@@ -98,6 +98,7 @@ cd claude-imple-skills/project-team
 | `/changelog` | 도메인별 변경 이력 조회 |
 | `/coverage` | 테스트 커버리지 시각화 |
 | `/architecture` | 프로젝트 구조 & 도메인 맵 |
+| `/compress` | Long Context 최적화 (H2O 패턴) |
 
 ---
 
@@ -107,8 +108,8 @@ cd claude-imple-skills/project-team
 
 ```
 project-team/
-├── agents/          # 10명 전문가
-├── hooks/           # 15개 자동 검증기
+├── agents/          # 9명 전문가
+├── hooks/           # 16개 자동 검증기
 ├── skills/          # 5개 유지보수 도구
 └── templates/       # 프로토콜 & 계약
 ```
@@ -285,8 +286,9 @@ cd project-team
 
 | 버전 | 날짜 | 변경사항 |
 |------|------|----------|
-| **v3.4.0** | 2026-03-03 | Long Context 최적화 (H2O, Compressive Context, RAG Hybrid) |
-| v3.3.0 | 2026-03-03 | 18개 스킬, 10개 에이전트, 15개 훅. 독립형 아키텍처 |
+| **v3.5.0** | 2026-03-03 | Context Optimize 스킬 (`/compress`), install.sh 수정, 18개 스킬, 9개 에이전트, 16개 훅 |
+| v3.4.0 | 2026-03-03 | Long Context 최적화 (H2O, Compressive Context, RAG Hybrid) |
+| v3.3.0 | 2026-03-03 | 독립형 아키텍처 |
 | v3.2.0 | 2026-02-21 | Tmux 병렬 모드, Progressive Disclosure |
 | v3.1.0 | 2026-02-11 | 거버넌스 설정, 워크플로우 연속성 |
 | v3.0.0 | 2026-02-08 | Project Team 시스템 도입 |

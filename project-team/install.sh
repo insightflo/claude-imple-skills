@@ -183,8 +183,9 @@ check_prerequisites() {
     header "Checking prerequisites"
 
     # Verify source directory has expected structure
+    # Note: skills are in root /skills/ directory, not in project-team/skills/
     local missing=0
-    for dir in hooks agents skills templates; do
+    for dir in hooks agents templates; do
         if [ ! -d "${SCRIPT_DIR}/${dir}" ]; then
             log_error "Missing source directory: ${SCRIPT_DIR}/${dir}"
             missing=$((missing + 1))

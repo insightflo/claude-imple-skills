@@ -98,6 +98,7 @@ cd claude-imple-skills/project-team
 | `/changelog` | Query change history by domain |
 | `/coverage` | Visualize test coverage gaps |
 | `/architecture` | Map project structure & domains |
+| `/compress` | Long Context optimization (H2O pattern) |
 
 ---
 
@@ -107,8 +108,8 @@ For larger projects, deploy an **AI agent team** with automatic quality gates:
 
 ```
 project-team/
-├── agents/          # 10 specialists
-├── hooks/           # 15 auto-validators
+├── agents/          # 9 specialists
+├── hooks/           # 16 auto-validators
 ├── skills/          # 5 maintenance tools
 └── templates/       # protocols & contracts
 ```
@@ -285,8 +286,9 @@ Choose a mode:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| **v3.4.0** | 2026-03-03 | Long Context optimization (H2O, Compressive Context, RAG Hybrid) |
-| v3.3.0 | 2026-03-03 | 18 skills, 10 agents, 15 hooks. Standalone-first architecture |
+| **v3.5.0** | 2026-03-03 | Context Optimize skill (`/compress`), install.sh fix, 18 skills, 9 agents, 16 hooks |
+| v3.4.0 | 2026-03-03 | Long Context optimization (H2O, Compressive Context, RAG Hybrid) |
+| v3.3.0 | 2026-03-03 | Standalone-first architecture |
 | v3.2.0 | 2026-02-21 | Tmux parallel mode, Progressive Disclosure |
 | v3.1.0 | 2026-02-11 | Governance setup, workflow continuity |
 | v3.0.0 | 2026-02-08 | Project Team system introduced |
