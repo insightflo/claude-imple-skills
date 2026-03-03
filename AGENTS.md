@@ -6,7 +6,7 @@ This file provides guidance to AI agents (Warp, Claude, Cursor, etc.) when worki
 
 **claude-imple-skills** — A standalone-first implementation skill pack for Claude Code.
 
-A collection of **14 core skills** and **agent team system** that help you build software with AI. No external dependencies required.
+A collection of **17 skills** and **agent team system** that help you build software with AI. No external dependencies required.
 
 ### Core Philosophy
 - **Layer-based incremental implementation**: Build projects in three stages - Skeleton (structure), Muscles (functionality), Skin (polish)
@@ -17,7 +17,7 @@ A collection of **14 core skills** and **agent team system** that help you build
 
 ---
 
-## 📊 Standalone Skill Catalog (14 Core Skills)
+## 📊 Standalone Skill Catalog (17 Skills)
 
 | Skill | Trigger | Role |
 |-------|---------|------|
@@ -26,15 +26,18 @@ A collection of **14 core skills** and **agent team system** that help you build
 | **quality-auditor** | `/audit` | Pre-deployment comprehensive audit |
 | **governance-setup** | `/governance-setup` | Phase 0: Governance team setup |
 | **tasks-init** | `/tasks-init` | TASKS.md scaffolding (standalone) |
+| **tasks-migrate** | `/tasks-migrate` | Consolidate legacy task files |
 | **checkpoint** | `/checkpoint` | Task completion code review |
 | **recover** | `/recover` | Universal recovery hub |
 | **orchestrate-standalone** | `/orchestrate` | Dependency-based task automation (30-80 tasks) |
+| **multi-ai-run** | `/multi-ai-run` | Multi-CLI model routing |
+| **multi-ai-review** | `/multi-ai-review` | CLI-based multi-AI review |
+| **security-review** | `/security-review` | OWASP Top 10 vulnerability scan |
 | **impact** | `/impact` | File change impact analysis |
 | **deps** | `/deps` | Dependency graph visualization |
 | **changelog** | `/changelog` | Change history analysis |
 | **architecture** | `/architecture` | Architecture query and visualization |
 | **coverage** | `/coverage` | Test coverage analysis |
-| **multi-ai-review** | `/multi-ai-review` | CLI-based multi-AI review |
 
 ---
 
@@ -60,7 +63,7 @@ cd project-team && ./install.sh --global
 
 ### What Installation Does
 - Creates symbolic links from `skills/` to `~/.claude/skills/`
-- Makes all 14 core skills available to Claude Desktop
+- Makes all 17 skills available to Claude Desktop
 - Skills remain in-repo for version control
 
 ---
@@ -70,21 +73,24 @@ cd project-team && ./install.sh --global
 ### Directory Structure
 ```
 claude-imple-skills/
-├── skills/                      # 14 core implementation skills
+├── skills/                      # 17 implementation skills
 │   ├── workflow-guide/          # v4.2.0 - Meta hub for skill routing
 │   ├── agile/                   # v2.4.0 - Sprint master
 │   ├── quality-auditor/         # v2.5.0 - Comprehensive audit
 │   ├── governance-setup/        # v1.4.0 - Phase 0 governance
 │   ├── tasks-init/              # v2.0.0 - TASKS.md scaffolding
+│   ├── tasks-migrate/           # v1.0.0 - Task file consolidation
 │   ├── checkpoint/              # v1.0.0 - Task completion review
 │   ├── recover/                 # v2.3.0 - Recovery hub
 │   ├── orchestrate-standalone/  # v1.1.0 - Task automation
-│   ├── impact/                  # Analysis skills
-│   ├── deps/
-│   ├── changelog/
-│   ├── architecture/
-│   ├── coverage/
-│   └── multi-ai-review/
+│   ├── multi-ai-run/            # v1.0.0 - Multi-CLI routing
+│   ├── multi-ai-review/         # v3.0.0 - CLI-based multi-AI review
+│   ├── security-review/         # v1.0.0 - OWASP vulnerability scan
+│   ├── impact/                  # Impact analysis
+│   ├── deps/                    # Dependency graph
+│   ├── changelog/               # Change history analysis
+│   ├── architecture/            # Architecture visualization
+│   └── coverage/                # Test coverage analysis
 ├── project-team/                # Enterprise agent coordination system
 │   ├── agents/                  # 9 specialized AI agents
 │   ├── hooks/                   # 16 automated hooks

@@ -214,14 +214,14 @@ T2.3 → Codex (code_generation)
 
 ## 오케스트레이터 통합
 
-`/auto-orchestrate` 또는 `/agile auto`와 함께 사용:
+`/orchestrate` 또는 `/agile auto`와 함께 사용:
 
 ```bash
 # 기존: Claude만 사용
-/auto-orchestrate
+/orchestrate
 
 # 신규: 모델 라우팅 활성화
-/auto-orchestrate --multi-ai
+/orchestrate --multi-ai
 
 # 또는 설정 파일로 기본 활성화
 # .claude/model-routing.yaml
@@ -244,7 +244,7 @@ enabled: true  # 모든 오케스트레이션에 자동 적용
 | 스킬 | 관계 |
 |------|------|
 | `/multi-ai-review` | 리뷰 단계에서 멀티 AI 사용 |
-| `/auto-orchestrate` | `--multi-ai` 플래그로 연동 |
+| `/orchestrate` | `--multi-ai` 플래그로 연동 |
 | `/cost-router` | 비용 기반 모델 선택과 조합 가능 |
 
 ---

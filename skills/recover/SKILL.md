@@ -79,7 +79,7 @@ git branch --no-merged main
 | 상태 | 설명 | 권장 조치 |
 |------|------|-----------|
 | **Orphan Worktree** | 브랜치 없는 고아 Worktree | `git worktree remove` |
-| **Unmerged Branch** | Phase 완료 후 미병합 | `git merge` → `/auto-orchestrate --resume` |
+| **Unmerged Branch** | Phase 완료 후 미병합 | `git merge` → `/orchestrate --resume` |
 | **Dirty Worktree** | 커밋되지 않은 변경 | `git stash` 또는 커밋 후 진행 |
 | **Conflict State** | 병합 충돌 중 | 충돌 해결 후 진행 |
 
@@ -102,8 +102,8 @@ git branch --no-merged main
 
 | 상황 | 권장 조치 | 자동 실행 여부 |
 |------|-----------|----------------|
-| **Orchestrate 중단** | `/auto-orchestrate --resume` | ⭐ 자동 권장 |
-| **Ultra-Thin 중단** | `/auto-orchestrate --ultra-thin --resume` | ⭐ 자동 권장 |
+| **Orchestrate 중단** | `/orchestrate --resume` | ⭐ 자동 권장 |
+| **Ultra-Thin 중단** | `/orchestrate --ultra-thin --resume` | ⭐ 자동 권장 |
 | **Agile 중단** | `/agile status` → `/agile run {next-task}` | 수동 확인 |
 | **Worktree 문제** | Git 정리 후 재개 | 수동 확인 |
 | **코드 불완전** | 파일별 수정 안내 | 수동 확인 |
@@ -157,8 +157,8 @@ git branch --no-merged main
 
 | 복구 결과 | 다음 스킬 | 설명 |
 |-----------|-----------|------|
-| Orchestrate 재개 | `/auto-orchestrate --resume` | 중단된 Phase부터 계속 |
-| **tmux 모드 재개** | `/auto-orchestrate --tmux --resume` | tmux 병렬 실행 재개 **(v1.10.0)** |
+| Orchestrate 재개 | `/orchestrate --resume` | 중단된 Phase부터 계속 |
+| **tmux 모드 재개** | `/orchestrate --tmux --resume` | tmux 병렬 실행 재개 **(v1.10.0)** |
 | 개별 태스크 재개 | `/agile run {task-id}` | 특정 태스크 실행 |
 | 결핍 분석 중단 | `/eros` | 디오티마 사다리 재개 **(v1.10.0)** |
 | 에로스 기획 중단 | `/poietes` | 4 Phase 재개 **(v1.10.0)** |
@@ -181,7 +181,7 @@ ls /tmp/task-*-result.md 2>/dev/null
 | 상태 | 설명 | 권장 조치 |
 |------|------|-----------|
 | 일부 `.done` 없음 | 일부 태스크만 실패 | 미완료 태스크만 재실행 |
-| 모두 `.done` 없음 | 전체 실패 | `/auto-orchestrate --tmux --resume` |
+| 모두 `.done` 없음 | 전체 실패 | `/orchestrate --tmux --resume` |
 | tmux 세션 남음 | 프로세스 아직 실행 중 | `tmux attach` 로 상태 확인 |
 
 ### 🪝 Hook 연동 (Standalone v2.4)
