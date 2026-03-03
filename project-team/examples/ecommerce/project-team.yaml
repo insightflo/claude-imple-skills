@@ -121,7 +121,7 @@ domains:
 
       - role: "domain-developer"
         name: "User Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies: []  # User는 다른 도메인에 의존하지 않음
 
@@ -157,7 +157,7 @@ domains:
 
       - role: "domain-developer"
         name: "Product Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "inventory"  # 재고 정보 필요
@@ -193,7 +193,7 @@ domains:
 
       - role: "domain-developer"
         name: "Order Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "user"      # 주문자 정보
@@ -232,7 +232,7 @@ domains:
 
       - role: "domain-developer"
         name: "Payment Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "order"   # 주문 정보
@@ -269,7 +269,7 @@ domains:
 
       - role: "domain-developer"
         name: "Inventory Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "product"  # 상품 정보

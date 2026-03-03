@@ -377,7 +377,7 @@ Output (stdout):
 Automatically syncs task completion status to the original TASKS.md file.
 
 **Problem Solved**:
-- VibeLab creates `docs/planning/06-tasks.md` but skills reference `TASKS.md`
+- Task files may be in different locations (TASKS.md, docs/planning/06-tasks.md, etc.)
 - Task completion doesn't always sync to the original file
 - This hook finds the task file regardless of location and updates it
 
@@ -409,8 +409,8 @@ Task T3.4 completed  # Skin task completion
 ```
 
 **Task File Discovery Order**:
-1. `TASKS.md` (project root)
-2. `docs/planning/06-tasks.md` (VibeLab convention)
+1. `TASKS.md` (project root, canonical)
+2. `docs/planning/06-tasks.md` (legacy convention)
 3. `docs/planning/tasks.md`
 4. `docs/tasks.md`
 5. Any `*tasks*.md` file (fallback search)

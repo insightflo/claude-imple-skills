@@ -1,6 +1,6 @@
 ---
 name: tasks-init
-description: TASKS.md 스캐폴딩을 생성합니다. VibeLab 없이 독립 실행 가능.
+description: TASKS.md 스캐폴딩을 생성합니다. Standalone 독립 실행.
 triggers:
   - /tasks-init
   - 태스크 초기화
@@ -12,7 +12,7 @@ version: 2.0.0
 # Tasks Init (Standalone)
 
 > TASKS.md 파일을 대화형으로 생성하는 경량 스킬입니다.
-> VibeLab의 `/tasks-generator` 없이 독립 실행 가능합니다.
+> Standalone으로 완전히 독립 실행 가능합니다.
 
 ## 역할
 
@@ -152,17 +152,6 @@ grep -rn "TODO\|FIXME\|XXX" --include="*.ts" --include="*.tsx" --include="*.py" 
   ]
 }
 ```
-
-## vs /tasks-generator (VibeLab)
-
-| 항목 | `/tasks-init` (이 스킬) | `/tasks-generator` (VibeLab) |
-|------|------------------------|------------------------------|
-| 의존성 | 없음 (standalone) | VibeLab 필요 |
-| 입력 | 대화형 인터뷰 | 기획 문서 (PRD, TRD) |
-| 출력 | Dependency-aware, Domain-Guarded | 화면 단위 상세 구조 |
-| 복잡도 | 간단 (10-30개 태스크) | 복잡 (30-200개 태스크) |
-| 용도 | 빠른 시작 | 대규모 프로젝트 |
-| 메타데이터 | deps, domain, risk, files, owner, model | 화면, 도메인 리소스 |
 
 ## 관련 스킬
 

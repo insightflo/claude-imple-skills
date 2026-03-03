@@ -1,6 +1,6 @@
 ---
 name: orchestrate-standalone
-description: 30~80개 태스크를 의존성 기반으로 병렬 실행합니다. VibeLab 없이 독립 실행 가능.
+description: 30~80개 태스크를 의존성 기반으로 병렬 실행합니다. Standalone 독립 실행.
 triggers:
   - /orchestrate-standalone
   - /orchestrate
@@ -12,7 +12,7 @@ updated: 2026-03-03
 
 # 🚀 Orchestrate Standalone
 
-> **목표**: VibeLab `/auto-orchestrate` 없이 30~80개 태스크를 의존성 기반 병렬 실행
+> **목표**: 30~80개 태스크를 의존성 기반 병렬 실행
 >
 > **철학**: 30개는 "1회 스프린트 최적 단위"이며, 그 이상은 **스프린트 분할 반복**으로 해결
 

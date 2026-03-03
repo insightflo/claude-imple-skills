@@ -295,7 +295,7 @@ domains:
   # 각 도메인은 다음 구성원을 가집니다:
   # - Part Leader (PL): 도메인 리더, 스펙 정의, 타 도메인 협의
   # - Domain Designer: 도메인 설계, 데이터 모델, API 설계
-  # - Domain Developer: 개발/테스트 구현 (vibelab 에이전트)
+  # - Domain Developer: 개발/테스트 구현
 
   - name: "{{ DOMAIN_1_NAME }}"
     display_name: "{{ DOMAIN_1_DISPLAY_NAME }}"

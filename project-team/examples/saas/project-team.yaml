@@ -119,7 +119,7 @@ domains:
 
       - role: "domain-developer"
         name: "Auth Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies: []
 
@@ -154,7 +154,7 @@ domains:
 
       - role: "domain-developer"
         name: "Subscription Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "auth"  # 테넌트 정보
@@ -189,7 +189,7 @@ domains:
 
       - role: "domain-developer"
         name: "Billing Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "subscription"  # 구독 정보
@@ -226,7 +226,7 @@ domains:
 
       - role: "domain-developer"
         name: "Usage Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "auth"  # 테넌트 정보
@@ -262,7 +262,7 @@ domains:
 
       - role: "domain-developer"
         name: "Analytics Domain Developer"
-        description: "개발, 테스트 (vibelab orchestrator)"
+        description: "개발, 테스트 구현"
 
     dependencies:
       - "usage"          # 사용량 데이터

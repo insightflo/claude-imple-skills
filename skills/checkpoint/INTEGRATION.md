@@ -14,19 +14,6 @@
 | **Phase 완료 시** | `/trinity` → `/evaluation` | 五柱 평가 + 메트릭 |
 | **배포 전** | `/audit` | 종합 감사 |
 
-### VibeLab `/code-review` vs `/checkpoint`
-
-| 항목 | VibeLab `/code-review` | `/checkpoint` |
-|------|------------------------|---------------|
-| Diff 입력 | 수동 | ✅ Git 자동 |
-| 컨텍스트 | 수동 | ✅ TASKS.md 자동 |
-| 보안 | 체크리스트 | ✅ `/security-review` |
-| Hook | ❌ 없음 | ✅ policy/standards 게이트 |
-| 영향도 | ❌ 없음 | ✅ `/impact` |
-| 의존성 | ❌ 없음 | ✅ `/deps` |
-| AI 멀티 | ❌ 없음 | ✅ `/multi-ai-review` |
-| 수정 가이드 | 수정 요청만 | 구체적 가이드 + `/recover` |
-
 ---
 
 ## 2. `/agile` 연동

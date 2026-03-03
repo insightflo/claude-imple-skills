@@ -9,8 +9,8 @@
  *   - Commit message patterns
  *
  * Finds TASKS.md regardless of location:
- *   - TASKS.md (root)
- *   - docs/planning/06-tasks.md (VibeLab convention)
+ *   - TASKS.md (root, canonical)
+ *   - docs/planning/06-tasks.md (legacy convention)
  *   - any tasks.md or *-tasks.md files
  *
  * Claude Code Hook Protocol (PostToolUse):

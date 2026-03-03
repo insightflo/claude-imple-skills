@@ -8,7 +8,7 @@ council:
         - name: gemini
           # NOTE: gemini CLI는 prompt를 positional로 받지 않고 -p/--prompt가 필요합니다.
           # council-job-worker가 -p를 자동 보정하지만, config에도 명시해두면 더 안전합니다.
-          command: "gemini --model gemini-3.1-pro-preview --output-format text -p"
+          command: "gemini --model gemini-3-flash-preview --output-format text -p"
           emoji: "💎"
           color: "GREEN"
 
@@ -16,7 +16,6 @@ council:
           command: "codex exec"
           emoji: "🤖"
           color: "BLUE"
-
 
     # Chairman configuration (Claude가 의장 역할)
     chairman:

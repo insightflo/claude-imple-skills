@@ -9,16 +9,8 @@ updated: 2026-03-03
 
 > **목적**: Phase 완료 또는 배포 전에 **기획 문서 대비 종합 품질 감사**를 수행합니다.
 >
-> **⚠️ 바이브랩스킬과의 역할 분담:**
-> | 스킬 | 시점 | 범위 |
-> |------|------|------|
-> | `/code-review` | 태스크/기능 완료 시 | 코드 리뷰 (2단계) |
-> | `/trinity` | Phase 완료/PR 전 | 五柱 철학 기반 품질 평가 |
-> | `/evaluation` | Phase 완료 시 | 메트릭 측정 + 품질 게이트 |
-> | **`/audit` (이 스킬)** | **배포 전** | **기획 정합성 + DDD + 보안 + 테스트 + 브라우저 검증** |
-> | `/multi-ai-review` | 심층 검토 필요 시 | 3개 AI 협업 리뷰 |
->
-> **v2.5.0 업데이트**: Mini-PRD 지원 (Socrates 대안), `/security-review` 연동 + project-team Hook 시스템 (quality-gate, standards-validator)
+> **v2.6.0 업데이트**: project-team QA Manager 에이전트 연동 (승인 요청, 피드백 루프)
+**v2.5.0 업데이트**: Mini-PRD 지원 (Socrates 대안), `/security-review` 연동 + project-team Hook 시스템 (quality-gate, standards-validator)
 
 ---
 
@@ -97,8 +89,7 @@ ls docs/planning/*.md 2>/dev/null             # 옵션 B: Socrates
 
 감사를 진행하려면 기획 문서가 필요합니다.
 
-옵션 1: /governance-setup → Mini-PRD 생성 (권장, 빠름)
-옵션 2: /socrates → Socrates 7개 문서 생성 (상세)
+권장: /governance-setup → Mini-PRD 생성
 ```
 
 ### 2단계: 컨텍스트 로딩 (Baseline Audit)
@@ -317,11 +308,7 @@ mcp__playwright__browser_console_messages → 콘솔 에러 확인
       "header": "감사 후 조치",
       "options": [
         {
-          "label": "⭐ [권장] 수정 태스크 생성",
-          "description": "/tasks-generator analyze로 수정용 TASKS.md 생성"
-        },
-        {
-          "label": "즉시 수정 시작",
+          "label": "⭐ [권장] 즉시 수정 시작",
           "description": "발견된 이슈를 우선순위대로 수정"
         },
         {
@@ -341,19 +328,16 @@ mcp__playwright__browser_console_messages → 콘솔 에러 확인
 
 ---
 
-## 🔗 스킬 연동 (v2.4)
+## 🔗 스킬 연동 (v2.6)
 
 감사 결과에 따라 **자동으로 적합한 스킬을 권장**합니다:
 
 | 감사 결과 | 권장 스킬 | 설명 |
 |-----------|-----------|------|
 | **Spec 불일치** | `/agile iterate` | 요구사항 맞춰 수정 |
-| **명세-코드 드리프트** | `/sync` | 명세와 코드 동기화 검증 |
-| **코드 품질 이슈** | `/trinity` → `/code-review` → 재감사 | 五柱 평가 + 2단계 리뷰 |
+| **코드 품질 이슈** | `/checkpoint` → 재감사 | 코드 리뷰 후 재감사 |
 | **보안 취약점** | `/security-review` 재실행 | OWASP TOP 10 기준 재검증 |
-| **성능 이슈** | `/vercel-review` | 프론트엔드 성능 최적화 |
-| **테스트 실패** | `/powerqa` 또는 `/systematic-debugging` | 자동 QA 사이클링 |
-| **심층 검토 필요** | `/multi-ai-review` | Claude + Gemini + GLM 3중 검증 |
+| **심층 검토 필요** | `/multi-ai-review` | Multi-AI 컨센서스 리뷰 |
 
 ### 🪝 Hook 연동 (v1.9.2)
 
@@ -362,6 +346,110 @@ mcp__playwright__browser_console_messages → 콘솔 에러 확인
 | `skill-router` | `/audit` 키워드 자동 감지 → 스킬 즉시 로드 |
 | `post-edit-analyzer` | 감사 후 수정 시 보안/품질 패턴 자동 검사 |
 | `git-commit-checker` | 감사 통과 전 커밋 경고 |
+
+### 🤖 Agent Team 연동 (v2.6.0)
+
+project-team의 QA Manager 에이전트와 협업하여 배포 승인 프로세스를 자동화합니다.
+
+#### 감사 승인 워크플로우
+
+```
+/audit 실행 → 품질 점수 계산 완료
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│  1️⃣ QA Manager 에이전트에게 승인 요청                       │
+│  - SendMessage tool로 승인 요청 전송                        │
+│  - 품질 점수, 주요 이슈, 판정 결과 전달                     │
+├─────────────────────────────────────────────────────────────┤
+│  2️⃣ QA Manager 판정                                        │
+│  - ✅ 승인: 배포 진행                                       │
+│  - ⚠️ 조건부 승인: 이슈 수정 후 재검증                       │
+│  - ❌ 거부: 주요 이슈 수정 필수                              │
+├─────────────────────────────────────────────────────────────┤
+│  3️⃣ 불합격 시 Domain Specialist에게 피드백 전송            │
+│  - backend-specialist: 백엔드 이슈                          │
+│  - frontend-specialist: 프론트엔드 이슈                      │
+│  - security-specialist: 보안 이슈                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### QA Manager 연동 패턴
+
+**1) 품질 게이트 승인 요청:**
+
+```javascript
+// project-team/hooks/quality-gate.js 실행 결과 확인
+const qualityResult = bashExecute("node project-team/hooks/quality-gate.js");
+const qualityData = JSON.parse(qualityResult);
+
+// QA Manager에게 승인 요청
+SendMessage({
+  type: "message",
+  recipient: "qa-manager",
+  content: `품질 게이트 승인 요청:
+
+## 감사 결과
+- 총점: ${qualityData.score}/100
+- 판정: ${qualityData.verdict}
+
+## 주요 이슈
+${qualityData.critical_issues.map(i => `- ${i.severity}: ${i.description}`).join('\n')}
+
+## 승인 요청
+이 감사 결과로 배포를 승인하시겠습니까?`,
+  summary: "Quality gate approval request"
+})
+```
+
+**2) 불합격 시 Specialist 에이전트에게 피드백:**
+
+```javascript
+// 판정이 FAIL/CAUTION일 경우
+if (qualityData.verdict === "FAIL" || qualityData.verdict === "CAUTION") {
+  // 이슈 유형별로 해당 Specialist에게 할당
+  for (const issue of qualityData.critical_issues) {
+    const specialist = getSpecialistForIssue(issue.type); // backend/frontend/security
+
+    Agent({
+      subagent_type: specialist,
+      prompt: `품질 감사 결과 수정이 필요합니다:
+
+## 이슈
+- 심각도: ${issue.severity}
+- 유형: ${issue.type}
+- 내용: ${issue.description}
+- 관련 파일: ${issue.files.join(', ')}
+
+## 수정 요청
+이 이슈를 수정해주세요. 수정 후 /audit 재실행이 필요합니다.`
+    });
+  }
+}
+```
+
+#### 에이전트별 피드백 라우팅
+
+| 이슈 유형 | 담당 에이전트 | 피드백 내용 |
+|-----------|--------------|-------------|
+| **보안 취약점** | security-specialist | OWASP Top 10, 시크릿 노출, 인증/인가 |
+| **백엔드 로직** | backend-specialist | API 구조, 데이터 모델, 트랜잭션 |
+| **프론트엔드** | frontend-specialist | UI/UX, 상태 관리, 성능 |
+| **아키텍처** | chief-architect | 설계 패턴, 모듈 의존성 |
+| **테스트 커버리지** | qa-manager | 테스트 추가 요청 |
+
+#### project-team 연동 전제 조건
+
+```bash
+# project-team이 설치되어 있어야 합니다
+ls project-team/agents/qa-manager.md
+
+# quality-gate Hook이 실행 가능해야 합니다
+node project-team/hooks/quality-gate.js --check
+```
+
+**project-team 미설치 시 동작:**
+- QA Manager 연동 없이 standalone 모드로 동작
+- 사용자에게 수동 승인 요청
 
 ---
 
@@ -382,10 +470,8 @@ mcp__playwright__browser_console_messages → 콘솔 에러 확인
 │ 이슈 유형별 대응                         │
 ├─────────────────────────────────────────┤
 │ Spec 불일치  → /agile iterate           │
-│ 품질 이슈    → /code-review             │
+│ 품질 이슈    → /checkpoint              │
 │ 보안 이슈    → /security-review         │
-│ 성능 이슈    → /vercel-review           │
-│ 대량 수정   → /tasks-generator analyze  │
 └─────────────────────────────────────────┘
     ↓
 재감사 (/audit)
@@ -411,4 +497,4 @@ mcp__playwright__browser_console_messages → 콘솔 에러 확인
 
 ---
 
-**Last Updated**: 2026-03-01 (v2.4.0 - `/security-review` 연동 보안 검증 추가)
+**Last Updated**: 2026-03-03 (v2.6.0 - QA Manager 에이전트 연동)

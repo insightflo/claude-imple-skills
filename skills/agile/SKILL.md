@@ -11,16 +11,10 @@ updated: 2026-03-03
 >
 > - **최상위 지침**: 모든 스프린트 관리는 **[TEAM-CHARTER.md](../../TEAM-CHARTER.md)**의 규칙을 최우선으로 따릅니다.
 >
-> **⚠️ 바이브랩스킬과의 역할 분담:**
-> | 스킬 | 용도 | 규모 |
-> |------|------|------|
-> | `/auto-orchestrate` | 완전 자동화 (병렬 실행) | 30~200개 태스크 |
-> | **`/agile` (이 스킬)** | **사용자 협업 + 레이어별 체크포인트** | **1~30개 태스크** |
-> | `/tasks-generator` | 태스크 생성만 | - |
->
 > **고유 기능**: Skeleton→Muscles→Skin 레이어 기반 점진적 완성 (Horizontal Slicing)
 >
-> **v2.4.0 업데이트**: project-team Hook 시스템 연동 (task-sync, quality-gate)
+> **v2.5.0 업데이트**: project-team 에이전트 팀 연동 (Project Manager, QA Manager)
+**v2.4.0 업데이트**: project-team Hook 시스템 연동 (task-sync, quality-gate)
 
 ---
 
@@ -336,6 +330,86 @@ TASKS 파일(`TASKS.md` 우선, 없으면 `docs/planning/06-tasks.md`)에서 태
 | `session-memory-loader` | 이전 스프린트 상태 자동 복원 |
 | `error-recovery-advisor` | 레이어 실패 시 복구 제안 |
 
+### 🤖 Agent Team 연동 (v2.5.0)
+
+project-team 에이전트들과 협업하여 스프린트를 관리합니다.
+
+#### 스프린트 시작 시 에이전트 협업
+
+```
+/agile start 또는 /agile auto 실행 시:
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│  1️⃣ Project Manager 에이전트에게 태스크 분배 요청           │
+│  - Agent tool 사용: subagent_type="project-manager"         │
+│  - 스프린트 범위와 일정 전달                                 │
+│  - PM이 태스크를 도메인별로 분배                            │
+├─────────────────────────────────────────────────────────────┤
+│  2️⃣ Domain Specialist 에이전트들에게 병렬 할당              │
+│  - backend-specialist: API/데이터 로직                      │
+│  - frontend-specialist: UI/상태 관리                        │
+│  - security-specialist: 보안 검증 (Muscles 완료 시)          │
+├─────────────────────────────────────────────────────────────┤
+│  3️⃣ 체크포인트 시 QA Manager에게 품질 검증 요청            │
+│  - SendMessage tool로 승인 요청                             │
+│  - 품질 게이트 통과 시 다음 레이어 진행                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 에이전트 호출 패턴
+
+**1) Project Manager에게 스프린트 계획 요청:**
+
+```javascript
+// Agent tool로 PM 호출
+Agent({
+  subagent_type: "project-manager",
+  prompt: `스프린트 계획을 수립해주세요:
+  - 범위: ${레이어} 레이어
+  - 태스크: ${태스크_목록}
+  - 일정: ${예상_기간}`
+})
+```
+
+**2) QA Manager에게 품질 승인 요청:**
+
+```javascript
+// SendMessage tool로 승인 요청
+SendMessage({
+  type: "message",
+  recipient: "qa-manager",
+  content: `품질 검증 요청:
+  - 레이어: ${레이어_명}
+  - 완료 태스크: ${태스크_ID_목록}
+  - 테스트 결과: ${결과_요약}`,
+  summary: "Quality gate approval request"
+})
+```
+
+#### 에이전트별 역할 분담
+
+| 에이전트 | 호출 시점 | 역할 |
+|---------|-----------|------|
+| **project-manager** | 스프린트 시작 | 태스크 분배, 일정 관리 |
+| **backend-specialist** | Muscles 레이어 | API/DB 로직 구현 가이드 |
+| **frontend-specialist** | Skin 레이어 | UI/UX 구현 가이드 |
+| **security-specialist** | Muscles 완료 시 | 보안 취약점 검증 |
+| **qa-manager** | 각 레이어 완료 시 | 품질 게이트 승인 |
+
+#### project-team 연동 전제 조건
+
+```bash
+# project-team이 설치되어 있어야 합니다
+ls project-team/agents/*.md
+
+# governance-setup이 실행된 프로젝트여야 합니다
+ls management/mini-prd.md
+```
+
+**project-team 미설치 시 동작:**
+- 에이전트 호출을 스킵하고 standalone 모드로 동작
+- 사용자에게 "project-team 설치 권장" 메시지 표시
+
 ---
 
 ## ⚠️ 실패 시 대응
@@ -349,4 +423,4 @@ TASKS 파일(`TASKS.md` 우선, 없으면 `docs/planning/06-tasks.md`)에서 태
 
 ---
 
-**Last Updated**: 2026-03-03 (v2.4.0 - /checkpoint 연동, standalone 의존성 변경)
+**Last Updated**: 2026-03-03 (v2.5.0 - project-team 에이전트 팀 연동)

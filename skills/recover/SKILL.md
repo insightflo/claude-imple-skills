@@ -9,9 +9,9 @@ updated: 2026-02-21
 
 > CLI 다운, 네트워크 끊김, 또는 에이전트 오류로 인해 중단된 작업을 **자동으로 탐지하고 복구**하는 스킬입니다.
 >
-> **⚠️ 바이브랩스킬에는 없는 고유 기능:**
-> - 바이브랩스킬의 `/auto-orchestrate --resume`은 **orchestrate 상태만** 복구
-> - **이 스킬은 모든 유형의 중단된 작업을 탐지**하고 적절한 복구 경로를 안내
+> **고유 기능:**
+> - 모든 유형의 중단된 작업을 탐지하고 적절한 복구 경로를 안내
+> - TASKS.md, 진행 로그, 상태 파일 등을 종합적으로 분석
 >
 > **v2.4.0 업데이트**: TASKS.md 우선 복구 + project-team Hook 연동
 
@@ -41,7 +41,7 @@ updated: 2026-02-21
 | **1 (최우선)** | Task Tracker | `TASKS.md` | `[ ]`, `[/]`, `[x]` 상태의 태스크 목록 |
 | 2 | Task Tracker (레거시) | `docs/planning/06-tasks.md`, `task.md` | 레거시 태스크 파일 |
 | 3 | Progress Log | `.claude/progress.txt` | 의사결정 및 이슈 기록 |
-| 4 (선택적) | Orchestrate State | `.claude/orchestrate-state.json` | VibeLab 자동화 상태 (있을 경우) |
+| 4 (선택적) | Orchestrate State | `.claude/orchestrate-state.json` | 자동화 상태 (있을 경우) |
 
 - **Standalone 우선순위**: `TASKS.md`의 미완료 태스크(`[ ]`, `[/]`)를 최우선으로 확인합니다.
 - 발견 시, 해당 항목 목록을 사용자에게 보고합니다.
@@ -203,4 +203,4 @@ ls /tmp/task-*-result.md 2>/dev/null
 
 ---
 
-**Last Updated**: 2026-02-21 (v2.3.0 - vibelab v1.10.0 tmux 모드 복구, eros/poietes 연동)
+**Last Updated**: 2026-03-03 (v2.4.0 - Standalone 독립 완료)

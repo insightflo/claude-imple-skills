@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: 태스크/PR 완료 시 즉시 코드 리뷰. Git Diff 자동 감지 + TASKS.md 컨텍스트 + Hook 게이트 + AI 멀티 리뷰. VibeLab /code-review를 개선한 차세대 스킬입니다.
+description: 태스크/PR 완료 시 즉시 코드 리뷰. Git Diff 자동 감지 + TASKS.md 컨텍스트 + Hook 게이트 + AI 멀티 리뷰.
 trigger: /checkpoint, "체크포인트", "리뷰해줘", "코드 검토"
 version: 1.0.0
 ---
@@ -9,23 +9,17 @@ version: 1.0.0
 
 > **목적**: 태스크/PR 완료 시 즉시 코드 리뷰를 수행하여 이슈를 조기에 발견하고 수정합니다.
 >
-> **VibeLab `/code-review` vs 우리 `/checkpoint`**:
-> | VibeLab | 우리 |
-> |---------|------|
-> | 수동 Diff 입력 | Git Diff 자동 감지 |
-> | 수동 컨텍스트 | TASKS.md 자동 추출 |
-> | 기본 보안 체크리스트 | `/security-review` 자동 호출 |
-> | 수정 요청만 | Hook 게이트 + 수정 가이드 |
+> **핵심 기능**:
+> - Git Diff 자동 감지
+> - TASKS.md 자동 컨텍스트 추출
+> - `/security-review` 자동 호출
+> - Hook 게이트 + 수정 가이드
 
 ---
 
-## ⚡ 핵심 차별점
+## ⚡ 핵심 기능
 
-### VibeLab `/code-review`
-```
-사용자 입력: Diff 수동 복사
-사용자 입력: 컨텍스트 수동 작성
-결과: Critical/Important/Minor 분류
+### Git Diff 자동 감지
 ```
 
 ### 우리 `/checkpoint`
@@ -277,19 +271,4 @@ pre-push:    /checkpoint --mode=full        # 전체 체크
 
 ---
 
-## vs VibeLab `/code-review` 비교
-
-| 항목 | VibeLab `/code-review` | 우리 `/checkpoint` |
-|------|------------------------|---------------------|
-| **Diff 입력** | 수동 | ✅ 자동 |
-| **컨텍스트** | 수동 | ✅ TASKS.md 자동 |
-| **보안** | 체크리스트 | ✅ `/security-review` |
-| **Hook** | ❌ 없음 | ✅ policy/standards 게이트 |
-| **영향도** | ❌ 없음 | ✅ `/impact` |
-| **의존성** | ❌ 없음 | ✅ `/deps` |
-| **AI 멀티** | ❌ 없음 | ✅ `/multi-ai-review` |
-| **수정 가이드** | 수정 요청만 | 구체적 가이드 + `/recover` |
-
----
-
-**Last Updated**: 2026-03-03 (v1.0.0)
+**Last Updated**: 2026-03-03 (v1.1.0 - Standalone 독립 완료)

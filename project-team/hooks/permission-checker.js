@@ -6,6 +6,8 @@
  * access_rights matrix. Blocks unauthorized writes and provides
  * clear guidance on proper escalation paths.
  *
+ * v2.0.0: JWT token support added (backward compatible with legacy tokens)
+ *
  * @TASK P2-T1 - Agent Permission Checker Hook
  * @SPEC project-team/agents/*.md (access_rights sections)
  *
@@ -16,7 +18,11 @@
  *
  * Agent Authentication:
  *   The current agent identity is established via a signed token.
- *   Do not trust CLAUDE_AGENT_ROLE alone for authorization decisions.
+ *   Supports both legacy tokens and JWT format (from auth.js).
+ *
+ * Token Formats:
+ *   1. Legacy: base64url(payload).base64url(signature)
+ *   2. JWT: base64url(header).base64url(payload).base64url(signature)
  */
 
 const path = require('path');
@@ -72,9 +78,114 @@ function verifyAgentToken(token, secret, nowMs = Date.now()) {
     return { ok: false, reason: 'Missing agent authentication token (CLAUDE_AGENT_TOKEN or tool_input.agent_token).' };
   }
 
+  // v2.0.0: Detect token format (legacy vs JWT)
+  const parts = token.split('.');
+
+  if (parts.length === 3) {
+    // JWT format: header.payload.signature
+    return verifyJWTToken(token, secret, nowMs);
+  } else if (parts.length === 2) {
+    // Legacy format: payload.signature
+    return verifyLegacyToken(token, secret, nowMs);
+  } else {
+    return { ok: false, reason: 'Invalid agent_token format (expected JWT or legacy "payload.signature").' };
+  }
+}
+
+/**
+ * Verify JWT format token (v2.0.0)
+ * @param {string} token - JWT token
+ * @param {string} secret - Secret key
+ * @param {number} nowMs - Current timestamp
+ * @returns {{ ok: boolean, role?: string, reason?: string }}
+ */
+function verifyJWTToken(token, secret, nowMs) {
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    return { ok: false, reason: 'Invalid JWT format (expected 3 parts).' };
+  }
+
+  const [headerEncoded, payloadEncoded, signature] = parts;
+
+  // Verify signature
+  let expectedSig;
+  try {
+    const data = `${headerEncoded}.${payloadEncoded}`;
+    expectedSig = base64UrlEncode(
+      crypto.createHmac('sha256', secret).update(data).digest()
+    );
+  } catch {
+    return { ok: false, reason: 'Failed to compute JWT signature.' };
+  }
+
+  try {
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expectedSig);
+    if (a.length !== b.length) {
+      return { ok: false, reason: 'Invalid JWT signature.' };
+    }
+    if (!crypto.timingSafeEqual(a, b)) {
+      return { ok: false, reason: 'Invalid JWT signature.' };
+    }
+  } catch {
+    return { ok: false, reason: 'Invalid JWT signature.' };
+  }
+
+  // Decode payload
+  let payload;
+  try {
+    payload = JSON.parse(base64UrlDecodeToBuffer(payloadEncoded).toString('utf8'));
+  } catch {
+    return { ok: false, reason: 'Invalid JWT payload.' };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return { ok: false, reason: 'Invalid JWT payload.' };
+  }
+
+  // Check role
+  const role = payload.role || payload.agentId?.role;
+  if (typeof role !== 'string' || role.trim() === '') {
+    return { ok: false, reason: 'JWT payload missing role.' };
+  }
+
+  // Check expiration
+  const exp = payload.exp;
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) {
+    return { ok: false, reason: 'JWT payload missing exp.' };
+  }
+
+  const nowSec = Math.floor(nowMs / 1000);
+  if (exp <= nowSec) {
+    return { ok: false, reason: 'JWT token has expired.' };
+  }
+
+  // Check token type (optional, for escalation tokens)
+  if (payload.type === 'escalation') {
+    return {
+      ok: true,
+      role: role.toLowerCase().replace(/\s+/g, '-'),
+      escalation: true,
+      requestor: payload.requestor,
+      target: payload.target
+    };
+  }
+
+  const roleLower = role.toLowerCase().replace(/\s+/g, '-');
+  return { ok: true, role: roleLower };
+}
+
+/**
+ * Verify legacy format token (v1.x)
+ * @param {string} token - Legacy token
+ * @param {string} secret - Secret key
+ * @param {number} nowMs - Current timestamp
+ * @returns {{ ok: boolean, role?: string, reason?: string }}
+ */
+function verifyLegacyToken(token, secret, nowMs) {
   const parts = token.split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return { ok: false, reason: 'Invalid agent_token format (expected "payload.signature").' };
+    return { ok: false, reason: 'Invalid legacy token format (expected "payload.signature").' };
   }
 
   const [payloadB64, signatureB64] = parts;
@@ -90,35 +201,35 @@ function verifyAgentToken(token, secret, nowMs = Date.now()) {
     const a = Buffer.from(signatureB64);
     const b = Buffer.from(expectedSig);
     if (a.length !== b.length) {
-      return { ok: false, reason: 'Invalid agent_token signature.' };
+      return { ok: false, reason: 'Invalid token signature.' };
     }
     if (!crypto.timingSafeEqual(a, b)) {
-      return { ok: false, reason: 'Invalid agent_token signature.' };
+      return { ok: false, reason: 'Invalid token signature.' };
     }
   } catch {
-    return { ok: false, reason: 'Invalid agent_token signature.' };
+    return { ok: false, reason: 'Invalid token signature.' };
   }
 
   let payload;
   try {
     payload = JSON.parse(base64UrlDecodeToBuffer(payloadB64).toString('utf8'));
   } catch {
-    return { ok: false, reason: 'Invalid agent_token payload.' };
+    return { ok: false, reason: 'Invalid token payload.' };
   }
 
   if (!payload || typeof payload !== 'object') {
-    return { ok: false, reason: 'Invalid agent_token payload.' };
+    return { ok: false, reason: 'Invalid token payload.' };
   }
   if (typeof payload.role !== 'string' || payload.role.trim() === '') {
-    return { ok: false, reason: 'agent_token payload missing role.' };
+    return { ok: false, reason: 'Token payload missing role.' };
   }
   if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) {
-    return { ok: false, reason: 'agent_token payload missing exp.' };
+    return { ok: false, reason: 'Token payload missing exp.' };
   }
 
   const nowSec = Math.floor(nowMs / 1000);
   if (payload.exp <= nowSec) {
-    return { ok: false, reason: 'agent_token has expired.' };
+    return { ok: false, reason: 'Token has expired.' };
   }
 
   const roleLower = payload.role.toLowerCase().replace(/\s+/g, '-');
@@ -891,6 +1002,8 @@ if (typeof module !== 'undefined' && module.exports) {
     toSafeProjectRelativePath,
     parseAgentRoleString,
     verifyAgentToken,
+    verifyJWTToken,
+    verifyLegacyToken,
     formatDenialMessage,
     formatBoundaryViolationMessage,
     formatUnknownAgentWarning

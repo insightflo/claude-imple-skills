@@ -6,6 +6,9 @@
  * Monitors interface contract changes and design system updates, then
  * creates YAML notification files for affected consumer domains.
  *
+ * v2.0.0: Agent Messaging Service integration - automatically notifies
+ *         relevant agents when cross-domain changes are detected.
+ *
  * @TASK P2-T6 - Cross-Domain Notifier Hook
  * @SPEC project-team/hooks/cross-domain-notifier.js
  *
@@ -24,9 +27,27 @@
  *   3. Interface contract type change     -> high priority to consumers
  *   4. Design token change               -> high priority broadcast
  *   5. Design component change           -> normal priority to related domains
+ *
+ * Agent Integration (v2.0.0):
+ *   - Automatically sends messages to affected agents via messaging service
+ *   - Breaking changes trigger immediate agent notification
+ *   - Non-breaking changes logged to agent inbox
  */
 
 const path = require('path');
+const fs = require('fs').promises;
+
+// v2.0.0: Agent Messaging Service integration
+let messagingService = null;
+try {
+  const messagingPath = path.join(__dirname, '../services/messaging.js');
+  if (require('fs').existsSync(messagingPath)) {
+    const { AgentMessagingService } = require(messagingPath);
+    messagingService = new AgentMessagingService();
+  }
+} catch (error) {
+  // Messaging service unavailable - will use file-based notification fallback
+}
 
 // ---------------------------------------------------------------------------
 // 1. Configuration
@@ -1149,7 +1170,192 @@ function toRelativePath(filePath) {
 }
 
 // ---------------------------------------------------------------------------
-// 12. Main Hook Entry Point
+// 12. Agent Messaging Integration (v2.0.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map domain names to agent IDs.
+ * @param {string} domain - Domain name
+ * @returns {string[]} Agent IDs for the domain
+ */
+function getAgentsForDomain(domain) {
+  const domainAgentMap = {
+    'backend': ['backend-specialist', 'dba'],
+    'frontend': ['frontend-specialist', 'chief-designer'],
+    'api': ['backend-specialist', 'frontend-specialist'],
+    'security': ['security-specialist'],
+    'all': ['project-manager', 'chief-architect', 'qa-manager',
+             'security-specialist', 'backend-specialist', 'frontend-specialist']
+  };
+
+  return domainAgentMap[domain] || [`${domain}-specialist`];
+}
+
+/**
+ * Send agent notification for cross-domain changes.
+ * v2.0.0: Uses Agent Messaging Service when available, falls back to file-based notification.
+ *
+ * @param {object[]} notifications - Built notification entries
+ * @param {string} category - 'interface' or 'design'
+ * @returns {Promise<object[]>} Results of agent notifications
+ */
+async function notifyAgents(notifications, category) {
+  const results = [];
+
+  // Use messaging service if available (v2.0.0 integration)
+  if (messagingService) {
+    for (const notif of notifications) {
+      try {
+        const targetAgents = notif.notification.to === 'broadcast'
+          ? getAgentsForDomain('all')
+          : getAgentsForDomain(notif.notification.to);
+
+        // Use broadcastDomainChange for breaking changes
+        if (notif.notification.breaking) {
+          const change = {
+            type: category,
+            from: notif.notification.from,
+            breaking: true,
+            changeCount: notif.notification.changeCount,
+            description: notif.content,
+            timestamp: new Date().toISOString()
+          };
+
+          const affectedDomains = notif.notification.to === 'broadcast'
+            ? ['all']
+            : [notif.notification.to];
+
+          await messagingService.broadcastDomainChange(change, affectedDomains);
+
+          for (const agentId of targetAgents) {
+            results.push({ agentId, status: 'delivered', method: 'messaging-service' });
+          }
+        } else {
+          // Use notifyAgent for non-breaking changes
+          for (const agentId of targetAgents) {
+            try {
+              await messagingService.notifyAgent(agentId, {
+                type: 'cross-domain-notification',
+                category,
+                breaking: false,
+                content: notif.content,
+                notificationFile: notif.path,
+                timestamp: new Date().toISOString()
+              });
+              results.push({ agentId, status: 'delivered', method: 'messaging-service' });
+            } catch (error) {
+              results.push({ agentId, status: 'failed', error: error.message, method: 'messaging-service' });
+            }
+          }
+        }
+      } catch (error) {
+        // Fallback to file-based notification on error
+        await notifyAgentsViaFiles(notifications, category, results);
+        break;
+      }
+    }
+    return results;
+  }
+
+  // Fallback: File-based notification (legacy behavior)
+  return notifyAgentsViaFiles(notifications, category, results);
+}
+
+/**
+ * Fallback file-based notification when messaging service is unavailable.
+ * @param {object[]} notifications - Built notification entries
+ * @param {string} category - 'interface' or 'design'
+ * @param {object[]} results - Results array to append to
+ * @returns {Promise<object[]>} Results of agent notifications
+ */
+async function notifyAgentsViaFiles(notifications, category, results = []) {
+  for (const notif of notifications) {
+    const targetAgents = notif.notification.to === 'broadcast'
+      ? getAgentsForDomain('all')
+      : getAgentsForDomain(notif.notification.to);
+
+    for (const agentId of targetAgents) {
+      try {
+        // Create agent inbox directory
+        const inboxDir = `management/inbox/${agentId}`;
+        await fs.mkdir(inboxDir, { recursive: true });
+
+        // Create message file
+        const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+        const messageFile = `${inboxDir}/${messageId}.json`;
+
+        const message = {
+          id: messageId,
+          type: 'cross-domain-notification',
+          timestamp: new Date().toISOString(),
+          from: notif.notification.from,
+          to: agentId,
+          subject: `Cross-Domain ${category === 'interface' ? 'Interface' : 'Design'} Change`,
+          priority: notif.notification.priority,
+          content: {
+            category,
+            breaking: notif.notification.breaking,
+            changeCount: notif.notification.changeCount,
+            notificationFile: notif.path,
+            description: notif.content
+          },
+          actionRequired: notif.notification.breaking,
+          protocol: 'broadcast'
+        };
+
+        await fs.writeFile(messageFile, JSON.stringify(message, null, 2), 'utf-8');
+
+        results.push({
+          agentId,
+          status: 'delivered',
+          messageId,
+          method: 'file-based'
+        });
+      } catch (error) {
+        results.push({
+          agentId,
+          status: 'failed',
+          error: error.message,
+          method: 'file-based'
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Format agent notification report for additionalContext.
+ * @param {object[]} agentResults - Results from notifyAgents
+ * @returns {string} Formatted report
+ */
+function formatAgentNotificationReport(agentResults) {
+  if (agentResults.length === 0) return '';
+
+  const delivered = agentResults.filter(r => r.status === 'delivered').length;
+  const failed = agentResults.filter(r => r.status === 'failed').length;
+
+  let report = '\n[Agent Messaging Service]\n';
+  report += `  Notified ${delivered} agent(s)`;
+
+  if (failed > 0) {
+    report += ` (${failed} failed)`;
+  }
+
+  report += '\n';
+
+  // List notified agents
+  const notifiedAgents = [...new Set(agentResults.filter(r => r.status === 'delivered').map(r => r.agentId))];
+  if (notifiedAgents.length > 0) {
+    report += '  Agents: ' + notifiedAgents.join(', ') + '\n';
+  }
+
+  return report;
+}
+
+// ---------------------------------------------------------------------------
+// 13. Main Hook Entry Point
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -1201,10 +1407,20 @@ async function main() {
 
   if (notifications.length === 0) return;
 
+  // v2.0.0: Notify agents about cross-domain changes
+  let agentReport = '';
+  try {
+    const agentResults = await notifyAgents(notifications, category);
+    agentReport = formatAgentNotificationReport(agentResults);
+  } catch (error) {
+    // Agent notification failure should not break the hook
+    agentReport = '\n[Agent Messaging Service] Notification skipped (service unavailable)';
+  }
+
   // Format and output report
   const report = formatNotificationReport(notifications, category);
-  if (report) {
-    outputContext(report);
+  if (report || agentReport) {
+    outputContext(report + agentReport);
   }
 }
 
@@ -1245,6 +1461,10 @@ if (typeof module !== 'undefined' && module.exports) {
     summarizeChangeType,
     summarizeDesignChangeType,
     formatNotificationReport,
+    // v2.0.0 Agent Messaging Integration
+    getAgentsForDomain,
+    notifyAgents,
+    formatAgentNotificationReport,
     toRelativePath
   };
 }

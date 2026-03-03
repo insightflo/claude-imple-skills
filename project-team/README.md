@@ -2,7 +2,7 @@
 
 > An enterprise-grade agent coordination system for managing large-scale AI-driven projects with structured governance, role-based permissions, and automated quality gates.
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/vibelab/project-team)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/anthropics/claude-imple-skills)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node.js-20%2B-brightgreen.svg)](https://nodejs.org/)
 [![Status](https://img.shields.io/badge/status-stable-success.svg)](#)
@@ -34,7 +34,7 @@ Project Level (5 agents)
 Domain Level (per domain: 3 agents)
   ├── Part Leader          - Domain management & decisions
   ├── Domain Designer      - Domain-specific design
-  └── Domain Developer     - Implementation (via vibelab)
+  └── Domain Developer     - Implementation
 ```
 
 ### Automated Governance
@@ -165,6 +165,22 @@ project-team/
 ```
 
 ## Configuration
+
+### Environment Variables
+
+| Variable | Purpose | Default | Required |
+|----------|---------|---------|----------|
+| `AGENT_JWT_SECRET` | JWT token signing key for agent authentication | `default-secret-key-change-in-production` | **Yes (production)** |
+| `CLAUDE_HOOK_SECRET` | Shared secret for hook-to-hook communication | None | No |
+| `PERMISSION_CHECKER_SECRET` | Legacy secret for permission validation | None | No |
+| `CLAUDE_AGENT_ROLE` | Agent role identifier (legacy, for permission checker) | None | No |
+| `PROJECT_TEAM_MODE` | Deployment mode: `lite`, `standard`, or `full` | `standard` | No |
+
+**⚠️ Security Note**: In production, always set `AGENT_JWT_SECRET` to a strong random value:
+
+```bash
+export AGENT_JWT_SECRET="$(openssl rand -base64 32)"
+```
 
 ### Global Configuration
 
@@ -373,7 +389,7 @@ endpoints:
 2. **Chief Architect** reviews technical feasibility
 3. **Part Leaders** coordinate their domain contributions
 4. **Domain Designers** ensure UI/UX consistency
-5. **Domain Developers** implement changes (via vibelab)
+5. **Domain Developers** implement changes
 6. **QA Manager** verifies quality criteria
 7. **Cross-domain notifier** keeps stakeholders informed
 
@@ -492,10 +508,10 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ## Authors
 
-Created by the Vibelab team as part of the Claude Project Team initiative.
+Part of the claude-imple-skills project.
 
 **Version**: 1.0.0
-**Last Updated**: 2026-02-08
+**Last Updated**: 2026-03-03
 
 ---
 
