@@ -341,11 +341,12 @@ TASKS 파일(`TASKS.md` 우선, 없으면 `docs/planning/06-tasks.md`)에서 태
 
 ---
 
-## 🔗 스킬 연동 (v2.4.0)
+## 🔗 스킬 연동 (v2.6.0)
 
 | 상황 | 연동 스킬 | 설명 |
 |------|-----------|------|
 | **시작 전** | `/workflow` | 현재 상태에 맞는 스킬 추천 |
+| **긴 기획 문서** | `/compress` | H2O 패턴으로 핵심 추출 후 시작 |
 | **태스크 필요** | `/tasks-init` | TASKS.md 스캐폴딩 |
 | **대규모 자동화** | `/orchestrate-standalone` | 30~80개 태스크 병렬 실행 |
 | **결핍/가정 검증** | `/eros` → `/the-fool` | 결핍 분석 + 비판적 검증 |
@@ -355,6 +356,7 @@ TASKS 파일(`TASKS.md` 우선, 없으면 `docs/planning/06-tasks.md`)에서 태
 | **버그 발생 시** | `/systematic-debugging` | 근본 원인 분석 |
 | **테스트 자동화** | `/powerqa` | QA 사이클링 |
 | **중단 시** | `/recover` | 작업 복구 |
+| **컨텍스트 과부하** | `/compress` | 긴 문서/코드 압축 후 재시도 |
 
 ### 🪝 Hook 연동 (v1.9.2)
 

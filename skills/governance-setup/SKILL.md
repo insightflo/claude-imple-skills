@@ -204,6 +204,9 @@ database/
 **Q: 에이전트 호출 실패**
 → `ls ~/.claude/agents/` 확인 (Claude Project Team 필요)
 
+**Q: 기획 문서가 너무 길어요**
+→ `/compress optimize docs/planning/*.md` 실행 (H2O 패턴으로 핵심 추출)
+
 ---
 
-**Last Updated**: 2026-02-21 (v1.2.0 - Progressive Disclosure, /eros 연동)
+**Last Updated**: 2026-03-03 (v1.4.1 - Context Optimize 연동)

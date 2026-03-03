@@ -14,6 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // ============================================
 // Configuration
@@ -22,62 +23,201 @@ const path = require('path');
 const DEFAULT_CONFIG = {
   maxTokens: 8000,        // Target token limit
   heavyHitterCount: 10,   // Number of key insights to extract
-  summaryRatio: 0.3,      // Ratio of content to compress
-  importance: {
-    code: ['function', 'class', 'interface', 'type', 'const', 'let', 'var'],
-    markdown: ['##', '###', '####', '| ', '- ', '* ', '> '],
-    yaml: ['  - ', '    - ', '  \\w+:']
-  }
+  summaryRatio: 0.3       // Ratio of content to compress
 };
 
 // ============================================
-// H2O: Heavy-Hitter Extraction
+// Enhanced Scoring System (H2O Heuristic v2)
 // ============================================
 
 /**
- * Extract heavy-hitter tokens from content
- * Preserves high-value information (functions, classes, headers, lists)
+ * Priority scores for different content types
+ * Lower number = higher priority (will appear first)
  */
-function extractHeavyHitters(content, options = {}) {
-  const { maxCount = 10, importance = DEFAULT_CONFIG.importance } = options;
-  const hitters = [];
-  const lines = content.split('\n');
+const PRIORITY_SCORES = {
+  // Headers by depth (shallower = more important)
+  h1: 1,
+  h2: 2,
+  h3: 3,
+  h4: 4,
+  // Code definitions
+  classDef: 1,
+  functionDef: 2,
+  interfaceDef: 2,
+  typeDef: 2,
+  constExport: 3,
+  // Document structures
+  tableHeader: 2,
+  codeBlockStart: 3,
+  importantMarker: 1,  // ⚠️, 🔥, IMPORTANT, CRITICAL, etc.
+  // Lists and YAML
+  listItem: 4,
+  yamlKey: 4,
+  // Position bonuses (applied as multiplier)
+  positionBonus: {
+    first10Percent: 0.8,   // 20% priority boost for top 10%
+    last10Percent: 0.9,    // 10% priority boost for bottom 10%
+    middle: 1.0            // no bonus
+  }
+};
 
-  for (const line of lines) {
-    if (hitters.length >= maxCount) break;
+/**
+ * Important keywords that boost priority
+ */
+const IMPORTANT_KEYWORDS = [
+  /\b(CRITICAL|IMPORTANT|WARNING|BREAKING|REQUIRED|MUST|TODO)\b/i,
+  /\b(핵심|중요|필수|주의|경고)\b/,
+  /[⚠️🔥💥🚨❗❌✅]/
+];
 
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+// ============================================
+// H2O: Heavy-Hitter Extraction (Enhanced v2)
+// ============================================
 
-    // Code patterns (function/class definitions)
-    if (trimmed.match(/^(function|class|interface|type|const|let|var)\s+\w+/)) {
-      hitters.push({ type: 'code', priority: 1, content: trimmed });
-      continue;
-    }
+/**
+ * Calculate position bonus based on line index
+ */
+function getPositionBonus(lineIndex, totalLines) {
+  const position = lineIndex / totalLines;
+  if (position < 0.1) return PRIORITY_SCORES.positionBonus.first10Percent;
+  if (position > 0.9) return PRIORITY_SCORES.positionBonus.last10Percent;
+  return PRIORITY_SCORES.positionBonus.middle;
+}
 
-    // Markdown headers
-    if (trimmed.match(/^#{1,4}\s+\S+/)) {
-      hitters.push({ type: 'header', priority: 1, content: trimmed });
-      continue;
-    }
+/**
+ * Check if line contains important keywords
+ */
+function hasImportantKeyword(line) {
+  return IMPORTANT_KEYWORDS.some(pattern => pattern.test(line));
+}
 
-    // Markdown lists
-    if (trimmed.match(/^[-*+]\s+\S+/) || trimmed.match(/^\d+\.\s+\S+/)) {
-      hitters.push({ type: 'list', priority: 2, content: trimmed });
-      continue;
-    }
+/**
+ * Classify and score a line of content
+ * Returns null if not a heavy-hitter candidate
+ */
+function classifyLine(line, lineIndex, totalLines) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length < 3) return null;
 
-    // YAML key-value pairs
-    if (trimmed.match(/^\s*\w+:\s*\S+/)) {
-      hitters.push({ type: 'yaml', priority: 2, content: trimmed });
-      continue;
+  let type = null;
+  let basePriority = 999;
+
+  // === Headers (depth-based priority) ===
+  const headerMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
+  if (headerMatch) {
+    const depth = headerMatch[1].length;
+    type = `h${depth}`;
+    basePriority = PRIORITY_SCORES[type] || depth;
+  }
+
+  // === Code definitions ===
+  else if (trimmed.match(/^(export\s+)?(abstract\s+)?class\s+\w+/)) {
+    type = 'classDef';
+    basePriority = PRIORITY_SCORES.classDef;
+  }
+  else if (trimmed.match(/^(export\s+)?(async\s+)?function\s+\w+/)) {
+    type = 'functionDef';
+    basePriority = PRIORITY_SCORES.functionDef;
+  }
+  else if (trimmed.match(/^(export\s+)?interface\s+\w+/)) {
+    type = 'interfaceDef';
+    basePriority = PRIORITY_SCORES.interfaceDef;
+  }
+  else if (trimmed.match(/^(export\s+)?type\s+\w+/)) {
+    type = 'typeDef';
+    basePriority = PRIORITY_SCORES.typeDef;
+  }
+  else if (trimmed.match(/^(export\s+)?const\s+\w+/)) {
+    type = 'constExport';
+    basePriority = PRIORITY_SCORES.constExport;
+  }
+
+  // === Table headers ===
+  else if (trimmed.match(/^\|.+\|/) && trimmed.includes('|')) {
+    // Only capture header rows (first row or row after separator)
+    if (!trimmed.match(/^\|[-:\s|]+\|$/)) {
+      type = 'tableHeader';
+      basePriority = PRIORITY_SCORES.tableHeader;
     }
   }
 
+  // === Code block starts ===
+  else if (trimmed.match(/^```\w+/)) {
+    type = 'codeBlockStart';
+    basePriority = PRIORITY_SCORES.codeBlockStart;
+  }
+
+  // === Lists ===
+  else if (trimmed.match(/^[-*+]\s+\S+/) || trimmed.match(/^\d+\.\s+\S+/)) {
+    type = 'listItem';
+    basePriority = PRIORITY_SCORES.listItem;
+  }
+
+  // === YAML keys ===
+  else if (trimmed.match(/^[a-zA-Z_]\w*:\s*.+/)) {
+    type = 'yamlKey';
+    basePriority = PRIORITY_SCORES.yamlKey;
+  }
+
+  if (!type) return null;
+
+  // Apply modifiers
+  let finalPriority = basePriority;
+
+  // Position bonus (multiply)
+  finalPriority *= getPositionBonus(lineIndex, totalLines);
+
+  // Important keyword bonus (reduce priority = higher rank)
+  if (hasImportantKeyword(trimmed)) {
+    finalPriority *= 0.5; // 50% priority boost
+    type = 'importantMarker';
+  }
+
   return {
-    heavyHitters: hitters.slice(0, maxCount),
-    totalCount: hitters.length,
-    compressionRatio: hitters.length / lines.length
+    type,
+    priority: finalPriority,
+    content: trimmed,
+    lineIndex
+  };
+}
+
+/**
+ * Extract heavy-hitter tokens from content (Enhanced v2)
+ * Uses depth-based header scoring, position bonuses, and keyword detection
+ */
+function extractHeavyHitters(content, options = {}) {
+  const { maxCount = 10 } = options;
+  const lines = content.split('\n');
+  const totalLines = lines.length;
+  const candidates = [];
+
+  // Classify all lines
+  for (let i = 0; i < lines.length; i++) {
+    const classified = classifyLine(lines[i], i, totalLines);
+    if (classified) {
+      candidates.push(classified);
+    }
+  }
+
+  // Sort by priority (lower = more important) then by line index (earlier = first)
+  candidates.sort((a, b) => {
+    if (Math.abs(a.priority - b.priority) < 0.1) {
+      return a.lineIndex - b.lineIndex; // Same priority: keep original order
+    }
+    return a.priority - b.priority;
+  });
+
+  // Take top N
+  const heavyHitters = candidates.slice(0, maxCount).map(h => ({
+    type: h.type,
+    priority: Math.round(h.priority * 100) / 100,
+    content: h.content
+  }));
+
+  return {
+    heavyHitters,
+    totalCount: candidates.length,
+    compressionRatio: candidates.length / totalLines
   };
 }
 
@@ -133,6 +273,169 @@ function compressContent(content, options = {}) {
   const sampled = middle.filter((_, i) => i % sampleStep === 0);
 
   return [...header, '... (compressed)', ...sampled, '... (compressed)', ...footer].join('\n');
+}
+
+// ============================================
+// LLM-Based Compression (Phase B)
+// ============================================
+
+/**
+ * Check if Claude CLI is available and not in nested session
+ */
+function isClaudeCliAvailable() {
+  // Cannot call claude CLI from within Claude Code session
+  if (process.env.CLAUDECODE) {
+    return false;
+  }
+
+  try {
+    execSync('which claude', { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Call Claude CLI with a prompt (uses subscription, no extra cost)
+ * @param {string} prompt - The prompt to send
+ * @param {object} options - Options for the CLI call
+ * @returns {string} - Claude's response
+ */
+function callClaudeCli(prompt, options = {}) {
+  const { model = 'haiku', maxTokens = 1000, timeout = 30000 } = options;
+
+  try {
+    // Create temp file for prompt (avoids shell escaping issues)
+    const tempFile = `/tmp/claude-prompt-${Date.now()}.txt`;
+    fs.writeFileSync(tempFile, prompt);
+
+    const result = execSync(
+      `claude -p "$(cat ${tempFile})" --model ${model} --max-tokens ${maxTokens} --output-format text 2>/dev/null`,
+      {
+        encoding: 'utf8',
+        timeout,
+        maxBuffer: 1024 * 1024
+      }
+    );
+
+    // Cleanup temp file
+    try { fs.unlinkSync(tempFile); } catch {}
+
+    return result.trim();
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Compress content using LLM summarization (Phase B)
+ * Falls back to heuristic compression if CLI unavailable
+ */
+function compressContentWithLLM(content, options = {}) {
+  const { summaryRatio = DEFAULT_CONFIG.summaryRatio, preserveLines = 5, useLLM = true } = options;
+  const lines = content.split('\n');
+  const totalLines = lines.length;
+
+  // Short content: return as-is
+  if (totalLines <= preserveLines * 2 + 10) {
+    return content;
+  }
+
+  // Check if LLM is available
+  if (!useLLM || !isClaudeCliAvailable()) {
+    return compressContent(content, options);
+  }
+
+  const header = lines.slice(0, preserveLines);
+  const footer = lines.slice(-preserveLines);
+  const middle = lines.slice(preserveLines, -preserveLines).join('\n');
+
+  // Calculate target summary length
+  const targetLength = Math.floor(middle.length * summaryRatio);
+
+  // Build summarization prompt
+  const summaryPrompt = `다음 텍스트를 ${targetLength}자 이내로 요약하세요.
+핵심 정보만 불릿 포인트로 추출하세요. 마크다운 형식으로 응답하세요.
+
+---
+${middle}
+---
+
+요약:`;
+
+  const summary = callClaudeCli(summaryPrompt, {
+    model: 'haiku',
+    maxTokens: Math.max(500, Math.floor(targetLength / 2))
+  });
+
+  if (!summary) {
+    // Fallback to heuristic compression
+    return compressContent(content, options);
+  }
+
+  return [...header, '\n## 📋 LLM Compressed Summary\n', summary, '\n', ...footer].join('\n');
+}
+
+/**
+ * Extract heavy-hitters using LLM scoring (Phase B)
+ * Falls back to heuristic extraction if CLI unavailable
+ */
+function extractHeavyHittersWithLLM(content, options = {}) {
+  const { maxCount = 10, useLLM = true } = options;
+
+  // Check if LLM is available
+  if (!useLLM || !isClaudeCliAvailable()) {
+    return extractHeavyHitters(content, options);
+  }
+
+  // For very short content, use heuristic
+  if (content.length < 500) {
+    return extractHeavyHitters(content, options);
+  }
+
+  const extractPrompt = `다음 텍스트에서 가장 중요한 ${maxCount}개의 핵심 문장/정보를 추출하세요.
+각 항목을 JSON 배열로 반환하세요. 형식: [{"content": "문장", "reason": "중요한 이유"}]
+
+---
+${content.slice(0, 8000)}
+---
+
+JSON 응답:`;
+
+  const response = callClaudeCli(extractPrompt, {
+    model: 'haiku',
+    maxTokens: 2000
+  });
+
+  if (!response) {
+    return extractHeavyHitters(content, options);
+  }
+
+  try {
+    // Parse JSON from response
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      return extractHeavyHitters(content, options);
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const heavyHitters = parsed.slice(0, maxCount).map((item, idx) => ({
+      type: 'llm-extracted',
+      priority: idx + 1,
+      content: item.content,
+      reason: item.reason
+    }));
+
+    return {
+      heavyHitters,
+      totalCount: heavyHitters.length,
+      compressionRatio: heavyHitters.length / content.split('\n').length,
+      method: 'llm'
+    };
+  } catch {
+    return extractHeavyHitters(content, options);
+  }
 }
 
 /**
@@ -217,7 +520,7 @@ function prioritizeDocuments(documents, query) {
 /**
  * Calculate document priority score
  */
-function calculatePriority(doc, query) {
+function calculatePriority(doc, _query) {
   let score = 0;
 
   // Relevance from retrieval
@@ -259,6 +562,29 @@ function parseArgs() {
   return options;
 }
 
+/**
+ * Map CLI options to function parameter names and convert types
+ */
+function normalizeOptions(options) {
+  const normalized = { ...options };
+
+  // Map CLI option names to function parameter names
+  if (options['heavy-count'] !== undefined) {
+    normalized.maxCount = Number(options['heavy-count']);
+  }
+  if (options['summary-ratio'] !== undefined) {
+    normalized.summaryRatio = Number(options['summary-ratio']);
+  }
+  if (options['max-tokens'] !== undefined) {
+    normalized.maxTokens = Number(options['max-tokens']);
+  }
+  if (options['preserve-lines'] !== undefined) {
+    normalized.preserveLines = Number(options['preserve-lines']);
+  }
+
+  return normalized;
+}
+
 function printHelp() {
   console.log(`
 Context Optimizer - Long Context Optimization Service
@@ -273,13 +599,20 @@ Options:
   --heavy-count=N      Number of heavy hitters (default: 10)
   --summary-ratio=N    Compression ratio 0-1 (default: 0.3)
   --json               Output JSON format
+  --llm                Use LLM-based extraction/compression (requires claude CLI)
 
 Examples:
-  # Optimize single file
+  # Optimize single file (heuristic)
   contextOptimizer.js optimize docs/plan/long-context-optimization.md
 
-  # Compress content
+  # Optimize with LLM scoring
+  contextOptimizer.js optimize docs/plan/long-context-optimization.md --llm
+
+  # Compress content (heuristic)
   contextOptimizer.js compress large-file.md
+
+  # Compress with LLM summarization
+  contextOptimizer.js compress large-file.md --llm --summary-ratio=0.3
 
   # Build RAG hybrid query
   contextOptimizer.js build "summarize this" docs/*.md
@@ -294,17 +627,24 @@ function cmdOptimize(options) {
   }
 
   const content = fs.readFileSync(filePath, 'utf8');
-  const { heavyHitters, totalCount, compressionRatio } = extractHeavyHitters(content, options);
+  const opts = normalizeOptions(options);
+  opts.useLLM = options.llm === true;
+
+  // Use LLM or heuristic extraction
+  const extractFn = opts.useLLM ? extractHeavyHittersWithLLM : extractHeavyHitters;
+  const result = extractFn(content, opts);
 
   if (options.json) {
-    console.log(JSON.stringify({ heavyHitters, totalCount, compressionRatio }, null, 2));
+    console.log(JSON.stringify(result, null, 2));
     return;
   }
 
-  console.log(`# Heavy-Hitters from: ${filePath}\n`);
-  console.log(`Extracted: ${heavyHitters.length} / ${totalCount} total\n`);
-  for (const hitter of heavyHitters) {
-    console.log(`[${hitter.type}] ${hitter.content}`);
+  const method = result.method === 'llm' ? '(LLM)' : '(Heuristic)';
+  console.log(`# Heavy-Hitters from: ${filePath} ${method}\n`);
+  console.log(`Extracted: ${result.heavyHitters.length} / ${result.totalCount} total\n`);
+  for (const hitter of result.heavyHitters) {
+    const extra = hitter.reason ? ` - ${hitter.reason}` : '';
+    console.log(`[${hitter.type}] ${hitter.content}${extra}`);
   }
 }
 
@@ -316,13 +656,19 @@ function cmdCompress(options) {
   }
 
   const content = fs.readFileSync(filePath, 'utf8');
-  const compressed = compressContent(content, options);
+  const opts = normalizeOptions(options);
+  opts.useLLM = options.llm === true;
+
+  // Use LLM or heuristic compression
+  const compressFn = opts.useLLM ? compressContentWithLLM : compressContent;
+  const compressed = compressFn(content, opts);
 
   if (options.json) {
     console.log(JSON.stringify({
       original: content.length,
       compressed: compressed.length,
-      ratio: compressed.length / content.length
+      ratio: compressed.length / content.length,
+      method: opts.useLLM ? 'llm' : 'heuristic'
     }, null, 2));
     return;
   }
@@ -345,7 +691,8 @@ function cmdBuild(options) {
     content: fs.readFileSync(file, 'utf8')
   }));
 
-  const result = ragHybridPipeline(query, documents, options);
+  const opts = normalizeOptions(options);
+  const result = ragHybridPipeline(query, documents, opts);
   console.log(result);
 }
 
@@ -380,6 +727,7 @@ function main() {
 // ============================================
 
 module.exports = {
+  // Heuristic functions (Phase A)
   extractHeavyHitters,
   structureContext,
   compressContent,
@@ -387,7 +735,15 @@ module.exports = {
   ragHybridPipeline,
   retrieveDocuments,
   prioritizeDocuments,
-  DEFAULT_CONFIG
+  // LLM-based functions (Phase B)
+  extractHeavyHittersWithLLM,
+  compressContentWithLLM,
+  isClaudeCliAvailable,
+  callClaudeCli,
+  // Config
+  DEFAULT_CONFIG,
+  PRIORITY_SCORES,
+  IMPORTANT_KEYWORDS
 };
 
 if (require.main === module) {

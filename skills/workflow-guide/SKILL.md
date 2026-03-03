@@ -49,7 +49,7 @@ updated: 2026-03-03
 
 ---
 
-## 📊 Standalone 스킬 카탈로그 (14개)
+## 📊 Standalone 스킬 카탈로그 (15개)
 
 ### 핵심 스킬
 
@@ -71,6 +71,7 @@ updated: 2026-03-03
 | **`/coverage`** | `/coverage` | 테스트 커버리지 |
 | **`/changelog`** | `/changelog` | 변경 이력 |
 | **`/architecture`** | `/architecture` | 아키텍처 맵 |
+| **`/compress`** | `/compress`, "컨텍스트 압축" | Long Context 최적화 (H2O 패턴) |
 
 ---
 
@@ -227,6 +228,8 @@ ls .claude/agents/*.md 2>/dev/null | wc -l  # 3개 이상이면 팀 구성됨
 │
 ├─ 작업 중단됨? ─────────────────────── YES → /recover
 │
+├─ 긴 문서/컨텍스트 과부하? ──────────── YES → /compress (H2O 패턴 압축)
+│
 ├─ 기획 문서 없음? ─────────────────── YES → /governance-setup (Mini-PRD 내장)
 │
 ├─ TASKS.md 없음?
@@ -338,6 +341,7 @@ ls .claude/agents/*.md 2>/dev/null | wc -l  # 3개 이상이면 팀 구성됨
 | 리뷰 실패 | `/agile iterate` | `/checkpoint` |
 | 품질 게이트 실패 | `/agile iterate` | 수정 후 재검증 |
 | 기획 불명확 | `/governance-setup` | `/tasks-init` |
+| 컨텍스트 과부하 | `/compress` | 최적화 후 재시도 |
 
 ---
 
@@ -360,6 +364,9 @@ ls .claude/agents/*.md 2>/dev/null | wc -l  # 3개 이상이면 팀 구성됨
 "멀티 AI로 실행"                → /multi-ai-run
 "Codex로 코드 작성"             → /multi-ai-run --model=codex
 "Gemini로 디자인"               → /multi-ai-run --model=gemini
+"컨텍스트 압축해줘"             → /compress
+"문서가 너무 길어"              → /compress optimize
+"context overflow"              → /compress
 ```
 
 ---
@@ -415,4 +422,9 @@ A: `/governance-setup`은 **거버넌스 팀**(PM, Architect, Designer, QA, DBA)
 
 ---
 
-**Last Updated**: 2026-03-03 (v4.2.0 - Standalone-first, 14개 핵심 스킬)
+### Q: 문서가 너무 길어서 처리가 안 돼요
+A: `/compress`를 사용하여 H2O 패턴으로 핵심 정보를 추출하세요. `--llm` 옵션으로 더 정밀한 요약도 가능합니다.
+
+---
+
+**Last Updated**: 2026-03-03 (v4.3.0 - Context Optimize 스킬 추가, 15개 핵심 스킬)
