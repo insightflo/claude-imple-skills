@@ -1,20 +1,54 @@
 ---
 name: agile
 description: 사용자와의 정기적인 체크인과 스프린트 관리를 담당하는 애자일 마스터입니다. /agile, /sprint, "스프린트 시작", "체크포인트" 트리거.
-version: 2.4.0
+version: 2.6.0
 updated: 2026-03-03
 ---
 
 # 🏃 Agile Sprint Master
 
-> **목적**: 개발 과정을 1~3일 단위의 작은 스프린트로 쪼개고, 각 단계마다 사용자(Customer/PO)에게 결과물을 검토받아 만족도를 높입니다.
+> **🔥 Heavy-Hitter (즉시 실행)**
+> ```
+> /agile auto   | 초기 빌드: 전체 레이어 자동 실행
+> /agile iterate "변경사항" | 변경/추가: 영향받는 레이어만 실행
+> /agile status | 현재 스프린트 진행 상황
+> ```
 >
-> - **최상위 지침**: 모든 스프린트 관리는 **[TEAM-CHARTER.md](../../TEAM-CHARTER.md)**의 규칙을 최우선으로 따릅니다.
->
-> **고유 기능**: Skeleton→Muscles→Skin 레이어 기반 점진적 완성 (Horizontal Slicing)
->
-> **v2.5.0 업데이트**: project-team 에이전트 팀 연동 (Project Manager, QA Manager)
-**v2.4.0 업데이트**: project-team Hook 시스템 연동 (task-sync, quality-gate)
+> **레이어**: Skeleton (뼈대) → Muscles (근육) → Skin (피부)
+> **목적**: 1~3일 단위 스프린트 + 사용자 검토로 만족도 향상
+
+> **v2.6.0**: Long Context 최적화 - H2O 패턴으로 핵심 정보 상단 배치
+> **v2.5.0**: project-team 에이전트 팀 연동 (Project Manager, QA Manager)
+> **v2.4.0**: project-team Hook 시스템 연동 (task-sync, quality-gate)
+
+---
+
+## ⚡ Quick Start (최우선)
+
+### 3-Stage Pipeline
+```
+1️⃣ 스프린트 계획   → Skeleton/Muscles/Skin 레이어 정의
+2️⃣ 스프린트 수행   → 집중 개발 + 태스크 동기화
+3️⃣ 체크포인트     → 스크린샷 캡처 + 사용자 승인
+```
+
+### 품질 게이트
+| 레이어 | 검증 기준 |
+|-------|-----------|
+| 🦴 Skeleton | 린트 통과 + 빌드 성공 |
+| 💪 Muscles | 린트 + 빌드 + 단위 테스트 + /checkpoint |
+| ✨ Skin | 전체 테스트 + /trinity → /audit |
+
+---
+
+## 🎯 핵심 원칙 (INVEST)
+
+- **I**ndependent: 각 태스크는 독립적 완료/검토 가능
+- **N**egotiable: 요구사항은 사용자와 협의 가능
+- **V**aluable: 각 스프린트 결과물은 실질적 가치 제공
+- **E**stimatable: 작업 규모 예측 가능
+- **S**mall: 1~3일 내 완료 가능
+- **T**estable: 완료 여부 명확히 검증 가능
 
 ---
 

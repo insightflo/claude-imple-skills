@@ -2,6 +2,8 @@
 
 > **Implementation skill pack for Claude Code** — Build software with AI agent teams
 
+[**English**](./README.md) | [**한국어**](./README_ko.md)
+
 A standalone-first collection of **skills** and **agent teams** that help you build software with Claude Code. No external dependencies required.
 
 ---
@@ -262,11 +264,59 @@ Choose a mode:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| **v3.3.0** | 2026-03-03 | 18 skills, 10 agents, 15 hooks. Standalone-first architecture |
+| **v3.4.0** | 2026-03-03 | Long Context optimization (H2O, Compressive Context, RAG Hybrid) |
+| v3.3.0 | 2026-03-03 | 18 skills, 10 agents, 15 hooks. Standalone-first architecture |
 | v3.2.0 | 2026-02-21 | Tmux parallel mode, Progressive Disclosure |
 | v3.1.0 | 2026-02-11 | Governance setup, workflow continuity |
 | v3.0.0 | 2026-02-08 | Project Team system introduced |
 | v2.0.0 | 2026-01-27 | MCP dependency removed |
+
+---
+
+## Long Context Optimization
+
+This project implements advanced techniques to minimize hallucination and information loss as context size grows:
+
+### Applied Techniques
+
+| Technique | Purpose | Implementation |
+|-----------|---------|----------------|
+| **H2O (Heavy-Hitter Oracle)** | Preserve critical info at the top | SKILL.md frontmatter, agent prompt headers |
+| **Compressive Context** | Summarize older/less important content | Agent Compressed Context sections |
+| **RAG Hybrid** | Retrieve → Prioritize → Compress → Synthesize | `project-team/services/contextOptimizer.js` |
+
+### Context Optimizer Service
+
+```bash
+# Extract heavy-hitter insights
+node project-team/services/contextOptimizer.js optimize <file>
+
+# Compress long content
+node project-team/services/contextOptimizer.js compress <file>
+
+# Build RAG hybrid query
+node project-team/services/contextOptimizer.js build "<query>" <files>
+```
+
+### MCP Server
+
+```json
+{
+  "mcpServers": {
+    "context-optimizer": {
+      "command": "node",
+      "args": ["project-team/services/mcp-context-server.js", "serve"]
+    }
+  }
+}
+```
+
+Available MCP tools:
+- `compress_context` - Compress using H2O pattern
+- `extract_heavy_hitters` - Extract key insights
+- `build_optimized_prompt` - Build optimized prompt
+
+See `docs/plan/long-context-optimization.md` for details.
 
 ---
 

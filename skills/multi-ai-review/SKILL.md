@@ -2,18 +2,48 @@
 name: multi-ai-review
 description: Claude + Gemini CLI + Codex CLI 멀티-AI 리뷰. 3단계 파이프라인으로 Initial Opinions → Cross-Review → Chairman Synthesis 수행. CLI 방식으로 추가 API 비용 없이 실행.
 trigger: "council 소집", "여러 AI 의견 물어봐", "심층 리뷰", "컨센서스 리뷰"
-version: 3.0.0
-updated: 2026-03-02
+version: 3.1.0
+updated: 2026-03-03
 ---
 
 # Multi-AI Review 스킬 (CLI 기반)
 
+> **🔥 Heavy-Hitter (즉시 실행)**
+> ```
+> "리뷰해줘" | "council 소집해줘" | "여러 AI 의견 들어보자"
+> ```
+>
+> **3-Stage Pipeline**: Initial Opinions (병렬) → Cross-Review (반박) → Chairman Synthesis (종합)
+> **비용**: CLI 구독 플랜만으로 실행 (추가 API 비용 없음)
+
+> **v3.1.0**: Long Context 최적화 - H2O 패턴으로 핵심 정보 상단 배치
 > **v3.0.0**: MCP 의존성 제거, agent-council 패턴 적용, CLI 직접 호출
+
+---
+
+## ⚡ Quick Start (최우선)
+
+### 사용법
+```bash
+# 스킬 호출 (호스트 에이전트)
+"리뷰해줘" | "council 소집해줘" | "Gemini랑 Codex 의견 들어보자"
+
+# 스크립트 직접 실행
+./skills/multi-ai-review/scripts/council.sh "리뷰 요청 내용"
+```
+
+### 전제 조건
+```bash
+command -v claude  # Claude Code (호스트) ✅
+command -v gemini  # Gemini CLI (선택사항)
+command -v codex   # Codex CLI (선택사항)
+```
+
+---
 
 ## 개요
 
 Claude(오케스트레이터) + Gemini CLI + Codex CLI가 **완전 자동화**된 리뷰를 수행합니다.
-agent-council 패턴을 적용하여 추가 API 비용 없이 CLI 구독 플랜만으로 실행합니다.
 
 ## 3-Stage Pipeline
 

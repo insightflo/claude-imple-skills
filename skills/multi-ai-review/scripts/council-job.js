@@ -314,6 +314,8 @@ function parseArgs(argv) {
     'verbose',
     'include-chairman',
     'exclude-chairman',
+    'summary',
+    'compressive-summary',
   ]);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -356,7 +358,7 @@ Usage:
   council-job.sh start [--config path] [--chairman auto|claude|codex|...] [--jobs-dir path] [--json] "question"
   council-job.sh status [--json|--text|--checklist] [--verbose] <jobDir>
   council-job.sh wait [--cursor CURSOR] [--bucket auto|N] [--interval-ms N] [--timeout-ms N] <jobDir>
-  council-job.sh results [--json] <jobDir>
+  council-job.sh results [--json|--summary] <jobDir>
   council-job.sh stop <jobDir>
   council-job.sh clean <jobDir>
 
@@ -364,6 +366,7 @@ Notes:
   - start returns immediately and runs members in parallel via detached Node workers
   - poll status with repeated short calls to update TODO/plan UIs in host agents
   - wait prints JSON by default and blocks until meaningful progress occurs, so you don't spam tool cells
+  - --summary applies H2O pattern to extract heavy-hitter insights from all member outputs
 `);
 }
 
@@ -649,6 +652,37 @@ function cmdWait(options, jobDir) {
   process.stdout.write(`${JSON.stringify({ ...asWaitPayload(finalPayload), cursor: finalCursor }, null, 2)}\n`);
 }
 
+// Long Context Optimization: Compressive Summary Generation
+// Applies H2O pattern to extract heavy-hitter insights from member outputs
+function generateCompressiveSummary(members) {
+  const insights = [];
+
+  for (const m of members) {
+    if (m.state !== 'done' || !m.output) continue;
+
+    const output = m.output;
+    const memberName = m.member;
+
+    // Extract bullet points and numbered lists as potential insights
+    const bulletMatches = output.match(/^[\s]*(?:[-*•]|\d+\.|\s+)\s*(.+)$/gm) || [];
+    const keyPoints = bulletMatches
+      .map(line => line.trim())
+      .filter(line => line.length > 10 && line.length < 200)
+      .slice(0, 5); // Top 5 per member
+
+    for (const point of keyPoints) {
+      insights.push({ member: memberName, point });
+    }
+  }
+
+  return {
+    heavyHitters: insights.slice(0, 10), // Top 10 overall
+    totalInsights: insights.length,
+    completedMembers: members.filter(m => m.state === 'done').length,
+    timestamp: new Date().toISOString()
+  };
+}
+
 function cmdResults(options, jobDir) {
   const resolvedJobDir = path.resolve(jobDir);
   const jobMeta = readJsonIfExists(path.join(resolvedJobDir, 'job.json'));
@@ -666,6 +700,21 @@ function cmdResults(options, jobDir) {
       const stderr = fs.existsSync(errorPath) ? fs.readFileSync(errorPath, 'utf8') : '';
       members.push({ safeName: entry, ...status, output, stderr });
     }
+  }
+
+  // Long Context Optimization: --summary flag for compressed output
+  if (options.summary || options['compressive-summary']) {
+    const summary = generateCompressiveSummary(members);
+
+    process.stdout.write(`# Council Summary (Compressive)\n\n`);
+    process.stdout.write(`## 🔥 Heavy-Hitters (Top ${summary.heavyHitters.length} Insights)\n\n`);
+    for (const insight of summary.heavyHitters) {
+      process.stdout.write(`**${insight.member}**: ${insight.point}\n`);
+    }
+    process.stdout.write(`\n---\n`);
+    process.stdout.write(`Completed: ${summary.completedMembers} members\n`);
+    process.stdout.write(`Total Insights Extracted: ${summary.totalInsights}\n`);
+    return;
   }
 
   if (options.json) {

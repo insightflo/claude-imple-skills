@@ -2,6 +2,8 @@
 
 > **Claude Code용 구현 스킬 팩** — AI 에이전트 팀으로 소프트웨어 구축
 
+[**English**](./README.md) | [**한국어**](./README_ko.md)
+
 Claude Code로 소프트웨어를 개발할 때 도와주는 **스킬**과 **에이전트 팀** 모음입니다. 외부 의존성 없이 독립적으로 실행됩니다.
 
 ---
@@ -262,11 +264,59 @@ cd project-team
 
 | 버전 | 날짜 | 변경사항 |
 |------|------|----------|
-| **v3.3.0** | 2026-03-03 | 18개 스킬, 10개 에이전트, 15개 훅. 독립형 아키텍처 |
+| **v3.4.0** | 2026-03-03 | Long Context 최적화 (H2O, Compressive Context, RAG Hybrid) |
+| v3.3.0 | 2026-03-03 | 18개 스킬, 10개 에이전트, 15개 훅. 독립형 아키텍처 |
 | v3.2.0 | 2026-02-21 | Tmux 병렬 모드, Progressive Disclosure |
 | v3.1.0 | 2026-02-11 | 거버넌스 설정, 워크플로우 연속성 |
 | v3.0.0 | 2026-02-08 | Project Team 시스템 도입 |
 | v2.0.0 | 2026-01-27 | MCP 의존성 제거 |
+
+---
+
+## Long Context 최적화
+
+이 프로젝트는 컨텍스트 크기 증가에 따른 환각 및 정보 손실을 최소화하기 위한 고급 기법을 적용합니다.
+
+### 적용된 기법
+
+| 기법 | 목적 | 구현 |
+|------|------|------|
+| **H2O (Heavy-Hitter Oracle)** | 상단에 중요 정보 보존 | SKILL.md frontmatter, 에이전트 프롬프트 헤더 |
+| **Compressive Context** | 오래된/덜 중요한 컨텐츠 요약 | 에이전트 Compressed Context 섹션 |
+| **RAG Hybrid** | 검색 → 우선순위 → 압축 → 종합 | `project-team/services/contextOptimizer.js` |
+
+### Context Optimizer 서비스
+
+```bash
+# 핵심 통찰 추출
+node project-team/services/contextOptimizer.js optimize <file>
+
+# 내용 압축
+node project-team/services/contextOptimizer.js compress <file>
+
+# RAG 하이브리드 쿼리 빌드
+node project-team/services/contextOptimizer.js build "<query>" <files>
+```
+
+### MCP 서버
+
+```json
+{
+  "mcpServers": {
+    "context-optimizer": {
+      "command": "node",
+      "args": ["project-team/services/mcp-context-server.js", "serve"]
+    }
+  }
+}
+```
+
+사용 가능한 MCP 도구:
+- `compress_context` - H2O 패턴으로 컨텍스트 압축
+- `extract_heavy_hitters` - 핵심 통찰 추출
+- `build_optimized_prompt` - 최적화된 프롬프트 빌드
+
+자세한 내용은 `docs/plan/long-context-optimization.md` 참조.
 
 ---
 
