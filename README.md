@@ -10,36 +10,32 @@ A standalone-first collection of **skills** and **agent teams** that help you bu
 
 ## Quick Start
 
-### Option 1: One-line Install (No git clone required)
+### Option 1: Interactive Install (Recommended)
 
 ```bash
-# Download and install automatically
-curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main/scripts/quick-install.sh | bash
-```
-
-This installs to `~/.claude/claude-imple-skills/` and symlinks skills to `~/.claude/skills/`.
-
-### Option 2: Manual Install
-
-```bash
-# Clone repository
 git clone https://github.com/insightflo/claude-imple-skills.git
 cd claude-imple-skills
-
-# Install (macOS/Linux)
-chmod +x ./scripts/install-unix.sh && ./scripts/install-unix.sh
-
-# Install (Windows PowerShell)
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
+./install.sh
 ```
 
-### Optional: Project Team
+TUI-based installer lets you select:
+- Install scope (global / project)
+- Skill categories (Core, Orchestration, Quality, Analysis, Tasks)
+- Project Team (10 agents + 15 hooks)
+- Multi-AI routing (Claude + Gemini + Codex)
 
-For large projects, deploy the AI agent team:
+### Option 2: Non-Interactive Install
 
 ```bash
-cd claude-imple-skills/project-team
-./install.sh --global
+./install.sh --global      # Global install (Core + Project Team)
+./install.sh --all         # All skills globally
+./install.sh --local       # Current project only
+```
+
+### Option 3: Remote Install (No git clone)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main/scripts/quick-install.sh | bash
 ```
 
 ---
