@@ -48,7 +48,7 @@ cd claude-imple-skills/project-team
 
 | 구성요소 | 개수 | 용도 |
 |----------|-------|------|
-| **스킬** | 18개 | 작업 실행, 분석, 자동화 |
+| **스킬** | 19개 | 작업 실행, 분석, 자동화 |
 | **에이전트** | 10개 | 역할 기반 전문가 팀 |
 | **훅** | 15개 | 자동 검증 (보안, 품질, 영향도) |
 | **템플릿** | 7개 | 프로토콜, ADR, 계약 |
@@ -99,6 +99,7 @@ cd claude-imple-skills/project-team
 | `/coverage` | 테스트 커버리지 시각화 |
 | `/architecture` | 프로젝트 구조 & 도메인 맵 |
 | `/compress` | Long Context 최적화 (H2O 패턴) |
+| `/statusline` | Claude Code 상태바에 TASKS.md 진행 상황 표시 |
 
 ---
 
@@ -198,7 +199,7 @@ project-team/
 
 ```
 claude-imple-skills/
-├── skills/                    # 18개 스킬
+├── skills/                    # 19개 스킬
 │   ├── workflow-guide/        # 메타 허브
 │   ├── governance-setup/      # Phase 0 설정
 │   ├── agile/                 # 레이어별 스프린트
@@ -215,7 +216,8 @@ claude-imple-skills/
 │   ├── deps/                  # 의존성 그래프
 │   ├── changelog/             # 변경 이력
 │   ├── coverage/              # 테스트 커버리지
-│   └── architecture/          # 아키텍처 맵
+│   ├── architecture/          # 아키텍처 맵
+│   └── statusline/            # 상태바 TASKS.md 진행 표시
 │
 ├── project-team/              # 에이전트 팀 시스템
 │   ├── install.sh             # 설치 스크립트

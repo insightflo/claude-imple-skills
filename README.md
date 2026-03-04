@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Skills** | 18 | Task execution, analysis, automation |
+| **Skills** | 19 | Task execution, analysis, automation |
 | **Agents** | 10 | Role-based specialist team |
 | **Hooks** | 15 | Auto-validation (security, quality, impact) |
 | **Templates** | 7 | Protocols, ADR, contracts |
@@ -95,6 +95,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main
 | `/coverage` | Visualize test coverage gaps |
 | `/architecture` | Map project structure & domains |
 | `/compress` | Long Context optimization (H2O pattern) |
+| `/statusline` | Display TASKS.md progress in Claude Code status bar |
 
 ---
 
@@ -211,7 +212,8 @@ claude-imple-skills/
 │   ├── deps/                  # Dependency graph
 │   ├── changelog/             # Change history
 │   ├── coverage/              # Test coverage
-│   └── architecture/          # Architecture map
+│   ├── architecture/          # Architecture map
+│   └── statusline/            # TASKS.md progress in status bar
 │
 ├── project-team/              # Agent team system
 │   ├── install.sh             # Installation script
