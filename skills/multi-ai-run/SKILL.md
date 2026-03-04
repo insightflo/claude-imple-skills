@@ -6,7 +6,7 @@ triggers:
   - 멀티 AI 실행
   - 모델 라우팅
   - AI 분업
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Multi-AI Run
@@ -39,6 +39,39 @@ version: 1.0.0
 ---
 
 ## 설정 파일
+
+### 🔧 CLI 모델 설정: `routing.config.yaml`
+
+각 CLI에서 사용할 모델을 직접 지정할 수 있습니다:
+
+```yaml
+# skills/multi-ai-run/routing.config.yaml (또는 .claude/routing.config.yaml)
+cli_models:
+  gemini:
+    command: "gemini"
+    model: "gemini-3.1-pro-preview"  # ← 모델 변경
+    # model: "gemini-2.0-flash"      # 빠른 응답용
+    # model: "gemini-3-flash-preview" # 경량 작업용
+    args: "--output-format text"
+
+  codex:
+    command: "codex exec"
+    model: "gpt-5.3-codex"           # ← 모델 변경
+    # model: "o3"                    # 추론 강화
+    # model: "gpt-4.1"               # 범용
+
+  claude:
+    command: "claude"
+    model: "opus"                    # ← 모델 변경
+    # model: "sonnet"                # 빠른 응답용
+```
+
+**설정 파일 우선순위:**
+1. 프로젝트: `.claude/routing.config.yaml`
+2. 글로벌: `~/.claude/routing.config.yaml`
+3. 스킬 기본값: `skills/multi-ai-run/routing.config.yaml`
+
+---
 
 ### 프로젝트별 설정: `.claude/model-routing.yaml`
 
@@ -262,4 +295,16 @@ A: 각 CLI의 구독 플랜 또는 API 크레딧을 사용합니다. Claude Code
 
 ---
 
-**Last Updated**: 2026-03-03 (v1.0.0 - 초기 버전)
+## 파일 구조
+
+```
+skills/multi-ai-run/
+├── SKILL.md                    # 이 파일
+├── routing.config.yaml         # CLI 모델 + 라우팅 설정
+└── references/
+    └── cli-setup.md            # CLI 설치 가이드
+```
+
+---
+
+**Last Updated**: 2026-03-04 (v1.1.0 - routing.config.yaml 추가)

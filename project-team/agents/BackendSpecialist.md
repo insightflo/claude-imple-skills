@@ -3,6 +3,11 @@ name: backend-specialist
 description: API 설계/구현 표준, 트랜잭션/캐시 패턴, 에러 핸들링, 성능 최적화
 tools: [Read, Write, Edit, Bash, Grep, Glob]
 model: sonnet
+# CLI 기반 모델 라우팅 (multi-ai-run 스타일)
+cli_command: "codex"
+cli_fallback: true
+# Codex는 MCP 지원 없음 - Claude 직접 처리
+mcp: []
 ---
 
 # Backend Specialist Agent

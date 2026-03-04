@@ -211,6 +211,8 @@ shared_specialists:
     enabled: true
     description: "OWASP Top 10, 시크릿 탐지, 의존성 CVE 검사"
     model: "sonnet"
+    cli_command: "codex"
+    cli_fallback: true
     hook: "security-scan"
     permissions:
       - read_all_domains
@@ -227,6 +229,8 @@ shared_specialists:
     enabled: true
     description: "API 설계, 트랜잭션 패턴, 에러 핸들링, 성능 최적화"
     model: "sonnet"
+    cli_command: "codex"
+    cli_fallback: true
     standards_ref: "templates/standards/backend-standards.md"
     permissions:
       - read_all_domains
@@ -243,6 +247,8 @@ shared_specialists:
     enabled: true
     description: "상태 관리, 렌더링 성능, 접근성 검증, 디자인 시스템 구현"
     model: "sonnet"
+    cli_command: "gemini"
+    cli_fallback: true
     mcp: ["gemini"]  # Gemini MCP로 디자인 코딩 위임
     standards_ref: "templates/standards/frontend-standards.md"
     permissions:
@@ -260,6 +266,8 @@ shared_specialists:
     enabled: false  # Phase 5에서 활성화
     description: "TDD 가이드, E2E/계약 테스트, 커버리지 관리"
     model: "sonnet"
+    cli_command: "codex"
+    cli_fallback: true
     permissions:
       - read_all_domains
       - write_tests
@@ -274,6 +282,8 @@ shared_specialists:
     enabled: false  # Phase 5에서 활성화
     description: "CI/CD 파이프라인, 관측성, 릴리스 안정화"
     model: "sonnet"
+    cli_command: "codex"
+    cli_fallback: true
     permissions:
       - read_all_domains
       - manage_infrastructure

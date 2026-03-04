@@ -2,11 +2,11 @@
 
 ## 필수 CLI
 
-| CLI | 용도 | 설치 확인 |
-|-----|------|-----------|
+| CLI      | 용도                    | 설치 확인          |
+| -------- | ----------------------- | ------------------ |
 | `claude` | 오케스트레이터 (호스트) | `claude --version` |
-| `codex` | 코드 생성/리뷰 | `codex --version` |
-| `gemini` | 디자인/UI 작업 | `gemini --version` |
+| `codex`  | 코드 생성/리뷰          | `codex --version`  |
+| `gemini` | 디자인/UI 작업          | `gemini --version` |
 
 ---
 
@@ -46,7 +46,7 @@ codex -q "Write a hello world in Python"
 
 ```bash
 # ~/.codexrc
-model: gpt-4o
+model: gpt-5.3-codex
 auto_approve: false
 ```
 
@@ -142,7 +142,7 @@ gcloud config get-value project
 ```yaml
 # .claude/model-routing.yaml
 timeouts:
-  codex: 60    # 초
-  gemini: 60
-  default: 30
+    codex: 60 # 초
+    gemini: 60
+    default: 30
 ```

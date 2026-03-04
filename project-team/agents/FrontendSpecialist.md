@@ -3,6 +3,10 @@ name: frontend-specialist
 description: 상태 관리 패턴, 렌더링 성능 최적화, 접근성 검증, 디자인 시스템 구현
 tools: [Read, Write, Edit, Bash, Grep, Glob]
 model: sonnet
+# CLI 기반 모델 라우팅 (multi-ai-run 스타일)
+cli_command: "gemini"
+cli_fallback: true
+# MCP는 폴백용으로 유지 (CLI 실패 시)
 mcp: [gemini]
 ---
 

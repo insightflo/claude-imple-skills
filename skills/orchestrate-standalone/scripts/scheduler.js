@@ -11,6 +11,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
+const os = require('os');
 
 // ---------------------------------------------------------------------------
 // Task Parsing
@@ -411,11 +413,199 @@ if (require.main === module) {
   }
 }
 
+// CLI Routing Functions
+async function checkCLI(command) {
+  return new Promise((resolve) => {
+    exec(`command -v ${command}`, (error, stdout, stderr) => {
+      resolve(!error);
+    });
+  });
+}
+
+async function runExternalCLI(command, task) {
+  return new Promise((resolve, reject) => {
+    const taskArg = command.includes('gemini') ? '--model gemini-2.0-flash-preview' : '';
+    const child = exec(command, [taskArg, task.description], {
+      maxBuffer: 1024 * 1024
+    });
+
+    let output = '';
+    child.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    child.stderr.on('data', (data) => {
+      output += data.toString();
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ success: true, output });
+      } else {
+        reject(new Error(`CLI failed with code ${code}: ${output}`));
+      }
+    });
+  });
+}
+
+/**
+ * Load model routing configuration
+ */
+function loadModelRouting() {
+  const routingPath = path.join(process.cwd(), '.claude', 'model-routing.yaml');
+  const globalRoutingPath = path.join(os.homedir(), '.claude', 'model-routing.yaml');
+
+
+  // Try local first, then global
+  for (const p of [routingPath, globalRoutingPath]) {
+    if (fs.existsSync(p)) {
+      try {
+        const content = fs.readFileSync(p, 'utf8');
+        return YAML.parse(content);
+      } catch (error) {
+        console.warn(`Failed to parse ${p}: ${error.message}`);
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Get CLI command for agent
+ */
+function getCLICommandForAgent(agentName) {
+  const routing = loadModelRouting();
+  if (!routing) return null;
+
+  // Direct match
+  if (routing.routing && routing.routing[agentName]) {
+    return routing.routing[agentName];
+  }
+
+  // Wildcard match
+  for (const pattern of Object.keys(routing.routing)) {
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace('*', '.*') + '$');
+      if (regex.test(agentName)) {
+        return routing.routing[pattern];
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Execute task with CLI routing
+ */
+async function executeWithCLI(agent, task) {
+  const cliCommand = agent.cli_command || getCLICommandForAgent(agent.name);
+
+  // No CLI command configured
+  if (!cliCommand) {
+    return null;
+  }
+
+  // Check if CLI exists
+  const cliExists = await checkCLI(cliCommand.split(' ')[0]);
+  if (!cliExists) {
+    console.warn(`CLI not found: ${cliCommand}`);
+    return null;
+  }
+
+  // Execute with CLI
+  try {
+    const result = await runExternalCLI(cliCommand, task);
+    return result;
+  } catch (error) {
+    console.error(`CLI execution failed: ${error.message}`);
+
+    // Try fallback
+    if (agent.cli_fallback) {
+      return await executeWithFallback(agent, task);
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Fallback execution (MCP or then Claude)
+ */
+async function executeWithFallback(agent, task) {
+  // Try MCP fallback
+  if (agent.mcp && agent.mcp.length > 0) {
+    for (const mcp of agent.mcp) {
+      if (mcp === 'gemini') {
+        console.log(`Falling back to Gemini MCP`);
+        // MCP call would be handled by the caller
+        return { useMCP: true, source: 'mcp' };
+      }
+    }
+  }
+
+  // Claude direct execution
+  console.log('Falling back to Claude direct execution');
+  return { model: 'claude', description: task.description };
+}
+
+/**
+ * Smart execution: CLI -> MCP -> Claude
+ */
+async function smartExecute(agent, task) {
+  // Try CLI first
+  const cliResult = await executeWithCLI(agent, task);
+
+  if (cliResult) {
+    return cliResult;
+  }
+
+  // Try fallback
+  return await executeWithFallback(agent, task);
+}
+
+// YAML parser (simple)
+function parseSimpleYAML(content) {
+  const result = {};
+  const lines = content.split('\n');
+  let currentKey = null;
+  let currentValue = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+
+    if (trimmed.includes(':')) {
+      if (currentKey) {
+        result[currentKey] = currentValue.join('\n');
+      }
+      currentKey = trimmed.slice(0, -1).trim();
+      currentValue = [];
+    } else if (currentKey) {
+      currentValue.push(trimmed);
+    }
+  }
+
+  if (currentKey) {
+    result[currentKey] = currentValue.join('\n');
+  }
+
+  return result;
+}
+
+
 module.exports = {
   parseTasks,
   buildDAG,
   createLayers,
   detectConflicts,
   createWaves,
-  createWavePlan
+  createWavePlan,
+  // CLI Routing exports
+  checkCLI,
+  runExternalCLI,
+  loadModelRouting,
+  getCLICommandForAgent,
+  executeWithCLI,
+  executeWithFallback,
+  smartExecute
 };
