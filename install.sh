@@ -180,6 +180,25 @@ configure_multi_ai_routing() {
     fi
 }
 
+configure_statusline() {
+    echo ""
+    gum style --foreground 39 "Step 5: Statusline 설정 (선택사항)"
+
+    gum style --foreground 252 --italic \
+        "TASKS.md 진행 상황을 Claude Code 상태바에 표시합니다:" \
+        "" \
+        "  📋 12/34 ▓▓▓░░░░░░░  Phase 2  → T2.1: Build API"
+    echo ""
+
+    if gum confirm --default=false "Statusline에 태스크 진행 상황을 추가하시겠습니까?"; then
+        SETUP_STATUSLINE=true
+        echo -e "${GREEN}✓ Statusline 설정 예정${NC}"
+    else
+        SETUP_STATUSLINE=false
+        echo -e "${YELLOW}⏭️  Statusline 설정 건너뜀${NC}"
+    fi
+}
+
 # ============================================================================
 # Installation Logic
 # ============================================================================
@@ -350,6 +369,25 @@ configure_hooks() {
     fi
 }
 
+install_statusline() {
+    if [[ "$SETUP_STATUSLINE" != true ]]; then
+        return
+    fi
+
+    echo ""
+    gum style --foreground 39 "Installing Statusline..."
+
+    local skill_dir="$SCRIPT_DIR/skills/statusline"
+    if [[ ! -f "$skill_dir/install.sh" ]]; then
+        echo -e "${YELLOW}⚠️  Statusline skill not found${NC}"
+        return
+    fi
+
+    gum spin --spinner dot --title "Statusline 설치 중..." -- \
+        bash "$skill_dir/install.sh"
+    echo -e "${GREEN}✓ Statusline 설치 완료${NC}"
+}
+
 setup_multi_ai_routing() {
     if [[ "$SETUP_MULTI_AI" != true ]]; then
         return
@@ -518,6 +556,7 @@ main() {
     select_skill_categories
     select_project_team
     configure_multi_ai_routing
+    configure_statusline
 
     echo ""
     gum style --foreground 39 "Installation Summary"
@@ -533,6 +572,7 @@ main() {
         install_skills
         install_project_team
         setup_multi_ai_routing
+        install_statusline
         show_completion
     else
         echo -e "${YELLOW}설치가 취소되었습니다.${NC}"
