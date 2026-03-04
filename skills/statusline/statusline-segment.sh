@@ -32,7 +32,7 @@ TASKS_FILE="$PROJECT_ROOT/TASKS.md"
 # Cache (30s TTL)
 # ============================================================================
 CACHE_HASH=$(printf '%s' "$PROJECT_ROOT" | md5 2>/dev/null || printf '%s' "$PROJECT_ROOT" | md5sum 2>/dev/null | cut -c1-8)
-CACHE_FILE="/tmp/.claude_tasks_status_${CACHE_HASH}"
+CACHE_FILE="${TMPDIR:-/tmp}/.claude_tasks_status_${CACHE_HASH}"
 
 use_cache=false
 if [[ -f "$CACHE_FILE" ]]; then

@@ -39,6 +39,12 @@ check_gum() {
             curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
             echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list
             sudo apt update && sudo apt install gum
+        elif command -v scoop &> /dev/null; then
+            scoop install gum
+        elif command -v winget &> /dev/null; then
+            winget install charmbracelet.gum
+        elif command -v choco &> /dev/null; then
+            choco install gum
         else
             echo -e "${RED}gum을 자동으로 설치할 수 없습니다.${NC}"
             echo "https://github.com/charmbracelet/gum#installation 참조"
@@ -219,8 +225,9 @@ install_skills() {
     if [[ "$INSTALL_ALL" == true ]] || [[ "$CATEGORIES" == *"Core"* ]]; then
         for skill in multi-ai-run multi-ai-review orchestrate-standalone; do
             if [[ -d "$SCRIPT_DIR/skills/$skill" ]]; then
+                mkdir -p "$TARGET_DIR/skills/$skill"
                 gum spin --spinner dot --title "$skill 설치 중..." -- \
-                    rsync -a "$SCRIPT_DIR/skills/$skill/" "$TARGET_DIR/skills/$skill/"
+                    bash -c "rsync -a \"$SCRIPT_DIR/skills/$skill/\" \"$TARGET_DIR/skills/$skill/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/skills/$skill/.\" \"$TARGET_DIR/skills/$skill/\""
                 installed=$((installed + 1))
             fi
         done
@@ -230,8 +237,9 @@ install_skills() {
     if [[ "$INSTALL_ALL" == true ]] || [[ "$CATEGORIES" == *"Orchestration"* ]]; then
         for skill in agile governance-setup workflow-guide; do
             if [[ -d "$SCRIPT_DIR/skills/$skill" ]]; then
+                mkdir -p "$TARGET_DIR/skills/$skill"
                 gum spin --spinner dot --title "$skill 설치 중..." -- \
-                    rsync -a "$SCRIPT_DIR/skills/$skill/" "$TARGET_DIR/skills/$skill/"
+                    bash -c "rsync -a \"$SCRIPT_DIR/skills/$skill/\" \"$TARGET_DIR/skills/$skill/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/skills/$skill/.\" \"$TARGET_DIR/skills/$skill/\""
                 installed=$((installed + 1))
             fi
         done
@@ -241,8 +249,9 @@ install_skills() {
     if [[ "$INSTALL_ALL" == true ]] || [[ "$CATEGORIES" == *"Quality"* ]]; then
         for skill in checkpoint quality-auditor security-review; do
             if [[ -d "$SCRIPT_DIR/skills/$skill" ]]; then
+                mkdir -p "$TARGET_DIR/skills/$skill"
                 gum spin --spinner dot --title "$skill 설치 중..." -- \
-                    rsync -a "$SCRIPT_DIR/skills/$skill/" "$TARGET_DIR/skills/$skill/"
+                    bash -c "rsync -a \"$SCRIPT_DIR/skills/$skill/\" \"$TARGET_DIR/skills/$skill/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/skills/$skill/.\" \"$TARGET_DIR/skills/$skill/\""
                 installed=$((installed + 1))
             fi
         done
@@ -252,8 +261,9 @@ install_skills() {
     if [[ "$INSTALL_ALL" == true ]] || [[ "$CATEGORIES" == *"Analysis"* ]]; then
         for skill in architecture deps impact changelog coverage; do
             if [[ -d "$SCRIPT_DIR/skills/$skill" ]]; then
+                mkdir -p "$TARGET_DIR/skills/$skill"
                 gum spin --spinner dot --title "$skill 설치 중..." -- \
-                    rsync -a "$SCRIPT_DIR/skills/$skill/" "$TARGET_DIR/skills/$skill/"
+                    bash -c "rsync -a \"$SCRIPT_DIR/skills/$skill/\" \"$TARGET_DIR/skills/$skill/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/skills/$skill/.\" \"$TARGET_DIR/skills/$skill/\""
                 installed=$((installed + 1))
             fi
         done
@@ -263,8 +273,9 @@ install_skills() {
     if [[ "$INSTALL_ALL" == true ]] || [[ "$CATEGORIES" == *"Tasks"* ]]; then
         for skill in tasks-init tasks-migrate recover context-optimize; do
             if [[ -d "$SCRIPT_DIR/skills/$skill" ]]; then
+                mkdir -p "$TARGET_DIR/skills/$skill"
                 gum spin --spinner dot --title "$skill 설치 중..." -- \
-                    rsync -a "$SCRIPT_DIR/skills/$skill/" "$TARGET_DIR/skills/$skill/"
+                    bash -c "rsync -a \"$SCRIPT_DIR/skills/$skill/\" \"$TARGET_DIR/skills/$skill/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/skills/$skill/.\" \"$TARGET_DIR/skills/$skill/\""
                 installed=$((installed + 1))
             fi
         done
@@ -295,7 +306,7 @@ install_project_team() {
     mkdir -p "$TARGET_DIR/agents"
     if [[ -d "$SCRIPT_DIR/project-team/agents" ]]; then
         gum spin --spinner dot --title "에이전트 설치 중..." -- \
-            rsync -a "$SCRIPT_DIR/project-team/agents/" "$TARGET_DIR/agents/"
+            bash -c "rsync -a \"$SCRIPT_DIR/project-team/agents/\" \"$TARGET_DIR/agents/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/project-team/agents/.\" \"$TARGET_DIR/agents/\""
         local agent_count=$(ls -1 "$TARGET_DIR/agents"/*.md 2>/dev/null | wc -l | tr -d ' ')
         echo -e "${GREEN}✓ $agent_count 에이전트 설치됨${NC}"
     fi
@@ -304,7 +315,7 @@ install_project_team() {
     mkdir -p "$TARGET_DIR/templates"
     if [[ -d "$SCRIPT_DIR/project-team/templates" ]]; then
         gum spin --spinner dot --title "템플릿 설치 중..." -- \
-            rsync -a "$SCRIPT_DIR/project-team/templates/" "$TARGET_DIR/templates/"
+            bash -c "rsync -a \"$SCRIPT_DIR/project-team/templates/\" \"$TARGET_DIR/templates/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/project-team/templates/.\" \"$TARGET_DIR/templates/\""
         echo -e "${GREEN}✓ 템플릿 설치됨${NC}"
     fi
 
@@ -313,7 +324,7 @@ install_project_team() {
         mkdir -p "$TARGET_DIR/hooks"
         if [[ -d "$SCRIPT_DIR/project-team/hooks" ]]; then
             gum spin --spinner dot --title "훅 설치 중..." -- \
-                rsync -a "$SCRIPT_DIR/project-team/hooks/" "$TARGET_DIR/hooks/"
+                bash -c "rsync -a \"$SCRIPT_DIR/project-team/hooks/\" \"$TARGET_DIR/hooks/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/project-team/hooks/.\" \"$TARGET_DIR/hooks/\""
             chmod +x "$TARGET_DIR/hooks/"*.js 2>/dev/null || true
             local hook_count=$(ls -1 "$TARGET_DIR/hooks"/*.js 2>/dev/null | wc -l | tr -d ' ')
             echo -e "${GREEN}✓ $hook_count 훅 설치됨${NC}"
