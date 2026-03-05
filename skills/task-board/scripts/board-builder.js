@@ -67,7 +67,9 @@ function parseTasks(tasksPath) {
   const lines = fs.readFileSync(tasksPath, 'utf8').split('\n');
   const tasks = [];
   for (const line of lines) {
-    const m = line.match(/^\s*-\s*\[( |x)\]\s*(.+)$/i);
+    // Match both: "- [ ] Title" and "### [x] Title" (heading-style tasks)
+    const m = line.match(/^\s*-\s*\[( |x)\]\s*(.+)$/i) ||
+              line.match(/^#+\s+\[( |x)\]\s+(.+)$/i);
     if (!m) continue;
     const done = m[1].toLowerCase() === 'x';
     const title = m[2].trim();
@@ -104,7 +106,7 @@ function parseOrchestrateState(statePath) {
 // ---------------------------------------------------------------------------
 
 function parseFrontmatter(content) {
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?(?:\n|$)/);
   if (!match) return {};
   const meta = {};
   for (const line of match[1].split('\n')) {
@@ -204,6 +206,8 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
 
 module.exports = { parseTasks, parseOrchestrateState, parseReqFiles, mergeSources, buildBoard, COLUMN_MAP };

@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 # board-show.sh — ASCII Kanban board renderer for task-board skill
 #
-# Reads .claude/collab/board-state.json and renders a terminal kanban board:
-#
-#   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-#   │   Backlog    │  │ In Progress  │  │   Blocked    │  │     Done     │
-#   ├──────────────┤  ├──────────────┤  ├──────────────┤  ├──────────────┤
-#   │ T1.1         │  │ T2.3         │  │ REQ-001      │  │ T1.2         │
-#   └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+# Reads .claude/collab/board-state.json and renders a terminal kanban board.
+# Delegates rendering to Node.js for portability (avoids bash 4+ requirements).
 #
 # Usage:
 #   ./board-show.sh [--project-dir=/path]
@@ -15,29 +10,13 @@
 
 set -euo pipefail
 
+BUILDER="$(dirname "$0")/board-builder.js"
+
 # ---------------------------------------------------------------------------
-# Config
+# Args (parse BEFORE computing BOARD_FILE so --project-dir takes effect)
 # ---------------------------------------------------------------------------
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-BOARD_FILE="$PROJECT_DIR/.claude/collab/board-state.json"
-BUILDER="$(dirname "$0")/board-builder.js"
-COL_WIDTH=22
-
-# Colors
-RESET="\033[0m"
-BOLD="\033[1m"
-DIM="\033[2m"
-C_BLUE="\033[38;2;137;180;250m"
-C_GREEN="\033[38;2;166;227;161m"
-C_RED="\033[38;2;243;139;168m"
-C_YELLOW="\033[38;2;249;226;175m"
-C_GRAY="\033[38;2;88;91;112m"
-
-# ---------------------------------------------------------------------------
-# Args
-# ---------------------------------------------------------------------------
-
 REBUILD=false
 for arg in "$@"; do
   case "$arg" in
@@ -46,13 +25,15 @@ for arg in "$@"; do
   esac
 done
 
+BOARD_FILE="$PROJECT_DIR/.claude/collab/board-state.json"
+
 # ---------------------------------------------------------------------------
 # Rebuild if requested or missing
 # ---------------------------------------------------------------------------
 
 if [[ "$REBUILD" == "true" ]] || [[ ! -f "$BOARD_FILE" ]]; then
   if command -v node &>/dev/null && [[ -f "$BUILDER" ]]; then
-    node "$BUILDER" --project-dir="$PROJECT_DIR" 2>/dev/null || true
+    node "$BUILDER" --project-dir="$PROJECT_DIR" 2>&1 || true
   fi
 fi
 
@@ -62,109 +43,66 @@ if [[ ! -f "$BOARD_FILE" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Parse board-state.json with node (portable, no jq required)
+# Render via Node (portable, works with bash 3.2+ on macOS)
 # ---------------------------------------------------------------------------
 
-BOARD_DATA=$(node - "$BOARD_FILE" <<'JSEOF'
+node - "$BOARD_FILE" <<'JSEOF'
+'use strict';
 const fs = require('fs');
-const file = process.argv[1];
+const file = process.argv[2];  // argv[0]=node, argv[1]="-", argv[2]=file
+
 const board = JSON.parse(fs.readFileSync(file, 'utf8'));
-const cols = ['Backlog', 'In Progress', 'Blocked', 'Done'];
-for (const col of cols) {
-  const cards = board.columns[col] || [];
-  process.stdout.write(col + '\t' + cards.map(c => c.id + (c.agent ? '[' + c.agent + ']' : '')).join('|') + '\n');
+const COL_ORDER = ['Backlog', 'In Progress', 'Blocked', 'Done'];
+const COL_WIDTH = 22;
+
+// ANSI colors
+const R = '\x1b[0m';
+const BOLD = '\x1b[1m';
+const DIM = '\x1b[2m';
+const C = {
+  Backlog:       '\x1b[38;2;88;91;112m',
+  'In Progress': '\x1b[38;2;137;180;250m',
+  Blocked:       '\x1b[38;2;243;139;168m',
+  Done:          '\x1b[38;2;166;227;161m',
+};
+
+function pad(s, w) {
+  const str = String(s);
+  if (str.length >= w) return str.slice(0, w - 1) + '…';
+  return str + ' '.repeat(w - str.length);
 }
+
+const now = new Date().toLocaleString('ko-KR', { hour12: false });
+process.stdout.write(`\nTask Board  ${now}\n\n`);
+
+// Header
+for (const col of COL_ORDER) {
+  const count = (board.columns[col] || []).length;
+  process.stdout.write(`${C[col]}${BOLD}${pad(col + ' (' + count + ')', COL_WIDTH)}${R}  `);
+}
+process.stdout.write('\n');
+
+// Separator
+for (let i = 0; i < COL_ORDER.length; i++) {
+  process.stdout.write('─'.repeat(COL_WIDTH) + '  ');
+}
+process.stdout.write('\n');
+
+// Cards
+const maxRows = Math.max(...COL_ORDER.map(col => (board.columns[col] || []).length));
+for (let row = 0; row < maxRows; row++) {
+  for (const col of COL_ORDER) {
+    const cards = board.columns[col] || [];
+    if (row < cards.length) {
+      const card = cards[row];
+      const label = card.id + (card.agent ? ` [${card.agent}]` : '');
+      process.stdout.write(pad(label, COL_WIDTH) + '  ');
+    } else {
+      process.stdout.write(' '.repeat(COL_WIDTH) + '  ');
+    }
+  }
+  process.stdout.write('\n');
+}
+
+process.stdout.write('\n');
 JSEOF
-)
-
-# ---------------------------------------------------------------------------
-# Render
-# ---------------------------------------------------------------------------
-
-declare -A COL_CARDS
-declare -a COL_ORDER=("Backlog" "In Progress" "Blocked" "Done")
-
-while IFS=$'\t' read -r col_name cards_str; do
-  COL_CARDS["$col_name"]="$cards_str"
-done <<< "$BOARD_DATA"
-
-pad_right() {
-  local str="$1" width="$2"
-  printf "%-${width}s" "$str"
-}
-
-header_color() {
-  case "$1" in
-    "Backlog")     echo -e "$C_GRAY" ;;
-    "In Progress") echo -e "$C_BLUE" ;;
-    "Blocked")     echo -e "$C_RED" ;;
-    "Done")        echo -e "$C_GREEN" ;;
-    *)             echo -e "$RESET" ;;
-  esac
-}
-
-echo ""
-echo -e "${BOLD}Task Board${RESET}  $(date '+%Y-%m-%d %H:%M')"
-echo ""
-
-# Header row
-for col in "${COL_ORDER[@]}"; do
-  color=$(header_color "$col")
-  printf "${color}${BOLD}%-${COL_WIDTH}s${RESET}  " "$col"
-done
-echo ""
-
-# Separator
-for col in "${COL_ORDER[@]}"; do
-  printf "%s  " "$(printf '%.0s─' $(seq 1 $COL_WIDTH))"
-done
-echo ""
-
-# Cards: find max rows
-max_rows=0
-declare -A COL_ARRAY
-for col in "${COL_ORDER[@]}"; do
-  cards_str="${COL_CARDS[$col]:-}"
-  if [[ -n "$cards_str" ]]; then
-    IFS='|' read -ra cards <<< "$cards_str"
-    count="${#cards[@]}"
-  else
-    count=0
-  fi
-  COL_ARRAY["${col}_count"]=$count
-  [[ $count -gt $max_rows ]] && max_rows=$count
-done
-
-for ((row=0; row<max_rows; row++)); do
-  for col in "${COL_ORDER[@]}"; do
-    cards_str="${COL_CARDS[$col]:-}"
-    if [[ -n "$cards_str" ]]; then
-      IFS='|' read -ra cards <<< "$cards_str"
-    else
-      cards=()
-    fi
-    if [[ $row -lt ${#cards[@]} ]]; then
-      card="${cards[$row]}"
-      # Truncate to col width
-      if [[ ${#card} -gt $((COL_WIDTH - 1)) ]]; then
-        card="${card:0:$((COL_WIDTH - 2))}…"
-      fi
-      printf "%-${COL_WIDTH}s  " "$card"
-    else
-      printf "%-${COL_WIDTH}s  " ""
-    fi
-  done
-  echo ""
-done
-
-echo ""
-
-# Summary counts
-echo -e "${DIM}Counts:${RESET}"
-for col in "${COL_ORDER[@]}"; do
-  count="${COL_ARRAY[${col}_count]}"
-  color=$(header_color "$col")
-  printf "  ${color}${col}${RESET}: ${BOLD}${count}${RESET}"
-done
-echo ""
-echo ""

@@ -165,8 +165,11 @@ function handleTaskUpdate(toolInput) {
 // ---------------------------------------------------------------------------
 
 function parseFrontmatterStatus(content) {
-  const match = content.match(/^---[\s\S]*?^status:\s*(\S+)/m);
-  return match ? match[1].trim() : null;
+  // Constrain match to within first --- block only, handle CRLF
+  const block = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!block) return null;
+  const statusMatch = block[1].match(/^status:\s*(\S+)/m);
+  return statusMatch ? statusMatch[1].trim().toUpperCase() : null;
 }
 
 function handleReqFileEdit(filePath, newContent) {
@@ -221,7 +224,7 @@ function applyEventToBoard(state, event) {
 async function main() {
   const input = await readStdin();
   const hookEvent = input.hook_event_name || '';
-  const toolName = input.tool_name || '';
+  const toolName = input.tool_name || input.tool || '';
   const toolInput = input.tool_input || {};
 
   if (!hookEvent.startsWith('PostToolUse')) return;
@@ -232,7 +235,13 @@ async function main() {
     event = handleTaskUpdate(toolInput);
   } else if (toolName === 'Edit' || toolName === 'Write') {
     const filePath = toolInput.file_path || toolInput.path || '';
-    const content = toolInput.new_string || toolInput.content || '';
+    // PostToolUse: file is already written — read from filesystem for full content
+    // (new_string is only the replacement snippet, not the full file)
+    let content = '';
+    try {
+      const fullPath = path.resolve(PROJECT_DIR, filePath);
+      if (fs.existsSync(fullPath)) content = fs.readFileSync(fullPath, 'utf8');
+    } catch { /* ignore read errors */ }
     event = handleReqFileEdit(filePath, content);
   }
 
@@ -248,7 +257,7 @@ async function main() {
   }
 }
 
-main().catch(() => {});
+main().catch((err) => process.stderr.write(`[task-board-sync] error: ${err.message}\n`));
 
 // ---------------------------------------------------------------------------
 // Exports for testing

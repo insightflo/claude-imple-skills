@@ -384,13 +384,13 @@ flowchart TD
 > **근거**: Claude Agent Teams + TaskForce AI MCP 리서치 결과 (2026-03-05)
 > **원칙**: standalone-first, TASKS.md = 단일 진실 원천, board-state.json = 파생 데이터
 
-### [ ] P8-T1: 통합 상태 매핑 표준화
+### [x] P8-T1: 통합 상태 매핑 표준화
 - **담당**: backend-specialist
 - **산출물**: `project-team/references/communication-protocol.md` 업데이트
 - **내용**: `pending/in_progress/completed` ↔ `OPEN/PENDING/ESCALATED` → 칸반 컬럼 매핑 (Backlog / In Progress / Blocked / Done)
 - **의존성**: 없음
 
-### [ ] P8-T2: task-board-sync.js 훅 구현
+### [x] P8-T2: task-board-sync.js 훅 구현
 - **담당**: backend-specialist
 - **산출물**: `project-team/hooks/task-board-sync.js`
 - **기능**:
@@ -400,13 +400,13 @@ flowchart TD
   - `.claude/collab/board-state.json` (현재 보드 스냅샷) 업데이트
 - **의존성**: P8-T1
 
-### [ ] P8-T3: collab-init.js 업데이트
+### [x] P8-T3: collab-init.js 업데이트
 - **담당**: backend-specialist
 - **산출물**: `project-team/scripts/collab-init.js` 업데이트
 - **내용**: `board-state.json`, `events.ndjson` 초기화 추가
 - **의존성**: P8-T2
 
-### [ ] P8-T4: board-builder.js 스크립트 구현
+### [x] P8-T4: board-builder.js 스크립트 구현
 - **담당**: backend-specialist
 - **산출물**: `skills/task-board/scripts/board-builder.js`
 - **기능**:
@@ -415,25 +415,25 @@ flowchart TD
   - `.claude/task-layers.json` (의존성 DAG) 활용
 - **의존성**: P8-T2
 
-### [ ] P8-T5: board-show.sh 터미널 렌더러 구현
+### [x] P8-T5: board-show.sh 터미널 렌더러 구현
 - **담당**: backend-specialist
 - **산출물**: `skills/task-board/scripts/board-show.sh`
 - **기능**: ASCII 칸반 보드 출력 (Backlog / In Progress / Blocked / Done 컬럼)
 - **의존성**: P8-T4
 
-### [ ] P8-T6: task-board 스킬 SKILL.md 작성
+### [x] P8-T6: task-board 스킬 SKILL.md 작성
 - **담당**: docs-specialist
 - **산출물**: `skills/task-board/SKILL.md`
 - **트리거**: `/task-board`
 - **명령어**: `init`, `show`, `rebuild`, `health`
 - **의존성**: P8-T4, P8-T5
 
-### [ ] P8-T7: install.sh에 task-board-sync 훅 추가
+### [x] P8-T7: install.sh에 task-board-sync 훅 추가
 - **담당**: backend-specialist
 - **산출물**: `project-team/install.sh` 업데이트
 - **의존성**: P8-T2
 
-### [ ] P8-T8: README 및 workflow-guide 업데이트
+### [x] P8-T8: README 및 workflow-guide 업데이트
 - **담당**: docs-specialist
 - **산출물**:
   - `README.md`, `README_ko.md` — task-board 스킬 추가
