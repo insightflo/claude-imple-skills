@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main
 |-----------|-------|---------|
 | **Skills** | 19 | Task execution, analysis, automation |
 | **Agents** | 10 | Role-based specialist team |
-| **Hooks** | 15 | Auto-validation (security, quality, impact) |
+| **Hooks** | 17 | Auto-validation (security, quality, impact) |
 | **Templates** | 7 | Protocols, ADR, contracts |
 
 ---
@@ -82,7 +82,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main
 
 | Skill | What it does |
 |-------|--------------|
-| `/orchestrate-standalone` | Execute 50-200 tasks with specialist agents |
+| `/orchestrate-standalone` | Execute 50-200 tasks with specialist agents (`--mode=sprint` for Agile PI planning + sprint review gates) |
 | `/multi-ai-run` | Parallel AI execution management |
 
 ### Maintenance
@@ -106,7 +106,9 @@ For larger projects, deploy an **AI agent team** with automatic quality gates:
 ```
 project-team/
 ├── agents/          # 9 specialists
-├── hooks/           # 16 auto-validators
+├── hooks/           # 17 auto-validators
+├── scripts/         # collaboration & conflict resolution
+├── references/      # communication protocols
 ├── skills/          # 5 maintenance tools
 └── templates/       # protocols & contracts
 ```
@@ -125,13 +127,13 @@ project-team/
 | **Backend Specialist** | API, business logic |
 | **Maintenance Analyst** | Production impact analysis |
 
-### Hooks (15)
+### Hooks (17)
 
 Automatic validations that run before/after file edits:
 
 | Category | Hooks |
 |----------|-------|
-| **Permission** | `permission-checker` |
+| **Permission** | `permission-checker`, `domain-boundary-enforcer` |
 | **Safety** | `pre-edit-impact-check`, `risk-area-warning`, `security-scan` |
 | **Quality** | `standards-validator`, `design-validator`, `interface-validator`, `quality-gate` |
 | **Gates** | `policy-gate`, `contract-gate`, `risk-gate`, `docs-gate` |
@@ -218,7 +220,9 @@ claude-imple-skills/
 ├── project-team/              # Agent team system
 │   ├── install.sh             # Installation script
 │   ├── agents/                # 10 agent definitions
-│   ├── hooks/                 # 15 auto-validation hooks
+│   ├── hooks/                 # 17 auto-validation hooks
+│   ├── scripts/               # Collaboration & conflict resolution scripts
+│   ├── references/            # Communication protocols & specs
 │   ├── skills/                # 5 maintenance skills
 │   ├── templates/             # Protocols, ADR, contracts
 │   ├── examples/              # Sample projects
@@ -287,7 +291,8 @@ Choose a mode:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| **v3.6.0** | 2026-03-03 | Hybrid Wave Architecture for 80-200 tasks (`/orchestrate --mode=wave`), Contract-First template |
+| **v3.7.0** | 2026-03-05 | Agile Sprint Mode (`--mode=sprint`), multi-ai-review zombie fix, hierarchical agent collaboration bus (REQ/DEC protocol, domain-boundary-enforcer, Wave Barrier scanner) |
+| v3.6.0 | 2026-03-03 | Hybrid Wave Architecture for 80-200 tasks (`/orchestrate --mode=wave`), Contract-First template |
 | v3.5.0 | 2026-03-03 | Context Optimize skill (`/compress`), install.sh fix, 18 skills, 9 agents, 16 hooks |
 | v3.4.0 | 2026-03-03 | Long Context optimization (H2O, Compressive Context, RAG Hybrid) |
 | v3.3.0 | 2026-03-03 | Standalone-first architecture |

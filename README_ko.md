@@ -50,7 +50,7 @@ cd claude-imple-skills/project-team
 |----------|-------|------|
 | **스킬** | 19개 | 작업 실행, 분석, 자동화 |
 | **에이전트** | 10개 | 역할 기반 전문가 팀 |
-| **훅** | 15개 | 자동 검증 (보안, 품질, 영향도) |
+| **훅** | 17개 | 자동 검증 (보안, 품질, 영향도) |
 | **템플릿** | 7개 | 프로토콜, ADR, 계약 |
 
 ---
@@ -86,7 +86,7 @@ cd claude-imple-skills/project-team
 
 | 스킬 | 기능 |
 |------|------|
-| `/orchestrate-standalone` | 50~200개 태스크를 전문가 에이전트로 실행 |
+| `/orchestrate-standalone` | 50~200개 태스크를 전문가 에이전트로 실행 (`--mode=sprint`으로 Agile PI 계획 + 스프린트 리뷰 게이트) |
 | `/multi-ai-run` | 병렬 AI 실행 관리 |
 
 ### 유지보수
@@ -110,7 +110,9 @@ cd claude-imple-skills/project-team
 ```
 project-team/
 ├── agents/          # 9명 전문가
-├── hooks/           # 16개 자동 검증기
+├── hooks/           # 17개 자동 검증기
+├── scripts/         # 협업 & 충돌 해결
+├── references/      # 통신 프로토콜 명세
 ├── skills/          # 5개 유지보수 도구
 └── templates/       # 프로토콜 & 계약
 ```
@@ -129,13 +131,13 @@ project-team/
 | **Backend Specialist** | API, 비즈니스 로직 |
 | **Maintenance Analyst** | 프로덕션 영향도 분석 |
 
-### 훅 (15개)
+### 훅 (17개)
 
 파일 수정 전후 자동 실행되는 검증:
 
 | 카테고리 | 훅 |
 |----------|-----|
-| **권한** | `permission-checker` |
+| **권한** | `permission-checker`, `domain-boundary-enforcer` |
 | **안전** | `pre-edit-impact-check`, `risk-area-warning`, `security-scan` |
 | **품질** | `standards-validator`, `design-validator`, `interface-validator`, `quality-gate` |
 | **게이트** | `policy-gate`, `contract-gate`, `risk-gate`, `docs-gate` |
@@ -222,7 +224,9 @@ claude-imple-skills/
 ├── project-team/              # 에이전트 팀 시스템
 │   ├── install.sh             # 설치 스크립트
 │   ├── agents/                # 10개 에이전트 정의
-│   ├── hooks/                 # 15개 자동 검증 훅
+│   ├── hooks/                 # 17개 자동 검증 훅
+│   ├── scripts/               # 협업 & 충돌 해결 스크립트
+│   ├── references/            # 통신 프로토콜 & 명세
 │   ├── skills/                # 5개 유지보수 스킬
 │   ├── templates/             # 프로토콜, ADR, 계약
 │   ├── examples/              # 샘플 프로젝트
@@ -291,7 +295,8 @@ cd project-team
 
 | 버전 | 날짜 | 변경사항 |
 |------|------|----------|
-| **v3.6.0** | 2026-03-03 | Hybrid Wave Architecture (80-200개 태스크용 `/orchestrate --mode=wave`), Contract-First 템플릿 |
+| **v3.7.0** | 2026-03-05 | Agile Sprint Mode (`--mode=sprint`), multi-ai-review 좀비 프로세스 수정, 계층형 에이전트 협업 버스 (REQ/DEC 프로토콜, domain-boundary-enforcer, Wave Barrier 스캐너) |
+| v3.6.0 | 2026-03-03 | Hybrid Wave Architecture (80-200개 태스크용 `/orchestrate --mode=wave`), Contract-First 템플릿 |
 | v3.5.0 | 2026-03-03 | Context Optimize 스킬 (`/compress`), install.sh 수정, 18개 스킬, 9개 에이전트, 16개 훅 |
 | v3.4.0 | 2026-03-03 | Long Context 최적화 (H2O, Compressive Context, RAG Hybrid) |
 | v3.3.0 | 2026-03-03 | 독립형 아키텍처 |
