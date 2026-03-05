@@ -8,9 +8,108 @@
  * @SPEC SKILL.md
  */
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+
+function writeStderr(message) {
+  process.stderr.write(`${message}\n`);
+}
+
+// ---------------------------------------------------------------------------
+// Routing Management
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses .claude/model-routing.yaml without external dependencies
+ */
+function loadModelRouting(projectDir) {
+  const routingPath = path.join(projectDir, '.claude', 'model-routing.yaml');
+  const routing = { default: 'claude', routing: {} };
+
+  if (fs.existsSync(routingPath)) {
+    try {
+      const content = fs.readFileSync(routingPath, 'utf8');
+
+      const defaultMatch = content.match(/^default:\s*([^\s]+)/m);
+      if (defaultMatch) routing.default = defaultMatch[1];
+
+      const parts = content.split(/^routing:/m);
+      const routingSection = parts.length > 1 ? parts[1] : null;
+
+      if (routingSection) {
+        const regex = /^\s+([a-zA-Z0-9_-]+):\s*([^\s]+)/gm;
+        let match;
+        while ((match = regex.exec(routingSection)) !== null) {
+          routing.routing[match[1]] = match[2].replace(/['"]/g, '');
+        }
+      }
+    } catch (e) {
+      writeStderr(`Failed to parse model-routing.yaml: ${e.message}`);
+    }
+  }
+
+  return routing;
+}
+
+/**
+ * Determines the appropriate CLI command based on task routing
+ * Priority: task.model > model-routing.yaml[task.owner] > default (claude)
+ */
+function resolveCliCommand(task, projectDir, defaultClaudePath = 'claude') {
+  let model = task.model;
+
+  // 1. task.model이 없으면 model-routing.yaml에서 task.owner 기반으로 탐색
+  if (!model) {
+    const routingConfig = loadModelRouting(projectDir);
+    if (task.owner && routingConfig.routing[task.owner]) {
+      model = routingConfig.routing[task.owner];
+    } else {
+      model = routingConfig.default || 'claude';
+    }
+  }
+
+  const rawModel = String(model || 'claude').trim().toLowerCase();
+  const claudeAliases = new Set(['claude', 'sonnet', 'opus', 'haiku']);
+  const isClaudeFamily = claudeAliases.has(rawModel) || rawModel.startsWith('claude-');
+
+  let resolvedModel = 'claude';
+  if (rawModel === 'codex' || rawModel === 'gemini') {
+    resolvedModel = rawModel;
+  } else if (isClaudeFamily) {
+    resolvedModel = 'claude';
+  } else {
+    writeStderr(`[Warning] Unknown model '${rawModel}'. Falling back to 'claude'.`);
+    resolvedModel = 'claude';
+  }
+
+  let command = defaultClaudePath;
+  let args = [];
+
+  // 2. 모델명에 따른 CLI 커맨드 및 인자 매핑
+  if (resolvedModel === 'codex') {
+    command = 'codex';
+    args = ['exec'];
+  } else if (resolvedModel === 'gemini') {
+    command = 'gemini';
+    args = [];
+  }
+
+  // 3. Fallback: CLI가 시스템에 없으면 defaultClaudePath 사용
+  if (command !== defaultClaudePath) {
+    try {
+      const checkCmd = process.platform === 'win32' ? 'where' : 'which';
+      execSync(`${checkCmd} ${command}`, { stdio: 'ignore' });
+    } catch (e) {
+      writeStderr(`[Warning] CLI '${command}' not found. Falling back to '${defaultClaudePath}'.`);
+      command = defaultClaudePath;
+      args = [];
+      resolvedModel = 'claude';
+    }
+  }
+
+  return { command, args, model: resolvedModel };
+}
 
 // ---------------------------------------------------------------------------
 // Task Execution
@@ -34,7 +133,7 @@ async function executeTask(task, options = {}) {
     // Update state to "in_progress"
     updateTaskState(statePath, task.id, 'in_progress', { worker: 'worker-' + process.pid % 4 });
 
-    // Prepare prompt for Claude
+    // Prepare prompt
     const prompt = `
 Execute the following task:
 
@@ -47,8 +146,12 @@ Execute the following task:
 Please complete this task and report back when done.
 `;
 
-    // Spawn Claude CLI
-    const claude = spawn(claudePath, [], {
+    // Resolve which CLI to use based on routing rules
+    const { command, args, model } = resolveCliCommand(task, projectDir, claudePath);
+    process.stderr.write(`[worker] Task ${task.id} → ${command} (model: ${model})\n`);
+
+    // Spawn the selected CLI
+    const cli = spawn(command, args, {
       cwd: projectDir,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, CLAUDE_AGENT_ROLE: task.owner || 'default' }
@@ -57,15 +160,23 @@ Please complete this task and report back when done.
     let output = '';
     let errorOutput = '';
 
-    claude.stdout.on('data', (data) => {
+    cli.stdout.on('data', (data) => {
       output += data.toString();
     });
 
-    claude.stderr.on('data', (data) => {
+    cli.stderr.on('data', (data) => {
       errorOutput += data.toString();
     });
 
-    claude.on('close', (code) => {
+    cli.on('error', (err) => {
+      updateTaskState(statePath, task.id, 'failed', {
+        duration: Date.now() - startTime,
+        error: err.message,
+      });
+      reject(new Error(`Task ${task.id} failed to start: ${err.message}`));
+    });
+
+    cli.on('close', (code) => {
       const duration = Date.now() - startTime;
 
       if (code === 0) {
@@ -78,7 +189,7 @@ Please complete this task and report back when done.
       } else {
         updateTaskState(statePath, task.id, 'failed', {
           duration,
-          error: errorOutput.slice(-500),
+          error: errorOutput.slice(-500) || `Process exited with code ${code}`,
           code
         });
         reject(new Error(`Task ${task.id} failed with code ${code}`));
@@ -87,18 +198,18 @@ Please complete this task and report back when done.
 
     // Timeout handling
     const timeoutHandle = setTimeout(() => {
-      claude.kill('SIGTERM');
+      cli.kill('SIGTERM');
       updateTaskState(statePath, task.id, 'timeout', { duration: timeout });
       reject(new Error(`Task ${task.id} timed out after ${timeout}ms`));
     }, timeout);
 
-    claude.on('close', () => {
+    cli.on('close', () => {
       clearTimeout(timeoutHandle);
     });
 
     // Send prompt
-    claude.stdin.write(prompt);
-    claude.stdin.end();
+    cli.stdin.write(prompt);
+    cli.stdin.end();
   });
 }
 
@@ -133,7 +244,7 @@ function updateTaskState(statePath, taskId, status, data = {}) {
 
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
   } catch (error) {
-    console.error(`Failed to update state: ${error.message}`);
+    writeStderr(`Failed to update state: ${error.message}`);
   }
 }
 
@@ -149,26 +260,23 @@ async function executeLayer(layer, workerCount = 2) {
   const executing = [];
 
   for (const task of layer) {
-    const promise = executeTask(task).then(result => {
-      results.push(result);
-      return result;
-    }).catch(error => {
-      results.push({ id: task.id, status: 'failed', error: error.message });
-      return { id: task.id, status: 'failed', error: error.message };
-    });
+    const p = executeTask(task)
+      .then(result => {
+        executing.splice(executing.indexOf(p), 1);
+        results.push(result);
+        return result;
+      })
+      .catch(error => {
+        executing.splice(executing.indexOf(p), 1);
+        const res = { id: task.id, status: 'failed', error: error.message };
+        results.push(res);
+        return res;
+      });
 
-    executing.push(promise);
+    executing.push(p);
 
-    // Wait for one to finish if pool is full
     if (executing.length >= workerCount) {
       await Promise.race(executing);
-      // Remove completed from executing
-      const completedIndex = executing.findIndex(p =>
-        results.some(r => r.id && p.toString().includes(r.id))
-      );
-      if (completedIndex >= 0) {
-        executing.splice(completedIndex, 1);
-      }
     }
   }
 
@@ -182,22 +290,18 @@ async function executeLayer(layer, workerCount = 2) {
 
 if (require.main === module) {
   const taskId = process.argv[2];
-  const mode = process.argv[3] || 'standard';
 
   if (!taskId) {
-    console.error('Usage: node worker.js <taskId> [mode]');
+    writeStderr('Usage: node worker.js <taskId> [mode]');
     process.exit(1);
   }
 
-  // Worker pool size based on mode
-  const workerCount = { lite: 2, standard: 4, full: 8 }[mode] || 4;
-
   executeTask({ id: taskId }, { timeout: 300000 })
     .then(result => {
-      console.log(JSON.stringify(result, null, 2));
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     })
     .catch(error => {
-      console.error(JSON.stringify({ error: error.message }, null, 2));
+      writeStderr(JSON.stringify({ error: error.message }, null, 2));
       process.exit(1);
     });
 }
@@ -205,5 +309,7 @@ if (require.main === module) {
 module.exports = {
   executeTask,
   executeLayer,
-  updateTaskState
+  updateTaskState,
+  loadModelRouting,
+  resolveCliCommand
 };
