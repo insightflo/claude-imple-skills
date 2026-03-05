@@ -6,8 +6,8 @@ triggers:
   - /orchestrate
   - 오케스트레이트
   - 태스크 실행
-version: 2.0.0
-updated: 2026-03-03
+version: 2.1.0
+updated: 2026-03-05
 ---
 
 # 🚀 Orchestrate Standalone
@@ -25,6 +25,7 @@ updated: 2026-03-03
 | **lite** | 30~50 | 2 | 빠른 실행 |
 | **standard** | 50~80 | 4 | 일반 프로젝트 |
 | **wave** | 80~200 | 4~8 | **Hybrid Wave Architecture** (NEW) |
+| **sprint** | 50~200 | 4 | **Agile Sprint Mode** (NEW) — PI 계획 + 스프린트 Gate |
 | **full** | 80개+ | 8 | 대규모 병렬 (legacy) |
 
 ---
@@ -80,6 +81,25 @@ updated: 2026-03-03
 | Context Drift | 높음 | 계약으로 방지 |
 | 병렬 효율 | 높음 | 높음 + 일관성 보장 |
 | 권장 태스크 | 80+ | 80~200 |
+
+---
+
+### Sprint Mode (Agile Gate)
+
+50-200 태스크를 3-4 스프린트로 분할하여, 각 스프린트 종료 시 사용자가
+동작하는 결과물을 확인하고 방향을 수정할 수 있습니다.
+
+```bash
+/orchestrate-standalone --mode=sprint
+/orchestrate-standalone --mode=sprint --sprint-size=25  # 스프린트 크기 조정
+```
+
+흐름:
+1. PI 계획 수립 (스프린트 분할 표시 → 사용자 승인)
+2. Sprint 실행 (Wave 병렬 실행)
+3. Sprint Review (변경 요약 + 테스트 결과)
+4. User Gate: [A]pprove / [M]odify / [S]top
+5. Retro → 다음 스프린트
 
 ---
 
@@ -270,4 +290,4 @@ security-scan (보안 스캔)
 
 ---
 
-**Last Updated**: 2026-03-03 (v2.0.0)
+**Last Updated**: 2026-03-05 (v2.1.0 - Sprint Mode 추가)
