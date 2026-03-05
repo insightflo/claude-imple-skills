@@ -96,18 +96,17 @@ function readBoardState() {
   try {
     return JSON.parse(fs.readFileSync(BOARD_FILE, 'utf8'));
   } catch {
-    return {
-      version: '1.0',
-      generated_at: new Date().toISOString(),
-      columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
-    };
+    // Return null on parse error — do NOT overwrite with empty state
+    return null;
   }
 }
 
 function writeBoardState(state) {
   ensureCollabDir();
   state.generated_at = new Date().toISOString();
-  fs.writeFileSync(BOARD_FILE, JSON.stringify(state, null, 2), 'utf8');
+  const tmp = BOARD_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+  fs.renameSync(tmp, BOARD_FILE);
 }
 
 // ---------------------------------------------------------------------------
@@ -123,13 +122,19 @@ function removeCardFromAllColumns(state, cardId) {
 
 function upsertCard(state, card) {
   const targetCol = COLUMN_MAP[card.status] || 'Backlog';
+  // Preserve existing title/agent before removing
+  let existing = null;
+  for (const col of Object.values(state.columns)) {
+    const found = col.find((c) => c.id === card.id);
+    if (found) { existing = found; break; }
+  }
   removeCardFromAllColumns(state, card.id);
   if (!state.columns[targetCol]) state.columns[targetCol] = [];
   state.columns[targetCol].push({
     id: card.id,
-    title: card.title || card.id,
+    title: (card.title && card.title !== card.id) ? card.title : (existing?.title || card.id),
     status: card.status,
-    agent: card.agent || null,
+    agent: card.agent || existing?.agent || null,
     updated_at: new Date().toISOString(),
   });
 }
@@ -140,7 +145,7 @@ function upsertCard(state, card) {
 
 function handleTaskUpdate(toolInput) {
   const taskId = toolInput.task_id || toolInput.id;
-  const status = toolInput.status;
+  const status = (toolInput.status || '').toLowerCase();
   if (!taskId || !status) return null;
 
   const eventTypeMap = {
@@ -169,7 +174,7 @@ function parseFrontmatterStatus(content) {
   const block = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!block) return null;
   const statusMatch = block[1].match(/^status:\s*(\S+)/m);
-  return statusMatch ? statusMatch[1].trim().toUpperCase() : null;
+  return statusMatch ? statusMatch[1].trim().replace(/^['"]|['"]$/g, '').toUpperCase() : null;
 }
 
 function handleReqFileEdit(filePath, newContent) {
@@ -250,6 +255,7 @@ async function main() {
   try {
     appendEvent(event);
     const state = readBoardState();
+    if (!state) return; // Parse error — skip write to avoid board wipe
     applyEventToBoard(state, event);
     writeBoardState(state);
   } catch {

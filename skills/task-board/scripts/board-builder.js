@@ -68,7 +68,7 @@ function parseTasks(tasksPath) {
   const tasks = [];
   for (const line of lines) {
     // Match both: "- [ ] Title" and "### [x] Title" (heading-style tasks)
-    const m = line.match(/^\s*-\s*\[( |x)\]\s*(.+)$/i) ||
+    const m = line.match(/^\s*[-*]\s*\[( |x)\]\s*(.+)$/i) ||
               line.match(/^#+\s+\[( |x)\]\s+(.+)$/i);
     if (!m) continue;
     const done = m[1].toLowerCase() === 'x';
@@ -127,7 +127,7 @@ function parseReqFiles(requestsDir) {
       return {
         id: meta.id || path.basename(f, '.md'),
         title: `REQ: ${meta.id || f}`,
-        status: (meta.status || 'OPEN').toUpperCase(),
+        status: (meta.status || 'OPEN').trim().replace(/^['"]|['"]$/g, '').toUpperCase(),
         agent: meta.from || null,
         source: 'req-file',
       };
@@ -145,8 +145,12 @@ function mergeSources(tasksMd, orchestrateState, reqs) {
   // Base: tasks-md
   for (const t of tasksMd) byId.set(t.id, t);
 
-  // Override with orchestrate-state (more precise status)
-  for (const t of orchestrateState) byId.set(t.id, { ...byId.get(t.id), ...t });
+  // Override with orchestrate-state (more precise status), but preserve richer title from tasks-md
+  for (const t of orchestrateState) {
+    const existing = byId.get(t.id);
+    const preservedTitle = (existing?.title && existing.title !== t.id) ? existing.title : (t.title || t.id);
+    byId.set(t.id, { ...existing, ...t, title: preservedTitle });
+  }
 
   // Add REQ cards (separate from tasks)
   for (const r of reqs) byId.set(r.id, r);
