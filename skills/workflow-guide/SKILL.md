@@ -160,6 +160,12 @@ AGENT_COUNT=$(ls .claude/agents/*.md 2>/dev/null | wc -l | tr -d ' ')
 TASK_COUNT=$(grep -cE '^\s*[-*]\s*\[|^#{1,6}\s+\[' TASKS.md 2>/dev/null || echo 0)
 echo "agents=$AGENT_COUNT tasks=$TASK_COUNT"
 # ⚠️ agents=0 AND tasks>=30 → install.sh REQUIRED before orchestration
+
+# 10. 거버넌스 권장 조건 감지
+DOMAIN_COUNT=$(grep -h "^\s*-\s*domain:" TASKS.md 2>/dev/null | awk '{print $NF}' | sort -u | wc -l | tr -d ' ')
+GOVERNANCE_DONE=$(ls management/project-plan.md 2>/dev/null && echo "yes" || echo "no")
+echo "domains=$DOMAIN_COUNT governance=$GOVERNANCE_DONE"
+# 거버넌스 권장: tasks>=10 AND (domains>=2 OR 팀원>=2 OR 외부API>=3)
 ```
 
 ### 2단계: 상황별 진단 결과 매핑
@@ -170,14 +176,12 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT"
 |-----------|---------------|-----------|
 | orchestrate-state.json 존재 | 🔄 **자동화 중단** | `/recover` → `/orchestrate-standalone --resume` |
 | Git 충돌/dirty 상태 | ⚠️ **복구 필요** | `/recover` |
-| **태스크 30개+ + agents=0** | 🔧 **[필수] project-team 미설치** | `./install.sh` 먼저 실행 → 에이전트/훅 설치 후 진행 |
-| 아이디어만 있음 | 💡 **기획 시작** | `/governance-setup` (Mini-PRD 내장) |
-| docs/planning/ 없음 | 🌱 **기획 필요** | `/governance-setup` |
-| 기획 있음 + TASKS.md 없음 + 레거시(06-tasks.md)만 존재 | 📋 **마이그레이션 필요** | `/tasks-migrate` (루트 TASKS.md로 통합) |
-| 기획 있음 + 태스크 파일 없음 | 📋 **태스크 필요** | `/tasks-init` |
+| TASKS.md 없음 + 레거시(06-tasks.md) 있음 | 📋 **마이그레이션 필요** | `/tasks-migrate` (루트 TASKS.md로 통합) |
+| TASKS.md 없음 | 📋 **태스크 필요** | `/tasks-init` (스캐폴딩 생성) |
 | 태스크 있음 + **거버넌스 권장 조건 충족** + 거버넌스 없음 | 🏛️ **거버넌스 필요** | `/governance-setup` |
-| 거버넌스 완료 + 미구현 | 🚀 **구현 준비** | `/agile auto` (≤30) 또는 `/orchestrate-standalone` (30~80) |
-| 태스크 있음 + 코드 없음 (소규모) | 🚀 **구현 준비** | `/agile auto` (≤30) |
+| **거버넌스 완료 + 태스크 30개+ + agents=0** | 🔧 **[필수] project-team 미설치** | `./install.sh` 먼저 실행 → 에이전트/훅 설치 후 진행 |
+| 거버넌스 완료 + agents 설치 + 미구현 | 🚀 **구현 준비** | `/orchestrate-standalone --mode=wave` (80+) 또는 `/agile auto` (≤30) |
+| 태스크 있음 + 코드 없음 (소규모, 거버넌스 불필요) | 🚀 **구현 준비** | `/agile auto` (≤30) |
 | 코드 있음 + 미완료 태스크 | 🔨 **구현 중** | `/agile iterate` 또는 `/orchestrate-standalone --resume` |
 | 모든 태스크 완료 | ✅ **검증 필요** | `/audit` |
 
@@ -236,13 +240,13 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT"
 │
 ├─ 긴 문서/컨텍스트 과부하? ──────────── YES → /compress (H2O 패턴 압축)
 │
-├─ 기획 문서 없음? ─────────────────── YES → /governance-setup (Mini-PRD 내장)
-│
 ├─ TASKS.md 없음?
-│   ├─ 레거시 파일만 있음 ───────────── /tasks-migrate (통합)
-│   └─ 태스크 파일 없음 ─────────────── /tasks-init (스캐폴딩)
+│   ├─ 레거시(06-tasks.md) 있음 ───────── /tasks-migrate (통합)
+│   └─ 레거시도 없음 ─────────────────── /tasks-init (스캐폴딩)
 │
-├─ 태스크 30개+ + .claude/agents/ 없음? ── YES → ./install.sh (project-team 설치)
+├─ 태스크 있음 + 거버넌스 권장 조건 충족 + 거버넌스 없음? ── YES → /governance-setup
+│
+├─ 거버넌스 완료 + 태스크 30개+ + .claude/agents/ 없음? ── YES → ./install.sh
 │
 ├─ 구현 시작?
 │   ├─ ≤30개 태스크 ──────────────────── /agile auto
