@@ -75,6 +75,7 @@ function parseTasks(tasksPath) {
     const title = m[2].trim();
     // Extract task ID if present (e.g. "T1.1:", "P8-T2:")
     const idMatch = title.match(/^([A-Z0-9]+-?[A-Z0-9]*\.[A-Z0-9]+):\s*/i) ||
+                    title.match(/^([A-Z][0-9]+-[A-Z][0-9]+):\s*/i) ||
                     title.match(/^([A-Z0-9]+-T[0-9]+):\s*/i);
     const id = idMatch ? idMatch[1] : title.slice(0, 40);
     tasks.push({ id, title, status: done ? 'completed' : 'pending', source: 'tasks-md' });
@@ -192,7 +193,11 @@ function main() {
   const p = opts.projectDir;
 
   const tasksMd = parseTasks(path.join(p, 'TASKS.md'));
-  const orchestrateState = parseOrchestrateState(path.join(p, '.claude', 'orchestrate-state.json'));
+  // Support both legacy (.claude/orchestrate-state.json) and new (.claude/orchestrate/orchestrate-state.json) paths
+  const statePath = fs.existsSync(path.join(p, '.claude', 'orchestrate', 'orchestrate-state.json'))
+    ? path.join(p, '.claude', 'orchestrate', 'orchestrate-state.json')
+    : path.join(p, '.claude', 'orchestrate-state.json');
+  const orchestrateState = parseOrchestrateState(statePath);
   const reqs = parseReqFiles(path.join(p, '.claude', 'collab', 'requests'));
 
   const cards = mergeSources(tasksMd, orchestrateState, reqs);
