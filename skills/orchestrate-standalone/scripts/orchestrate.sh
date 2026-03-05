@@ -192,13 +192,17 @@ if [ "$MODE" = "sprint" ]; then
             } catch(e) { console.log('UNKNOWN'); }
         " 2>/dev/null || echo 'UNKNOWN')
 
-        if [ "$SPRINT_STATE_VAL" != "SPRINT_RUNNING" ]; then
+        if [ "$SPRINT_STATE_VAL" = "UNKNOWN" ]; then
+            log_error "Cannot read sprint-state.json (missing or corrupted)"
+            exit 1
+        fi
+
+        if [ "$SPRINT_STATE_VAL" = "PI_COMPLETE" ] || [ "$SPRINT_STATE_VAL" = "PAUSED" ]; then
             log_info "Sprint state: $SPRINT_STATE_VAL — exiting loop"
             break
         fi
 
-        "$NODE_CMD" "$SCRIPT_DIR/sprint-runner.js" "$TASKS_FILE"
-        SPRINT_EXIT=$?
+        "$NODE_CMD" "$SCRIPT_DIR/sprint-runner.js" "$TASKS_FILE" && SPRINT_EXIT=0 || SPRINT_EXIT=$?
 
         # Bug #2: exit code별 분기 처리
         case $SPRINT_EXIT in

@@ -297,9 +297,29 @@ async function main(tasksFile) {
     statusById[normalizeTaskId(task.id)] = 'pending';
   }
 
+  // Bug #11: resume 시 이미 완료된 태스크 상태 복원
+  const currentSprint = sprintState.sprints[sprintIndex];
+  if (Array.isArray(currentSprint.tasks)) {
+    for (const t of currentSprint.tasks) {
+      if (t && typeof t === 'object' && t.status === 'completed') {
+        const key = normalizeTaskId(t.id || t.task_id || t.taskId);
+        if (Object.prototype.hasOwnProperty.call(statusById, key)) {
+          statusById[key] = 'completed';
+        }
+      }
+    }
+  }
+
   for (let i = 0; i < waves.length; i += 1) {
     const wave = waves[i];
-    const { results, failed } = await executeWave(wave, i, waves.length, { projectDir: process.cwd() });
+    // Bug #11: 완료된 태스크 제외
+    const pendingTasks = wave.tasks.filter((t) => statusById[normalizeTaskId(t.id)] !== 'completed');
+    if (pendingTasks.length === 0) {
+      console.log(`[Sprint Runner] Wave ${i + 1}: all tasks completed, skipping`);
+      continue;
+    }
+    const waveToExecute = { ...wave, tasks: pendingTasks };
+    const { results, failed } = await executeWave(waveToExecute, i, waves.length, { projectDir: process.cwd() });
 
     for (const result of results) {
       statusById[normalizeTaskId(result.id)] = result.status;
