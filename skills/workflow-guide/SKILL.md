@@ -155,8 +155,11 @@ ls management/quality-gates.md 2>/dev/null && echo "QA: OK"
 # DBA 산출물
 ls database/standards.md 2>/dev/null && echo "DBA: OK"
 
-# 9. 에이전트 팀 확인 (v3.1.1 NEW)
-ls .claude/agents/*.md 2>/dev/null | wc -l  # 3개 이상이면 팀 구성됨
+# 9. 에이전트 팀 + project-team 설치 여부 확인 (CRITICAL)
+AGENT_COUNT=$(ls .claude/agents/*.md 2>/dev/null | wc -l | tr -d ' ')
+TASK_COUNT=$(grep -cE '^\s*[-*]\s*\[|^#{1,6}\s+\[' TASKS.md 2>/dev/null || echo 0)
+echo "agents=$AGENT_COUNT tasks=$TASK_COUNT"
+# ⚠️ agents=0 AND tasks>=30 → install.sh REQUIRED before orchestration
 ```
 
 ### 2단계: 상황별 진단 결과 매핑
@@ -167,6 +170,7 @@ ls .claude/agents/*.md 2>/dev/null | wc -l  # 3개 이상이면 팀 구성됨
 |-----------|---------------|-----------|
 | orchestrate-state.json 존재 | 🔄 **자동화 중단** | `/recover` → `/orchestrate-standalone --resume` |
 | Git 충돌/dirty 상태 | ⚠️ **복구 필요** | `/recover` |
+| **태스크 30개+ + agents=0** | 🔧 **[필수] project-team 미설치** | `./install.sh` 먼저 실행 → 에이전트/훅 설치 후 진행 |
 | 아이디어만 있음 | 💡 **기획 시작** | `/governance-setup` (Mini-PRD 내장) |
 | docs/planning/ 없음 | 🌱 **기획 필요** | `/governance-setup` |
 | 기획 있음 + TASKS.md 없음 + 레거시(06-tasks.md)만 존재 | 📋 **마이그레이션 필요** | `/tasks-migrate` (루트 TASKS.md로 통합) |
@@ -237,6 +241,8 @@ ls .claude/agents/*.md 2>/dev/null | wc -l  # 3개 이상이면 팀 구성됨
 ├─ TASKS.md 없음?
 │   ├─ 레거시 파일만 있음 ───────────── /tasks-migrate (통합)
 │   └─ 태스크 파일 없음 ─────────────── /tasks-init (스캐폴딩)
+│
+├─ 태스크 30개+ + .claude/agents/ 없음? ── YES → ./install.sh (project-team 설치)
 │
 ├─ 구현 시작?
 │   ├─ ≤30개 태스크 ──────────────────── /agile auto
@@ -438,7 +444,7 @@ ls .claude/agents/*.md 2>/dev/null | wc -l  # 3개 이상이면 팀 구성됨
 
 ```bash
 # project-team 설치 스크립트 실행
-./project-team/install.sh
+./install.sh
 ```
 
 ---
