@@ -33,6 +33,7 @@ updated: 2026-03-06
      ↓                  /tasks-migrate (레거시 통합)
      ↓
 구현 ────────────────── /agile auto (≤30개)
+     │                  /orchestrate-standalone --mode=auto (러프 골 자율)
      │                  /multi-ai-run (모델 라우팅)
      ↓
 태스크 리뷰 ─────────── /checkpoint (2단계 리뷰) ← v4.1 NEW
@@ -72,7 +73,7 @@ updated: 2026-03-06
 | **`/changelog`** | `/changelog` | 변경 이력 |
 | **`/architecture`** | `/architecture` | 아키텍처 맵 |
 | **`/compress`** | `/compress`, "컨텍스트 압축" | Long Context 최적화 (H2O 패턴) |
-| **`/orchestrate-standalone`** | `/orchestrate-standalone`, `/orchestrate` | 30~200개 태스크 병렬 실행 (`--mode=wave/sprint`) |
+| **`/orchestrate-standalone`** | `/orchestrate-standalone`, `/orchestrate` | 30~200개 태스크 병렬 실행 (`--mode=wave/sprint/auto`) |
 | **`/task-board`** | `/task-board`, "칸반 보드", "보드 보여줘" | 에이전트 태스크 칸반 시각화 (Backlog/In Progress/Blocked/Done) |
 | **`/statusline`** | 자동 활성화 (설치 후) | TASKS.md 진행률 Claude Code 상태바 Line 3 표시 |
 
@@ -364,6 +365,7 @@ ALGORITHM get_recommendation():
 │
 ├─ 구현 시작?
 │   ├─ ≤30개 태스크 ──────────────────── /agile auto
+│   ├─ 러프 골(1~2문장) ──────────────── /orchestrate-standalone --mode=auto --goal="..."
 │   ├─ 30~80개 태스크 ───────────────── /orchestrate-standalone
 │   ├─ 80~200개 (자율 병렬 실행) ──────── /orchestrate-standalone --mode=wave
 │   ├─ 200개+ 태스크 ───────────────── 하위 프로젝트 분할 → wave
@@ -398,9 +400,12 @@ ALGORITHM get_recommendation():
 | **30~80개** | `/orchestrate-standalone` | 전문가 에이전트 | ✅ 선택 | `/governance-setup` |
 | **50~200개** | `/orchestrate-standalone --mode=sprint` | Agile 스프린트 에이전트 | ✅ 선택 | `/governance-setup` |
 | **80~200개** | `/orchestrate-standalone --mode=wave` | 도메인 병렬 에이전트 | ✅ 권장 | `/governance-setup` |
+| **러프 골** | `/orchestrate-standalone --mode=auto --goal="..."` | 자율 DCPEA 에이전트 | ✅ 선택 | 불필요 (자동 생성) |
 | **200개+** | 하위 프로젝트 분할 → `/orchestrate-standalone --mode=wave` | 도메인 병렬 에이전트 | ✅ 필수 | `/governance-setup` |
 
 > **Sprint vs Wave 선택 기준**: `--mode=sprint`은 Human-in-the-loop 리뷰가 필요할 때 (각 스프린트 경계에서 사용자 승인), `--mode=wave`는 완전 자율 도메인 병렬 실행 시 사용합니다.
+>
+> **Auto 모드**: `--mode=auto`는 1-2문장 목표를 받아 자동 분해 → 실행 → 평가 → 조정하는 자율 DCPEA 루프입니다. Human Gate는 Contract, Decompose, Failure, Final 4곳입니다.
 >
 > **v2.0 Hybrid Wave Architecture**: 80개 이상 태스크는 `--mode=wave`로 Contract-First + 도메인 병렬 + Cross-Review 게이트를 적용하여 대규모에서도 일관성을 보장합니다.
 
@@ -517,6 +522,8 @@ ALGORITHM get_recommendation():
 "context overflow"              → /compress
 "스프린트로 실행해줘"           → /orchestrate-standalone --mode=sprint
 "사용자 리뷰 게이트 원해"       → /orchestrate-standalone --mode=sprint
+"자율 실행해줘"                 → /orchestrate-standalone --mode=auto
+"목표만 줄게"                   → /orchestrate-standalone --mode=auto --goal="..."
 "협업 버스 초기화"              → node project-team/scripts/collab-init.js
 "콜랩 인프라 셋업"              → node project-team/scripts/collab-init.js
 "Wave Barrier 확인"             → node project-team/scripts/conflict-resolver.js
@@ -584,6 +591,7 @@ A: `/recover`를 실행하여 중단된 작업을 복구하세요.
 A: 태스크 규모와 리뷰 필요 여부에 따라:
 - **50~200개 (사용자 리뷰 필요)**: `/orchestrate-standalone --mode=sprint`. Agile PI 계획 + 스프린트 경계마다 사용자 승인 게이트.
 - **80~200개 (완전 자율 실행)**: `/orchestrate-standalone --mode=wave`. Contract-First + 도메인 병렬 + Cross-Review로 일관성 보장.
+- **러프 골 (자율 DCPEA)**: `/orchestrate-standalone --mode=auto --goal="Build user auth with OAuth"`. 1-2문장 목표 → 자동 분해 → 실행 → 평가 → 조정. Human Gate 4곳: Contract, Decompose, Failure, Final.
 - **200개+**: 하위 프로젝트로 분할 후 각각 wave 모드 적용.
 - 구현 전 `/governance-setup`으로 거버넌스(PM/Architect/QA/DBA) 문서 생성 권장.
 

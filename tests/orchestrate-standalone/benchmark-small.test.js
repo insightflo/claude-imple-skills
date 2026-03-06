@@ -9,7 +9,7 @@ const {
   parseTasks,
   buildDAG,
   createLayers
-} = require('../../skills/orchestrate-standalone/scripts/scheduler');
+} = require('../../skills/orchestrate-standalone/scripts/engine/scheduler');
 
 function withTempDir(prefix, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -157,4 +157,3 @@ runTest('full parse -> DAG -> layers pipeline builds the expected execution plan
     assert.deepStrictEqual(tasksById.get('T6').deps, ['T4', 'T5']);
   });
 });
-

@@ -9,7 +9,7 @@ const {
   parseTasks,
   buildDAG,
   createLayers
-} = require('../../skills/orchestrate-standalone/scripts/scheduler');
+} = require('../../skills/orchestrate-standalone/scripts/engine/scheduler');
 
 function withTempDir(prefix, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));

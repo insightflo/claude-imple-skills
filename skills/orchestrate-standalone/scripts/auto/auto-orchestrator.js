@@ -34,7 +34,7 @@ const {
   readEvents
 } = require('./event-log');
 
-const { executeLayer } = require('./worker');
+const { executeLayer } = require('../engine/worker');
 
 const TASKS_FILE = 'TASKS.md';
 const DEFAULT_MAX_DEFINE_RETRIES = 3;

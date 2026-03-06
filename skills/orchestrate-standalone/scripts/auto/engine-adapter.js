@@ -23,22 +23,22 @@ const {
   buildDAG,
   createLayers,
   createWaves
-} = require('./scheduler');
+} = require('../engine/scheduler');
 const {
   loadState,
   saveState,
   updateTask,
   getProgress
-} = require('./state');
+} = require('../engine/state');
 const {
   executeTask,
   executeLayer
-} = require('./worker');
+} = require('../engine/worker');
 const {
   preDispatchGate,
   postTaskGate,
   barrierGate
-} = require('./gate-chain');
+} = require('../engine/gate-chain');
 
 const AUTO_STATE_FILE = '.claude/orchestrate/auto-state.json';
 const TASKS_FILE = 'TASKS.md';

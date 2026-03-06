@@ -172,7 +172,7 @@ log_success "Node.js: $(node --version)"
 if [ "$MODE" != "sprint" ]; then
     header "Building Task Dependency Graph"
 
-    LAYER_OUTPUT="$("$NODE_CMD" "$SCRIPT_DIR/scheduler.js" "$TASKS_FILE" 2>&1)"
+    LAYER_OUTPUT="$("$NODE_CMD" "$SCRIPT_DIR/engine/scheduler.js" "$TASKS_FILE" 2>&1)"
     if [ $? -ne 0 ]; then
         log_error "Failed to parse tasks"
         echo "$LAYER_OUTPUT"
@@ -208,13 +208,13 @@ if [ "$MODE" = "auto" ]; then
 
     if [ "$RESUME" = "true" ]; then
         log_info "Resuming auto mode from checkpoint..."
-        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto-orchestrator.js" --resume "${AUTO_ARGS[@]}"
+        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto/auto-orchestrator.js" --resume "${AUTO_ARGS[@]}"
     else
         if [ -z "$AUTO_GOAL" ]; then
             log_error "Auto mode requires --goal='...'. Example: --mode=auto --goal='Build user auth'"
             exit 1
         fi
-        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto-orchestrator.js" "${AUTO_ARGS[@]}" "$AUTO_GOAL"
+        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto/auto-orchestrator.js" "${AUTO_ARGS[@]}" "$AUTO_GOAL"
     fi
 
     AUTO_EXIT=$?
@@ -242,7 +242,7 @@ if [ "$MODE" = "sprint" ]; then
 
     # Bug #8: resume이 아닐 때만 planner 실행
     if [ "$RESUME" != "true" ]; then
-        if ! "$NODE_CMD" "$SCRIPT_DIR/sprint-planner.js" "$TASKS_FILE" "$SPRINT_SIZE"; then
+        if ! "$NODE_CMD" "$SCRIPT_DIR/engine/sprint-planner.js" "$TASKS_FILE" "$SPRINT_SIZE"; then
             log_error "Sprint planning failed or cancelled"
             exit 1
         fi
@@ -273,7 +273,7 @@ if [ "$MODE" = "sprint" ]; then
             break
         fi
 
-        "$NODE_CMD" "$SCRIPT_DIR/sprint-runner.js" "$TASKS_FILE" && SPRINT_EXIT=0 || SPRINT_EXIT=$?
+        "$NODE_CMD" "$SCRIPT_DIR/engine/sprint-runner.js" "$TASKS_FILE" && SPRINT_EXIT=0 || SPRINT_EXIT=$?
 
         # Bug #2: exit code별 분기 처리
         case $SPRINT_EXIT in
@@ -306,12 +306,12 @@ header "Executing Tasks (Mode: $MODE, Workers: $WORKER_COUNT)"
 
 # Initialize state if not resuming
 if [ "$RESUME" != "true" ]; then
-    "$NODE_CMD" "$SCRIPT_DIR/state.js" clear &>/dev/null || true
+    "$NODE_CMD" "$SCRIPT_DIR/engine/state.js" clear &>/dev/null || true
 fi
 
 CURRENT_LAYER=0
 if [ "$RESUME" = "true" ]; then
-    CURRENT_LAYER=$("$NODE_CMD" "$SCRIPT_DIR/state.js" load 2>/dev/null | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).current_layer || 0")
+    CURRENT_LAYER=$("$NODE_CMD" "$SCRIPT_DIR/engine/state.js" load 2>/dev/null | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).current_layer || 0")
     log_info "Resuming from layer $CURRENT_LAYER"
 fi
 
@@ -332,7 +332,7 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
     # Pre-dispatch gate
     log_info "Running pre-dispatch gate..."
     for task in $(echo "$LAYER_TASKS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).map(t => t.id).join(' ')"); do
-        GATE_RESULT=$("$NODE_CMD" "$SCRIPT_DIR/gate-chain.js" pre-dispatch "$(echo "$LAYER_TASKS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).find(t => t.id === '$task')")" 2>&1)
+        GATE_RESULT=$("$NODE_CMD" "$SCRIPT_DIR/engine/gate-chain.js" pre-dispatch "$(echo "$LAYER_TASKS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).find(t => t.id === '$task')")" 2>&1)
         GATE_PASSED=$(echo "$GATE_RESULT" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).passed")
 
         if [ "$GATE_PASSED" != "true" ]; then
@@ -348,7 +348,7 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
     # For now, sequential execution as placeholder
     for task in $(echo "$LAYER_TASKS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).map(t => t.id).join(' ')"); do
         log_info "  → $task"
-        "$NODE_CMD" "$SCRIPT_DIR/worker.js" "$task" "$MODE" &>/dev/null &
+        "$NODE_CMD" "$SCRIPT_DIR/engine/worker.js" "$task" "$MODE" &>/dev/null &
     done
 
     # Wait for all tasks in this layer
@@ -357,7 +357,7 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
     # Post-task gate
     log_info "Running post-task gate..."
     for task in $(echo "$LAYER_TASKS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).map(t => t.id).join(' ')"); do
-        GATE_RESULT=$("$NODE_CMD" "$SCRIPT_DIR/gate-chain.js" post-task "$(echo "$LAYER_TASKS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).find(t => t.id === '$task')")" 2>&1)
+        GATE_RESULT=$("$NODE_CMD" "$SCRIPT_DIR/engine/gate-chain.js" post-task "$(echo "$LAYER_TASKS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).find(t => t.id === '$task')")" 2>&1)
         GATE_PASSED=$(echo "$GATE_RESULT" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).passed")
 
         if [ "$GATE_PASSED" != "true" ]; then
@@ -367,7 +367,7 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
 
     # Barrier gate after layer
     log_info "Running barrier gate..."
-    BARRIER_RESULT=$("$NODE_CMD" "$SCRIPT_DIR/gate-chain.js" barrier "$CURRENT_LAYER" "$LAYER_TASKS" 2>&1)
+    BARRIER_RESULT=$("$NODE_CMD" "$SCRIPT_DIR/engine/gate-chain.js" barrier "$CURRENT_LAYER" "$LAYER_TASKS" 2>&1)
     BARRIER_PASSED=$(echo "$BARRIER_RESULT" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).passed")
 
     if [ "$BARRIER_PASSED" != "true" ]; then
@@ -377,7 +377,7 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
     fi
 
     # Update current layer
-    "$NODE_CMD" "$SCRIPT_DIR/state.js" update "$CURRENT_LAYER" "current_layer=$LAYER_NUM" &>/dev/null
+    "$NODE_CMD" "$SCRIPT_DIR/engine/state.js" update "$CURRENT_LAYER" "current_layer=$LAYER_NUM" &>/dev/null
     CURRENT_LAYER=$LAYER_NUM
 
     log_success "Layer $LAYER_NUM/$TOTAL_LAYERS completed"
@@ -389,7 +389,7 @@ done
 
 header "Orchestration Complete"
 
-PROGRESS=$("$NODE_CMD" "$SCRIPT_DIR/state.js" progress 2>/dev/null || echo '{}')
+PROGRESS=$("$NODE_CMD" "$SCRIPT_DIR/engine/state.js" progress 2>/dev/null || echo '{}')
 COMPLETED=$(echo "$PROGRESS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).completed")
 FAILED=$(echo "$PROGRESS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).failed")
 PERCENT=$(echo "$PROGRESS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).percent")

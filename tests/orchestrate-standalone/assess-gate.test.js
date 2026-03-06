@@ -6,9 +6,9 @@ const os = require('os');
 const path = require('path');
 const Module = require('module');
 
-const state = require('../../skills/orchestrate-standalone/scripts/state');
-const eventLog = require('../../skills/orchestrate-standalone/scripts/event-log');
-const { parseTasks } = require('../../skills/orchestrate-standalone/scripts/scheduler');
+const state = require('../../skills/orchestrate-standalone/scripts/engine/state');
+const eventLog = require('../../skills/orchestrate-standalone/scripts/auto/event-log');
+const { parseTasks } = require('../../skills/orchestrate-standalone/scripts/engine/scheduler');
 
 const tests = [];
 
@@ -24,7 +24,7 @@ function loadModuleWithInternals(modulePath, internalNames) {
 
 const autoOrchestratorPath = path.join(
   __dirname,
-  '../../skills/orchestrate-standalone/scripts/auto-orchestrator.js'
+  '../../skills/orchestrate-standalone/scripts/auto/auto-orchestrator.js'
 );
 const autoOrchestrator = loadModuleWithInternals(autoOrchestratorPath, [
   'getCurrentTaskMetrics',
