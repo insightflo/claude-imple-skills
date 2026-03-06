@@ -756,6 +756,130 @@ function cmdResults(options, jobDir) {
   }
 }
 
+/**
+ * Cross-Review Phase (Stage 2)
+ * Each member reviews the other members' Stage 1 outputs.
+ */
+function cmdCrossReview(options, jobDir) {
+  const resolvedJobDir = path.resolve(jobDir);
+  const jobMeta = readJsonIfExists(path.join(resolvedJobDir, 'job.json'));
+  if (!jobMeta) exitWithError(`job.json not found in ${resolvedJobDir}`);
+
+  const membersRoot = path.join(resolvedJobDir, 'members');
+  if (!fs.existsSync(membersRoot)) exitWithError(`members folder not found: ${membersRoot}`);
+
+  // Collect Stage 1 outputs
+  const stage1Results = {};
+  for (const entry of fs.readdirSync(membersRoot)) {
+    const statusPath = path.join(membersRoot, entry, 'status.json');
+    const outputPath = path.join(membersRoot, entry, 'output.txt');
+    const status = readJsonIfExists(statusPath);
+    if (!status || status.state !== 'done') continue;
+    const output = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf8') : '';
+    if (output.trim()) stage1Results[status.member] = output;
+  }
+
+  const memberNames = Object.keys(stage1Results);
+  if (memberNames.length < 2) {
+    if (options.json) {
+      process.stdout.write(JSON.stringify({ skipped: true, reason: 'Need at least 2 successful Stage 1 results' }) + '\n');
+    } else {
+      process.stdout.write('cross-review: skipped (need at least 2 successful Stage 1 results)\n');
+    }
+    return;
+  }
+
+  const crossJobDir = resolvedJobDir + '-cross';
+  const crossMembersDir = path.join(crossJobDir, 'members');
+  ensureDir(crossMembersDir);
+
+  const originalPromptPath = path.join(resolvedJobDir, 'prompt.txt');
+  const originalPrompt = fs.existsSync(originalPromptPath) ? fs.readFileSync(originalPromptPath, 'utf8') : '';
+
+  const configPath = options.config || process.env.COUNCIL_CONFIG || resolveDefaultConfigFile();
+  const config = parseCouncilConfig(configPath);
+  const timeoutSetting = Number(config.council.settings.timeout || 0);
+  const timeoutSec = timeoutSetting > 0 ? timeoutSetting : 0;
+
+  const memberConfigs = {};
+  for (const m of (config.council.members || [])) {
+    if (m && m.name && m.command) memberConfigs[m.name.toLowerCase()] = m;
+  }
+
+  const crossReviewTasks = [];
+  for (const reviewer of memberNames) {
+    const reviewerConfig = memberConfigs[reviewer.toLowerCase()];
+    if (!reviewerConfig) continue;
+
+    const othersOpinions = memberNames
+      .filter(m => m !== reviewer)
+      .map(m => `### ${m}의 의견:\n${stage1Results[m]}`)
+      .join('\n\n');
+
+    const crossPrompt = `# Cross-Review 요청
+
+당신은 "${reviewer}"입니다. 다른 AI들의 리뷰 의견을 검토하고 반박하거나 동의하세요.
+
+## 원본 리뷰 요청:
+${originalPrompt}
+
+## 다른 AI들의 Stage 1 의견:
+${othersOpinions}
+
+## Cross-Review 과제:
+1. 각 의견의 강점과 약점을 분석
+2. 동의/반박 명확히
+3. 추가 통찰 제시
+4. 핵심 1-3가지 요약
+
+**반드시 한국어로 답변하세요.**`;
+
+    crossReviewTasks.push({ reviewer, config: reviewerConfig, prompt: crossPrompt });
+  }
+
+  const crossJobMeta = {
+    id: `${jobMeta.id}-cross`,
+    createdAt: new Date().toISOString(),
+    stage: 'cross-review',
+    parentJobDir: resolvedJobDir,
+    members: crossReviewTasks.map(t => ({
+      name: t.reviewer, command: t.config.command,
+      emoji: t.config.emoji || null, color: t.config.color || null,
+    })),
+  };
+  atomicWriteJson(path.join(crossJobDir, 'job.json'), crossJobMeta);
+
+  for (const task of crossReviewTasks) {
+    const safeName = safeFileName(task.reviewer);
+    const memberDir = path.join(crossMembersDir, safeName);
+    ensureDir(memberDir);
+
+    fs.writeFileSync(path.join(memberDir, 'prompt.txt'), task.prompt, 'utf8');
+
+    atomicWriteJson(path.join(memberDir, 'status.json'), {
+      member: task.reviewer, state: 'queued',
+      queuedAt: new Date().toISOString(), command: task.config.command,
+    });
+
+    const workerArgs = [
+      WORKER_PATH, '--job-dir', crossJobDir,
+      '--member', task.reviewer, '--safe-member', safeName,
+      '--command', task.config.command,
+      '--prompt-file', path.join(memberDir, 'prompt.txt'),
+    ];
+    if (timeoutSec > 0) workerArgs.push('--timeout', String(timeoutSec));
+
+    const child = spawn(process.execPath, workerArgs, { detached: true, stdio: 'ignore', env: process.env });
+    child.unref();
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify({ crossJobDir, ...crossJobMeta }, null, 2) + '\n');
+  } else {
+    process.stdout.write(`${crossJobDir}\n`);
+  }
+}
+
 function cmdStop(_options, jobDir) {
   const resolvedJobDir = path.resolve(jobDir);
   const membersRoot = path.join(resolvedJobDir, 'members');
@@ -829,6 +953,12 @@ function main() {
     const jobDir = rest[0];
     if (!jobDir) exitWithError('clean: missing jobDir');
     cmdClean(options, jobDir);
+    return;
+  }
+  if (command === 'cross-review') {
+    const jobDir = rest[0];
+    if (!jobDir) exitWithError('cross-review: missing jobDir');
+    cmdCrossReview(options, jobDir);
     return;
   }
 

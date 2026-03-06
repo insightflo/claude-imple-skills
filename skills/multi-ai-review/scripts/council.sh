@@ -65,7 +65,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 case "$1" in
-  start|status|wait|results|stop|clean)
+  start|status|wait|results|stop|clean|cross-review)
     exec "$JOB_SCRIPT" "$@"
     ;;
 esac
@@ -124,9 +124,32 @@ process.stdout.write(String(d.overallState||""));
     fi
   done
 
-  # All members done — remove traps before normal cleanup to prevent double-stop.
-  trap - EXIT INT TERM HUP
+  # Stage 1 complete — show results
+  echo "=== Stage 1: Initial Opinions ===" >&2
   "$JOB_SCRIPT" results "$JOB_DIR"
+
+  # Stage 2: Cross-Review
+  echo "" >&2
+  echo "=== Stage 2: Cross-Review ===" >&2
+  CROSS_JOB_DIR="$("$JOB_SCRIPT" cross-review "$JOB_DIR" 2>/dev/null || true)"
+
+  if [ -n "$CROSS_JOB_DIR" ] && [ -d "$CROSS_JOB_DIR" ]; then
+    while true; do
+      WAIT_JSON="$("$JOB_SCRIPT" wait --timeout-ms 10000 "$CROSS_JOB_DIR")"
+      OVERALL="$(printf '%s' "$WAIT_JSON" | node -e '
+const d=JSON.parse(require("fs").readFileSync(0,"utf8"));
+process.stdout.write(String(d.overallState||""));
+')"
+      if [ "$OVERALL" = "done" ]; then
+        break
+      fi
+    done
+    "$JOB_SCRIPT" results "$CROSS_JOB_DIR"
+    "$JOB_SCRIPT" clean "$CROSS_JOB_DIR" >/dev/null 2>&1 || true
+  fi
+
+  # All done — remove traps before cleanup
+  trap - EXIT INT TERM HUP
   "$JOB_SCRIPT" clean "$JOB_DIR" >/dev/null 2>&1 || true
   exit 0
 fi
@@ -150,5 +173,31 @@ done
 
 trap - INT TERM HUP
 
+echo "=== Stage 1: Initial Opinions ===" >&2
 "$JOB_SCRIPT" results "$JOB_DIR"
+
+# Stage 2: Cross-Review
+echo "" >&2
+echo "=== Stage 2: Cross-Review ===" >&2
+CROSS_JOB_DIR="$("$JOB_SCRIPT" cross-review "$JOB_DIR" 2>/dev/null || true)"
+
+if [ -n "$CROSS_JOB_DIR" ] && [ -d "$CROSS_JOB_DIR" ]; then
+  while true; do
+    WAIT_JSON="$("$JOB_SCRIPT" wait "$CROSS_JOB_DIR")"
+    OVERALL="$(printf '%s' "$WAIT_JSON" | node -e '
+const fs=require("fs");
+const d=JSON.parse(fs.readFileSync(0,"utf8"));
+process.stdout.write(String(d.overallState||""));
+')"
+
+    "$JOB_SCRIPT" status --text "$CROSS_JOB_DIR" >&2
+
+    if [ "$OVERALL" = "done" ]; then
+      break
+    fi
+  done
+  "$JOB_SCRIPT" results "$CROSS_JOB_DIR"
+  "$JOB_SCRIPT" clean "$CROSS_JOB_DIR" >/dev/null 2>&1 || true
+fi
+
 "$JOB_SCRIPT" clean "$JOB_DIR" >/dev/null

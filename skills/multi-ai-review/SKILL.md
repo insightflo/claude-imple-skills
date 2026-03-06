@@ -2,8 +2,8 @@
 name: multi-ai-review
 description: Claude + Gemini CLI + Codex CLI 멀티-AI 리뷰. 3단계 파이프라인으로 Initial Opinions → Cross-Review → Chairman Synthesis 수행. CLI 방식으로 추가 API 비용 없이 실행.
 trigger: "council 소집", "여러 AI 의견 물어봐", "심층 리뷰", "컨센서스 리뷰"
-version: 3.1.0
-updated: 2026-03-03
+version: 3.2.0
+updated: 2026-03-07
 ---
 
 # Multi-AI Review 스킬 (CLI 기반)
@@ -16,6 +16,7 @@ updated: 2026-03-03
 > **3-Stage Pipeline**: Initial Opinions (병렬) → Cross-Review (반박) → Chairman Synthesis (종합)
 > **비용**: CLI 구독 플랜만으로 실행 (추가 API 비용 없음)
 
+> **v3.2.0**: Cross-Review 자동화 - Stage 2에서 멤버 간 상호 비평 자동 실행
 > **v3.1.0**: Long Context 최적화 - H2O 패턴으로 핵심 정보 상단 배치
 > **v3.0.0**: MCP 의존성 제거, agent-council 패턴 적용, CLI 직접 호출
 

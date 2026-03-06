@@ -104,7 +104,11 @@ function main() {
   const outPath = path.join(memberDir, 'output.txt');
   const errPath = path.join(memberDir, 'error.txt');
 
-  const promptPath = path.join(jobDir, 'prompt.txt');
+  // Support member-specific prompt file (for cross-review stage)
+  const promptFile = options['prompt-file'];
+  const promptPath = promptFile && fs.existsSync(promptFile)
+    ? promptFile
+    : path.join(jobDir, 'prompt.txt');
   const prompt = fs.existsSync(promptPath) ? fs.readFileSync(promptPath, 'utf8') : '';
 
   const tokens = splitCommand(command);
