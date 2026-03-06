@@ -22,6 +22,10 @@ MODE="${MODE:-standard}"
 RESUME="${RESUME:-false}"
 SPRINT_SIZE=30
 AUTO_GOAL=""
+AUTO_MAX_ITERATIONS=""
+AUTO_MAX_DYNAMIC_TASKS=""
+AUTO_WORKER_COUNT=""
+AUTO_MAX_CONSECUTIVE_FAILURES=""
 
 # Worker pool size based on mode
 declare -A WORKERS=(
@@ -76,6 +80,18 @@ while [ $# -gt 0 ]; do
             ;;
         --goal=*)
             AUTO_GOAL="${1#*=}"
+            ;;
+        --max-iterations=*)
+            AUTO_MAX_ITERATIONS="${1#*=}"
+            ;;
+        --max-dynamic-tasks=*)
+            AUTO_MAX_DYNAMIC_TASKS="${1#*=}"
+            ;;
+        --worker-count=*)
+            AUTO_WORKER_COUNT="${1#*=}"
+            ;;
+        --max-consecutive-failures=*)
+            AUTO_MAX_CONSECUTIVE_FAILURES="${1#*=}"
             ;;
         --help|-h)
             cat <<EOF
@@ -183,15 +199,22 @@ fi
 if [ "$MODE" = "auto" ]; then
     header "Executing Auto Mode (DCPEA Loop)"
 
+    # Build forwarded args for auto-orchestrator.js
+    AUTO_ARGS=()
+    [ -n "$AUTO_MAX_ITERATIONS" ] && AUTO_ARGS+=("--max-iterations=$AUTO_MAX_ITERATIONS")
+    [ -n "$AUTO_MAX_DYNAMIC_TASKS" ] && AUTO_ARGS+=("--max-dynamic-tasks=$AUTO_MAX_DYNAMIC_TASKS")
+    [ -n "$AUTO_WORKER_COUNT" ] && AUTO_ARGS+=("--worker-count=$AUTO_WORKER_COUNT")
+    [ -n "$AUTO_MAX_CONSECUTIVE_FAILURES" ] && AUTO_ARGS+=("--max-consecutive-failures=$AUTO_MAX_CONSECUTIVE_FAILURES")
+
     if [ "$RESUME" = "true" ]; then
         log_info "Resuming auto mode from checkpoint..."
-        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto-orchestrator.js" --resume
+        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto-orchestrator.js" --resume "${AUTO_ARGS[@]}"
     else
         if [ -z "$AUTO_GOAL" ]; then
             log_error "Auto mode requires --goal='...'. Example: --mode=auto --goal='Build user auth'"
             exit 1
         fi
-        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto-orchestrator.js" "$AUTO_GOAL"
+        AUTO_MODE=true "$NODE_CMD" "$SCRIPT_DIR/auto-orchestrator.js" "${AUTO_ARGS[@]}" "$AUTO_GOAL"
     fi
 
     AUTO_EXIT=$?
