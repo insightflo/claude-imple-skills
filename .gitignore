@@ -28,6 +28,9 @@ TASKS.md
 # 로컬 참고 자료 (배포 불필요)
 ref/
 
+# 로컬 테스트 (배포 불필요)
+tests/
+
 # multi-ai-review 실행 산출물 (로컬/CI 런타임 생성)
 skills/multi-ai-review/.jobs/
 skills/multi-ai-review/.jobs/**
