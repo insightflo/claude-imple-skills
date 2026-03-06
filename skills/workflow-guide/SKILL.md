@@ -2,8 +2,8 @@
 name: workflow-guide
 description: 여러 플러그인 중 상황에 맞는 워크플로우를 안내합니다. /workflow, "어떤 스킬을 써야 해?", "워크플로우 추천" 트리거.
 trigger: /workflow, /workflow-guide, "뭐해야해?", "어떤 스킬", "워크플로우 추천"
-version: 4.5.0
-updated: 2026-03-05
+version: 4.9.3
+updated: 2026-03-06
 
 ---
 
@@ -49,7 +49,7 @@ updated: 2026-03-05
 
 ---
 
-## 📊 Standalone 스킬 카탈로그 (19개)
+## 📊 Standalone 스킬 카탈로그 (20개)
 
 ### 핵심 스킬
 
@@ -72,8 +72,9 @@ updated: 2026-03-05
 | **`/changelog`** | `/changelog` | 변경 이력 |
 | **`/architecture`** | `/architecture` | 아키텍처 맵 |
 | **`/compress`** | `/compress`, "컨텍스트 압축" | Long Context 최적화 (H2O 패턴) |
-| **`/orchestrate-standalone`** | `/orchestrate-standalone`, `/orchestrate-standalone` | 30~200개 태스크 병렬 실행 (`--mode=wave/sprint`) |
+| **`/orchestrate-standalone`** | `/orchestrate-standalone`, `/orchestrate` | 30~200개 태스크 병렬 실행 (`--mode=wave/sprint`) |
 | **`/task-board`** | `/task-board`, "칸반 보드", "보드 보여줘" | 에이전트 태스크 칸반 시각화 (Backlog/In Progress/Blocked/Done) |
+| **`/statusline`** | 자동 활성화 (설치 후) | TASKS.md 진행률 Claude Code 상태바 Line 3 표시 |
 
 ---
 
@@ -125,16 +126,33 @@ ls docs/planning/*.md 2>/dev/null
 # 권장: 루트 TASKS.md / 레거시: docs/planning/06-tasks.md
 ls TASKS.md 2>/dev/null || ls docs/planning/06-tasks.md 2>/dev/null
 
-# 3. 코드 베이스 확인
-ls package.json pyproject.toml requirements.txt 2>/dev/null
+# 3. 코드 베이스 확인 (source_code = src/·app/·lib/ 디렉토리에 실제 코드 파일이 있어야 함)
+# package.json만 있는 신규 프로젝트는 source_code로 보지 않음
+SOURCE_CODE=$(find src/ app/ lib/ -maxdepth 3 -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.go" -o -name "*.rs" \) 2>/dev/null | head -1)
+echo "source_code=${SOURCE_CODE:+yes}"
 
 # 4. 중단된 작업 확인
-ls .claude/orchestrate-standalone-state.json 2>/dev/null
-cat .claude/orchestrate-standalone-state.json 2>/dev/null | head -5
+# ⚠️ 레거시/신규 경로 모두 확인 — 하나라도 미완료 태스크 있으면 INCOMPLETE_IN_STATE=1 (OR 판정)
+# ⚠️ grep -q 사용: grep -c || echo 0 은 no-match 시 "0\n0" 이중 출력 버그 있음
+INCOMPLETE_IN_STATE=0
+for STATE_PATH in ".claude/orchestrate-state.json" ".claude/orchestrate/orchestrate-state.json"; do
+  if [ -f "$STATE_PATH" ]; then
+    if grep -qE '"status"[[:space:]]*:[[:space:]]*"(in_progress|pending)"' "$STATE_PATH" 2>/dev/null; then
+      INCOMPLETE_IN_STATE=1
+      echo "state_file=$STATE_PATH incomplete_in_state=1 (중단 감지)"
+    else
+      echo "state_file=$STATE_PATH incomplete_in_state=0 (완료 상태)"
+    fi
+  fi
+done
+echo "INCOMPLETE_IN_STATE=$INCOMPLETE_IN_STATE"
 
 # 5. Git 상태 확인
 git status --short 2>/dev/null | head -10
 git worktree list 2>/dev/null
+# ⚠️ merge conflict 감지 (git dirty 는 정상 — /recover 불필요)
+CONFLICT_FILES=$(git diff --name-only --diff-filter=U 2>/dev/null | wc -l | tr -d ' ')
+echo "conflicts=$CONFLICT_FILES"  # 0이면 정상, 1 이상이면 /recover 필요
 
 # 6. specs/ 폴더 확인 (v1.8.1)
 ls specs/screens/*.yaml 2>/dev/null
@@ -158,8 +176,10 @@ ls database/standards.md 2>/dev/null && echo "DBA: OK"
 # 9. 에이전트 팀 + project-team 설치 여부 확인 (CRITICAL)
 AGENT_COUNT=$(ls .claude/agents/*.md 2>/dev/null | wc -l | tr -d ' ')
 TASK_COUNT=$(grep -cE '^\s*[-*]\s*\[|^#{1,6}\s+\[' TASKS.md 2>/dev/null || echo 0)
-echo "agents=$AGENT_COUNT tasks=$TASK_COUNT"
+INCOMPLETE_COUNT=$(grep -cE '^\s*[-*]\s*\[\s*\]|^#{1,6}\s+\[\s*\]' TASKS.md 2>/dev/null || echo 0)
+echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT"
 # ⚠️ agents=0 AND tasks>=30 → install.sh REQUIRED before orchestration
+# ⚠️ incomplete=0 AND tasks>0 → all_tasks_completed = true → /audit 경로
 
 # 10. 거버넌스 권장 조건 감지
 DOMAIN_COUNT=$(grep -h "^\s*-\s*domain:" TASKS.md 2>/dev/null | awk '{print $NF}' | sort -u | wc -l | tr -d ' ')
@@ -168,22 +188,108 @@ echo "domains=$DOMAIN_COUNT governance=$GOVERNANCE_DONE"
 # 거버넌스 권장: tasks>=10 AND (domains>=2 OR 팀원>=2 OR 외부API>=3)
 ```
 
-### 2단계: 상황별 진단 결과 매핑
+### 2단계: 결정 알고리즘 (의무 실행 — 순서대로, 첫 RETURN에서 중단)
 
-**진단 우선순위** (위에서 아래로 먼저 매칭되는 것 적용):
+> ⛔ **아래 알고리즘을 IF-THEN 순서대로 실행하세요. 첫 번째 조건이 참이면 즉시 해당 스킬을 RETURN하고 나머지 조건은 평가하지 않습니다.**
+>
+> ⛔ **절대 금지**: TASKS.md 내용(제목·목적·설명·주석), 사용자 발언, 프로젝트 이름, 이전 대화 내용은 이 알고리즘의 입력이 아닙니다. **1단계에서 측정한 변수만 사용합니다.**
+>
+> ✅ **3단계 AskUserQuestion에서 이 알고리즘이 RETURN한 스킬을 반드시 ⭐으로 표시합니다. 임의 변경 금지.**
 
-| 진단 결과 | 프로젝트 단계 | 권장 스킬 |
-|-----------|---------------|-----------|
-| orchestrate-state.json 존재 | 🔄 **자동화 중단** | `/recover` → `/orchestrate-standalone --resume` |
-| Git 충돌/dirty 상태 | ⚠️ **복구 필요** | `/recover` |
-| TASKS.md 없음 + 레거시(06-tasks.md) 있음 | 📋 **마이그레이션 필요** | `/tasks-migrate` (루트 TASKS.md로 통합) |
-| TASKS.md 없음 | 📋 **태스크 필요** | `/tasks-init` (스캐폴딩 생성) |
-| 태스크 있음 + **거버넌스 권장 조건 충족** + 거버넌스 없음 | 🏛️ **거버넌스 필요** | `/governance-setup` |
-| **거버넌스 완료 + 태스크 30개+ + agents=0** | 🔧 **[필수] project-team 미설치** | `./install.sh` 먼저 실행 → 에이전트/훅 설치 후 진행 |
-| 거버넌스 완료 + agents 설치 + 미구현 | 🚀 **구현 준비** | `/orchestrate-standalone --mode=wave` (80+) 또는 `/agile auto` (≤30) |
-| 태스크 있음 + 코드 없음 (소규모, 거버넌스 불필요) | 🚀 **구현 준비** | `/agile auto` (≤30) |
-| 코드 있음 + 미완료 태스크 | 🔨 **구현 중** | `/agile iterate` 또는 `/orchestrate-standalone --resume` |
-| 모든 태스크 완료 | ✅ **검증 필요** | `/audit` |
+```
+# 1단계 bash 변수 → 알고리즘 변수 매핑:
+# TASK_COUNT        → TASK_COUNT       (총 태스크 수)
+# INCOMPLETE_COUNT  → incomplete_tasks  (미완료 태스크: [ ] 체크박스)
+# TASK_COUNT>0 AND INCOMPLETE_COUNT=0 → all_tasks_completed
+# SOURCE_CODE(yes)  → source_code EXISTS (src/·app/·lib/ 에 코드 파일 있음)
+# AGENT_COUNT       → AGENT_COUNT      (.claude/agents/*.md 개수)
+# GOVERNANCE_DONE   → GOVERNANCE_DONE  (management/project-plan.md 존재: yes/no)
+# DOMAIN_COUNT      → DOMAIN_COUNT     (TASKS.md domain: 필드 유니크 수)
+# CONFLICT_FILES>0  → git merge conflicts exist (git diff --diff-filter=U 결과)
+
+ALGORITHM get_recommendation():
+
+  # ① 복구 체크 (최우선)
+  #    ⚠️ orchestrate.sh는 완료 시 state 파일을 자동 삭제하지 않음
+  #       → 파일 존재 + 미완료(in_progress/pending) 태스크 존재 시만 복구 신호
+  #    레거시: .claude/orchestrate-state.json / 신규: .claude/orchestrate/orchestrate-state.json
+  IF (state file EXISTS) AND (INCOMPLETE_IN_STATE > 0):
+    RETURN "/recover"  # 이후 /orchestrate-standalone --resume 안내
+
+  # ⚠️ git dirty (미커밋 변경사항)는 정상 개발 상태 — /recover 트리거 아님
+  # 오직 unresolved merge conflicts만 복구 필요
+  IF git merge conflicts exist (git diff --diff-filter=U 결과 있음):
+    RETURN "/recover"
+
+  # ② 태스크 파일 체크
+  IF TASKS.md NOT EXISTS:
+    IF docs/planning/06-tasks.md EXISTS:
+      RETURN "/tasks-migrate"
+    ELSE:
+      RETURN "/tasks-init"
+  IF TASK_COUNT == 0:
+    RETURN "/tasks-init"   # TASKS.md 있으나 태스크 없음 → 스캐폴딩 필요
+
+  # ③ 유지보수 체크 ← 단독·소규모 유지보수 (AGENT_COUNT=0 AND GOVERNANCE_DONE=no 인 경우만)
+  #    source_code = src/ 또는 app/ 또는 lib/ 디렉토리에 파일 1개 이상 있음
+  #    ⚠️ package.json만 있는 신규 프로젝트는 source_code 아님 → ③ 건너뜀
+  #    ⚠️ AGENT_COUNT > 0 (거버넌스+팀 구성된 대규모 진행 중) → ③ 건너뜀
+  #    ⚠️ GOVERNANCE_DONE = yes (거버넌스 완료 후 install 대기) → ③ 건너뜀 → ⑤로 이동
+  IF source_code EXISTS AND AGENT_COUNT == 0 AND GOVERNANCE_DONE == "no":
+    IF incomplete_tasks > 0:
+      RETURN "/agile iterate"   # 단독 유지보수 → iterate 사용
+    IF all_tasks_completed:
+      RETURN "/audit"
+
+  # ④ 거버넌스 체크 ← source_code 없는 신규 프로젝트 전용 (미완료 태스크 있을 때만)
+  #    DOMAIN_COUNT는 TASKS.md 'domain:' 필드 기반; 없으면 TASK_COUNT>=30으로 대체
+  #    ⚠️ incomplete_tasks == 0 (모든 완료) → 거버넌스 불필요 → ⑦·⑧으로 이동
+  IF TASK_COUNT >= 10 AND (DOMAIN_COUNT >= 2 OR TASK_COUNT >= 30) AND GOVERNANCE_DONE == "no" AND incomplete_tasks > 0:
+    RETURN "/governance-setup"
+    # ⚠️ AGENT_COUNT, TASKS.md 목적·설명 필드, 사용자 맥락은 이 조건에 영향 없음
+
+  # ⑤ 인프라 체크 (거버넌스 완료 후, 미완료 태스크 있을 때만)
+  #    ⚠️ all_tasks_completed이면 install.sh 불필요 → ⑥·⑧으로 이동
+  IF GOVERNANCE_DONE == "yes" AND TASK_COUNT >= 30 AND AGENT_COUNT == 0 AND incomplete_tasks > 0:
+    RETURN "project-team/install.sh --mode standard"
+    # 참고: claude-imple-skills 클론 디렉토리 내 project-team/ 에서 실행
+
+  # ⑥ 구현/배포 판단 (거버넌스 완료 + 인프라 준비)
+  IF GOVERNANCE_DONE == "yes" AND AGENT_COUNT > 0:
+    IF all_tasks_completed: RETURN "/audit"   # 전체 완료 → 배포 전 감사
+    IF incomplete_tasks >= 80: RETURN "/orchestrate-standalone --mode=wave"
+    IF incomplete_tasks >= 30: RETURN "/orchestrate-standalone"
+    ELSE: RETURN "/agile auto"
+
+  # ⑦ 소규모 신규 구현 (거버넌스 불필요, 코드 없음, 미완료 태스크 있음)
+  IF TASK_COUNT > 0 AND TASK_COUNT < 30 AND incomplete_tasks > 0:
+    RETURN "/agile auto"
+
+  # ⑧ 완료
+  IF all_tasks_completed:
+    RETURN "/audit"
+```
+
+**시나리오별 추적 검증:**
+
+| 시나리오 | 초기 상태 | 알고리즘 경로 | 예상 추천 |
+|---------|-----------|--------------|----------|
+| S1 (새 프로젝트) | TASKS.md 없음 | ② → /tasks-init | ✅ `/tasks-init` |
+| S1 (tasks-init 후) | 20 tasks, domain<2, 코드 없음 | ③ skip, ④ skip(20<30), ⑦ → /agile auto | ✅ `/agile auto` |
+| S2 (100 tasks, 12 domains, 거버넌스 없음) | 코드 없음, GOVERNANCE_DONE=no | ③ skip(코드없음), ④ 100>=30 → /governance-setup | ✅ `/governance-setup` |
+| S2 (거버넌스 후, agents=0) | GOVERNANCE_DONE=yes, AGENT_COUNT=0 | ⑤ → project-team/install.sh | ✅ `install.sh` |
+| S2 (설치 후) | GOVERNANCE_DONE=yes, AGENT_COUNT>0, incomplete=100 | ⑥ incomplete>=80 → /orchestrate-standalone --mode=wave | ✅ `/orchestrate-standalone --mode=wave` |
+| S2 (실행중, incomplete=50) | GOVERNANCE_DONE=yes, AGENT_COUNT>0, incomplete=50, **state 파일 미완료 태스크 0** (이전 실행이 모두 완료 → INCOMPLETE_IN_STATE=0) | ① skip(state없음), ⑥ 30<=incomplete<80 → /orchestrate-standalone | ✅ `/orchestrate-standalone` |
+| S3 (유지보수) | source_code EXISTS(src/), AGENT_COUNT=0, GOVERNANCE_DONE=no, incomplete>0 | ③ AGENT_COUNT=0 AND gov=no → /agile iterate | ✅ `/agile iterate` |
+| S5 (배포 직전) | GOVERNANCE_DONE=yes, AGENT_COUNT>0, all_completed | ⑥ all_tasks_completed → /audit | ✅ `/audit` |
+| S6 (복구-state) | orchestrate-state.json 존재 AND 미완료(in_progress/pending) 태스크 있음 | ①a state+incomplete>0 → /recover | ✅ `/recover` |
+| S6 (복구-merge) | git merge conflicts 존재 (git diff --diff-filter=U) | ①b merge conflict → /recover | ✅ `/recover` |
+| S1-레거시 | TASKS.md 없음, 06-tasks.md 있음 | ② → /tasks-migrate | ✅ `/tasks-migrate` |
+| S1-빈TASKS | TASKS.md 있으나 task 0개 | ② TASK_COUNT=0 → /tasks-init | ✅ `/tasks-init` |
+| S1-완료 | TASK_COUNT=20, all done, 코드 없음 | ③ skip(코드없음), ④ skip(20<30), ⑦ skip(incomplete=0), ⑧ → /audit | ✅ `/audit` |
+| S4·S7 | 명시적 직접 호출 | workflow-guide 우회 가능 (자연어 트리거) | ✅ 해당 스킬 직접 실행 |
+| S6-신규경로 | .claude/orchestrate/orchestrate-state.json 존재 AND incomplete>0 | ① 신규 경로 체크 → /recover | ✅ `/recover` |
+| 비정상 (AGENT>0+GOV=no) | AGENT_COUNT>0, GOVERNANCE_DONE=no, T=20, incomplete>0 | ③ skip(AGENT>0), ④ skip(T<30), ⑤ skip(GOV=no), ⑥ skip(GOV=no), ⑦ T<30 AND incomplete>0 → /agile auto | ✅ `/agile auto` |
 
 ### 2-1단계: 부분 완료 상태 판단 기준
 
@@ -231,27 +337,34 @@ echo "domains=$DOMAIN_COUNT governance=$GOVERNANCE_DONE"
 
 ---
 
-## 🎯 핵심 의사결정 트리 (Standalone v4.2)
+## 🎯 핵심 의사결정 트리 (Standalone v4.9)
 
 ```
 시작
 │
-├─ 작업 중단됨? ─────────────────────── YES → /recover
+├─ orchestrate-state.json 존재 AND 미완료(in_progress/pending) 태스크 있음? ── YES → /recover
+│   ↳ 레거시·신규 경로 모두 확인 / 완료된 state 파일은 오탐 방지로 건너뜀
 │
-├─ 긴 문서/컨텍스트 과부하? ──────────── YES → /compress (H2O 패턴 압축)
+├─ git merge conflicts 존재? (git diff --diff-filter=U) ─── YES → /recover
+│   ↳ dirty working tree(미커밋 변경)는 정상 개발 상태 — /recover 트리거 아님
+│
 │
 ├─ TASKS.md 없음?
 │   ├─ 레거시(06-tasks.md) 있음 ───────── /tasks-migrate (통합)
 │   └─ 레거시도 없음 ─────────────────── /tasks-init (스캐폴딩)
 │
-├─ 태스크 있음 + 거버넌스 권장 조건 충족 + 거버넌스 없음? ── YES → /governance-setup
+├─ 기존 코드베이스? (src/·app/·lib/에 실제 파일 존재) + AGENT_COUNT=0 + GOVERNANCE_DONE=no?
+│   ├─ 미완료 태스크 있음 ─────────────── /agile iterate   ← ③ 유지보수
+│   └─ 모든 태스크 완료 ─────────────── /audit
+│   ↳ AGENT_COUNT>0 또는 GOVERNANCE_DONE=yes 이면 이 분기 건너뜀
 │
-├─ 거버넌스 완료 + 태스크 30개+ + .claude/agents/ 없음? ── YES → ./install.sh
+├─ 태스크 있음 + 미완료 있음 + 거버넌스 권장 조건 충족 + 거버넌스 없음? ── YES → /governance-setup
+│
+├─ 거버넌스 완료 + 태스크 30개+ + .claude/agents/ 없음 + 미완료 있음? ── YES → project-team/install.sh --mode standard
 │
 ├─ 구현 시작?
 │   ├─ ≤30개 태스크 ──────────────────── /agile auto
 │   ├─ 30~80개 태스크 ───────────────── /orchestrate-standalone
-│   ├─ 50~200개 (사용자 리뷰 게이트) ─── /orchestrate-standalone --mode=sprint (NEW)
 │   ├─ 80~200개 (자율 병렬 실행) ──────── /orchestrate-standalone --mode=wave
 │   ├─ 200개+ 태스크 ───────────────── 하위 프로젝트 분할 → wave
 │   └─ 수정/변경 ─────────────────────── /agile iterate
@@ -385,8 +498,11 @@ echo "domains=$DOMAIN_COUNT governance=$GOVERNANCE_DONE"
 "뭐부터 해야 할지 모르겠어"     → /workflow
 "기획서 있는데 코딩 시작해줘"   → /agile auto
 "이 기능 수정해줘"              → /agile iterate
-"코드 검토해줘"                 → /checkpoint
-"리뷰해줘"                      → /checkpoint
+"코드 검토해줘"                 → /checkpoint  (빠른 2단계 리뷰)
+"리뷰해줘"                      → /checkpoint  (빠른 리뷰; 심층이면 /multi-ai-review)
+"심층 리뷰해줘"                 → /multi-ai-review
+"council 소집해줘"              → /multi-ai-review
+"여러 AI 의견 들어보자"         → /multi-ai-review
 "보안 검사해줘"                 → /security-review
 "품질 검사해줘"                 → /audit
 "작업이 중단됐어"               → /recover
@@ -447,8 +563,8 @@ echo "domains=$DOMAIN_COUNT governance=$GOVERNANCE_DONE"
 ### Hook 설치
 
 ```bash
-# project-team 설치 스크립트 실행
-./install.sh
+# project-team 설치 스크립트 실행 (claude-imple-skills 클론 디렉토리 내 project-team/ 에서 실행)
+cd project-team && ./install.sh --mode standard
 ```
 
 ---
@@ -481,4 +597,4 @@ A: `/compress`를 사용하여 H2O 패턴으로 핵심 정보를 추출하세요
 
 ---
 
-**Last Updated**: 2026-03-05 (v4.5.0 - Sprint Mode, domain-boundary-enforcer, REQ/DEC 프로토콜, 협업 버스 인프라 추가)
+**Last Updated**: 2026-03-06 (v4.9.3 - ① 복구 체크 강화: grep -q OR 판정으로 교체, S6 시나리오 분리(state/merge), S2-running 전제 조건 명확화, 결정 트리 merge conflict 추가·sprint 제거)
