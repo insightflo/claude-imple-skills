@@ -19,6 +19,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { emitHookDecision } = require('./lib/hook-decision-event');
 
 // ---------------------------------------------------------------------------
 // 1. Permission Matrix (from permission-checker.js)
@@ -274,10 +275,24 @@ async function main() {
   const toolInput = input.tool_input || {};
   const filePath = toolInput.file_path || toolInput.path || '';
 
-  if (!filePath) return;
+  if (!filePath) {
+    await emitHookDecision(input, {
+      hook: 'policy-gate',
+      decision: 'skip',
+      summary: 'No target file path provided.',
+    });
+    return;
+  }
 
   const relativePath = toRelativePath(filePath);
-  if (relativePath.startsWith('..')) return;
+  if (relativePath.startsWith('..')) {
+    await emitHookDecision(input, {
+      hook: 'policy-gate',
+      decision: 'skip',
+      summary: 'Target path is outside project scope.',
+    });
+    return;
+  }
 
   // Detect agent role
   const agentRole = process.env.CLAUDE_AGENT_ROLE?.toLowerCase().replace(/\s+/g, '-') || '';
@@ -287,6 +302,13 @@ async function main() {
     if (agentRole) {
       const result = checkPermission(agentRole, relativePath);
       if (!result.allowed) {
+        await emitHookDecision(input, {
+          hook: 'policy-gate',
+          decision: 'deny',
+          severity: 'error',
+          summary: 'Write denied by role policy.',
+          remediation: 'Request an authorized role or target an allowed path.',
+        });
         process.stdout.write(JSON.stringify({
           decision: 'deny',
           reason: result.reason
@@ -294,6 +316,12 @@ async function main() {
         return;
       }
     }
+    await emitHookDecision(input, {
+      hook: 'policy-gate',
+      decision: 'allow',
+      severity: 'info',
+      summary: 'Write allowed by policy checks.',
+    });
     // Allow by default
     return;
   }
@@ -301,20 +329,48 @@ async function main() {
   // PostToolUse: Standards validation
   if (hookEvent.startsWith('PostToolUse')) {
     const content = toolInput.content || toolInput.new_string || '';
-    if (!content) return;
+    if (!content) {
+      await emitHookDecision(input, {
+        hook: 'policy-gate',
+        decision: 'skip',
+        summary: 'No content provided for standards validation.',
+      });
+      return;
+    }
 
     const violations = validateContent(content, relativePath);
     if (violations.length > 0) {
       const report = formatViolationReport(violations, relativePath);
+      const hasError = violations.some((v) => v.severity === 'error');
+      await emitHookDecision(input, {
+        hook: 'policy-gate',
+        decision: 'warn',
+        severity: hasError ? 'error' : 'warning',
+        summary: `${violations.length} standards issue(s) detected.`,
+        remediation: 'Review policy warnings before continuing.',
+      });
       process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
           additionalContext: report,
           hookEventName: hookEvent
         }
       }));
+    } else {
+      await emitHookDecision(input, {
+        hook: 'policy-gate',
+        decision: 'allow',
+        severity: 'info',
+        summary: 'Standards validation passed.',
+      });
     }
     return;
   }
+
+  await emitHookDecision(input, {
+    hook: 'policy-gate',
+    decision: 'skip',
+    summary: 'Unsupported hook event.',
+  });
 }
 
 main().catch(() => {});

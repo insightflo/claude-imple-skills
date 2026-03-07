@@ -201,13 +201,13 @@ function verifyLegacyToken(token, secret, nowMs) {
     const a = Buffer.from(signatureB64);
     const b = Buffer.from(expectedSig);
     if (a.length !== b.length) {
-      return { ok: false, reason: 'Invalid token signature.' };
+      return { ok: false, reason: 'Invalid agent_token signature.' };
     }
     if (!crypto.timingSafeEqual(a, b)) {
-      return { ok: false, reason: 'Invalid token signature.' };
+      return { ok: false, reason: 'Invalid agent_token signature.' };
     }
   } catch {
-    return { ok: false, reason: 'Invalid token signature.' };
+    return { ok: false, reason: 'Invalid agent_token signature.' };
   }
 
   let payload;

@@ -22,6 +22,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { emitHookDecision } = require('./lib/hook-decision-event');
 
 // ---------------------------------------------------------------------------
 // 1. Secret Detection Patterns
@@ -415,6 +416,11 @@ function getFilesToScan(targetPath = '.') {
 
 async function main() {
   try {
+    const input = {
+      hook_event_name: 'ManualHook',
+      tool_name: 'security-scan',
+      tool_input: {},
+    };
     // Collect all findings
     const allSecrets = [];
     const allOwasp = [];
@@ -447,6 +453,15 @@ async function main() {
 
     const report = generateReport(findings);
 
+    await emitHookDecision(input, {
+      hook: 'security-scan',
+      decision: passed ? 'allow' : 'deny',
+      severity: passed ? 'info' : (hasCriticalSecrets || hasCriticalOwasp || hasCriticalCve ? 'critical' : 'error'),
+      risk_level: hasCriticalSecrets || hasCriticalOwasp || hasCriticalCve ? 'CRITICAL' : 'LOW',
+      summary: `Security scan ${passed ? 'passed' : 'failed'} (${allSecrets.length} secret matches, ${allOwasp.length} OWASP findings, ${dependencies.vulnerabilities.length} dependency vulnerabilities).`,
+      remediation: passed ? '' : 'Remediate critical findings and rerun the security scan.',
+    });
+
     // Output JSON result
     process.stdout.write(JSON.stringify({
       decision: passed ? 'allow' : 'deny',
@@ -459,6 +474,13 @@ async function main() {
       details: findings
     }));
   } catch (error) {
+    await emitHookDecision({ hook_event_name: 'ManualHook', tool_name: 'security-scan', tool_input: {} }, {
+      hook: 'security-scan',
+      decision: 'deny',
+      severity: 'critical',
+      summary: 'Security scan execution error.',
+      remediation: 'Review hook runtime errors and rerun.',
+    });
     process.stdout.write(JSON.stringify({
       decision: 'deny',
       reason: `Security scan error: ${error.message}`

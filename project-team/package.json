@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "npx --yes jest --runInBand"
+  },
   "devDependencies": {
     "jest": "^30.2.0"
   }
