@@ -5,6 +5,14 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
+const {
+  emitCouncilEvent,
+  memberSelectionPayload,
+  readJsonIfExists,
+  resolveReviewContext,
+  summarizeCouncilVerdict,
+} = require('./council-event-utils');
+
 const SCRIPT_DIR = __dirname;
 const SKILL_DIR = path.resolve(SCRIPT_DIR, '..');
 const WORKER_PATH = path.join(SCRIPT_DIR, 'council-job-worker.js');
@@ -140,15 +148,6 @@ function atomicWriteJson(filePath, payload) {
   const tmpPath = `${filePath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), 'utf8');
   fs.renameSync(tmpPath, filePath);
-}
-
-function readJsonIfExists(filePath) {
-  try {
-    if (!fs.existsSync(filePath)) return null;
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
 }
 
 function sleepMs(ms) {
@@ -370,7 +369,20 @@ Notes:
 `);
 }
 
-function cmdStart(options, prompt) {
+function markerPath(jobDir, name) {
+  return path.join(jobDir, '.whitebox', `${name}.json`);
+}
+
+async function emitOnce(jobDir, name, callback) {
+  const marker = markerPath(jobDir, name);
+  fs.mkdirSync(path.dirname(marker), { recursive: true });
+  if (fs.existsSync(marker)) return false;
+  await callback();
+  fs.writeFileSync(marker, JSON.stringify({ emittedAt: new Date().toISOString(), name }, null, 2), 'utf8');
+  return true;
+}
+
+async function cmdStart(options, prompt) {
   const configPath = options.config || process.env.COUNCIL_CONFIG || resolveDefaultConfigFile();
   const jobsDir =
     options['jobs-dir'] || process.env.COUNCIL_JOBS_DIR || path.join(SKILL_DIR, '.jobs');
@@ -414,6 +426,7 @@ function cmdStart(options, prompt) {
   const jobMeta = {
     id: `council-${jobId}`,
     createdAt: new Date().toISOString(),
+    taskId: options['task-id'] || process.env.WHITEBOX_TASK_ID || null,
     configPath,
     hostRole,
     chairmanRole,
@@ -430,6 +443,21 @@ function cmdStart(options, prompt) {
   };
   atomicWriteJson(path.join(jobDir, 'job.json'), jobMeta);
 
+  const context = resolveReviewContext(jobDir);
+  await emitCouncilEvent(context, 'multi_ai_review.run.start', {
+    host_role: hostRole,
+    chairman_role: chairmanRole,
+    stage: 'member_selection',
+    member_count: members.length,
+    members: members.map((member) => member.name),
+    prompt_sha256: context.promptHash,
+  });
+  await emitCouncilEvent(context, 'multi_ai_review.stage.transition', {
+    stage: 'member_selection',
+    status: 'completed',
+    member_count: members.length,
+  });
+
   for (const member of members) {
     const name = String(member.name);
     const safeName = safeFileName(name);
@@ -442,6 +470,8 @@ function cmdStart(options, prompt) {
       queuedAt: new Date().toISOString(),
       command: String(member.command),
     });
+
+    await emitCouncilEvent(context, 'multi_ai_review.member.selected', memberSelectionPayload(context, member));
 
     const workerArgs = [
       WORKER_PATH,
@@ -683,7 +713,7 @@ function generateCompressiveSummary(members) {
   };
 }
 
-function cmdResults(options, jobDir) {
+async function cmdResults(options, jobDir) {
   const resolvedJobDir = path.resolve(jobDir);
   const jobMeta = readJsonIfExists(path.join(resolvedJobDir, 'job.json'));
   const membersRoot = path.join(resolvedJobDir, 'members');
@@ -705,6 +735,30 @@ function cmdResults(options, jobDir) {
   // Long Context Optimization: --summary flag for compressed output
   if (options.summary || options['compressive-summary']) {
     const summary = generateCompressiveSummary(members);
+    const context = resolveReviewContext(resolvedJobDir);
+    const verdictSummary = summarizeCouncilVerdict(members);
+
+    await emitOnce(resolvedJobDir, 'synthesis-start', async () => {
+      await emitCouncilEvent(context, 'multi_ai_review.stage.transition', {
+        stage: 'chairman_synthesis',
+        status: 'started',
+        member_count: members.length,
+      });
+    });
+    await emitOnce(resolvedJobDir, 'synthesis-finish', async () => {
+      await emitCouncilEvent(context, 'multi_ai_review.stage.transition', {
+        stage: 'chairman_synthesis',
+        status: 'completed',
+        member_count: members.length,
+      });
+    });
+    await emitOnce(resolvedJobDir, 'run-finish', async () => {
+      await emitCouncilEvent(context, 'multi_ai_review.run.finish', {
+        stage: 'chairman_synthesis',
+        verdict: verdictSummary.verdict,
+        member_states: verdictSummary.counts,
+      });
+    });
 
     process.stdout.write(`# Council Summary (Compressive)\n\n`);
     process.stdout.write(`## 🔥 Heavy-Hitters (Top ${summary.heavyHitters.length} Insights)\n\n`);
@@ -717,7 +771,31 @@ function cmdResults(options, jobDir) {
     return;
   }
 
+  const context = resolveReviewContext(resolvedJobDir);
+  const verdictSummary = summarizeCouncilVerdict(members);
+  await emitOnce(resolvedJobDir, 'synthesis-start', async () => {
+    await emitCouncilEvent(context, 'multi_ai_review.stage.transition', {
+      stage: 'chairman_synthesis',
+      status: 'started',
+      member_count: members.length,
+    });
+  });
+  await emitOnce(resolvedJobDir, 'synthesis-finish', async () => {
+    await emitCouncilEvent(context, 'multi_ai_review.stage.transition', {
+      stage: 'chairman_synthesis',
+      status: 'completed',
+      member_count: members.length,
+    });
+  });
+
   if (options.json) {
+    await emitOnce(resolvedJobDir, 'run-finish', async () => {
+      await emitCouncilEvent(context, 'multi_ai_review.run.finish', {
+        stage: 'chairman_synthesis',
+        verdict: verdictSummary.verdict,
+        member_states: verdictSummary.counts,
+      });
+    });
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -743,6 +821,14 @@ function cmdResults(options, jobDir) {
     );
     return;
   }
+
+  await emitOnce(resolvedJobDir, 'run-finish', async () => {
+    await emitCouncilEvent(context, 'multi_ai_review.run.finish', {
+      stage: 'chairman_synthesis',
+      verdict: verdictSummary.verdict,
+      member_states: verdictSummary.counts,
+    });
+  });
 
   for (const m of members.sort((a, b) => String(a.member).localeCompare(String(b.member)))) {
     process.stdout.write(`\n=== ${m.member} (${m.state}) ===\n`);
@@ -786,7 +872,7 @@ function cmdClean(_options, jobDir) {
   process.stdout.write(`cleaned: ${resolvedJobDir}\n`);
 }
 
-function main() {
+async function main() {
   const options = parseArgs(process.argv);
   const [command, ...rest] = options._;
 
@@ -798,7 +884,7 @@ function main() {
   if (command === 'start') {
     const prompt = rest.join(' ').trim();
     if (!prompt) exitWithError('start: missing prompt');
-    cmdStart(options, prompt);
+    await cmdStart(options, prompt);
     return;
   }
   if (command === 'status') {
@@ -816,7 +902,7 @@ function main() {
   if (command === 'results') {
     const jobDir = rest[0];
     if (!jobDir) exitWithError('results: missing jobDir');
-    cmdResults(options, jobDir);
+    await cmdResults(options, jobDir);
     return;
   }
   if (command === 'stop') {
@@ -836,5 +922,7 @@ function main() {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    exitWithError(error && error.message ? error.message : String(error));
+  });
 }

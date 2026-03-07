@@ -1,6 +1,6 @@
 ---
 name: statusline
-description: TASKS.md 진행 상황을 Claude Code 상태바 Line 3에 표시합니다.
+description: TASKS.md 진행 상황과 화이트박스 요약 상태를 Claude Code 상태바 Line 3에 표시합니다.
 version: 1.0.0
 ---
 
@@ -9,7 +9,7 @@ version: 1.0.0
 Claude Code 상태바에 프로젝트 태스크 진행 상황을 실시간으로 표시합니다.
 
 ```
-📋 12/34 ▓▓▓░░░░░░░  Phase 2  → T2.1: Build API
+📋 12/34 ▓▓▓░░░░░░░  Phase 2  → T2.1: Build API  WB blocked:1
 ```
 
 ## 설치
@@ -28,11 +28,12 @@ Claude Code 상태바에 프로젝트 태스크 진행 상황을 실시간으로
 | `▓▓▓░░░░░░░` | 진행률 바 (10칸) |
 | `Phase 2` | 현재 진행 중인 Phase |
 | `→ T2.1: ...` | 다음 미완료 태스크 |
+| `WB blocked:1` | 화이트박스 요약 기반 blocker/stale/run 힌트 |
 
 ## 동작 방식
 
-1. `statusline-segment.sh` — 상태바 호출 시 TASKS.md 파싱 (30초 캐시)
-2. `hooks/tasks-status-writer.js` — TASKS.md 편집 시 즉시 캐시 갱신
+1. `statusline-segment.sh` — 상태바 호출 시 TASKS.md 파싱 (30초 캐시) + `whitebox-summary.json` 읽기
+2. `hooks/tasks-status-writer.js` — TASKS.md 편집 시 즉시 `tasks-status.json` 및 `whitebox-summary.json` 갱신
 
 ## 파일 구조
 

@@ -5,6 +5,12 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
+const {
+  emitCouncilEvent,
+  resolveReviewContext,
+  withExecutorMetadata,
+} = require('./council-event-utils');
+
 function exitWithError(message) {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -85,7 +91,7 @@ function atomicWriteJson(filePath, payload) {
   fs.renameSync(tmpPath, filePath);
 }
 
-function main() {
+async function main() {
   const options = parseArgs(process.argv);
   const jobDir = options['job-dir'];
   const member = options.member;
@@ -106,6 +112,7 @@ function main() {
 
   const promptPath = path.join(jobDir, 'prompt.txt');
   const prompt = fs.existsSync(promptPath) ? fs.readFileSync(promptPath, 'utf8') : '';
+  const context = resolveReviewContext(jobDir);
 
   const tokens = splitCommand(command);
   if (!tokens || tokens.length === 0) {
@@ -115,6 +122,14 @@ function main() {
       message: 'Invalid command string',
       finishedAt: new Date().toISOString(),
       command,
+    });
+    await emitCouncilEvent(context, 'multi_ai_review.member.finish', {
+      member_name: member,
+      state: 'error',
+      message: 'Invalid command string',
+      ...withExecutorMetadata(member, {
+        command,
+      }),
     });
     process.exit(1);
   }
@@ -138,6 +153,14 @@ function main() {
     pid: null,
   });
 
+  await emitCouncilEvent(context, 'multi_ai_review.member.start', {
+    member_name: member,
+    stage: 'initial_opinion',
+    ...withExecutorMetadata(member, {
+      command,
+    }),
+  });
+
   const outStream = fs.createWriteStream(outPath, { flags: 'w' });
   const errStream = fs.createWriteStream(errPath, { flags: 'w' });
 
@@ -154,6 +177,14 @@ function main() {
       message: error && error.message ? error.message : 'Failed to spawn command',
       finishedAt: new Date().toISOString(),
       command,
+    });
+    await emitCouncilEvent(context, 'multi_ai_review.member.finish', {
+      member_name: member,
+      state: 'error',
+      message: error && error.message ? error.message : 'Failed to spawn command',
+      ...withExecutorMetadata(member, {
+        command,
+      }),
     });
     process.exit(1);
   }
@@ -193,7 +224,7 @@ function main() {
     atomicWriteJson(statusPath, payload);
   };
 
-  child.on('error', (error) => {
+  child.on('error', async (error) => {
     const isMissing = error && error.code === 'ENOENT';
     finalize({
       member,
@@ -204,16 +235,35 @@ function main() {
       exitCode: null,
       pid: child.pid,
     });
+    if (isMissing) {
+      await emitCouncilEvent(context, 'multi_ai_review.capability', {
+        member_name: member,
+        state: 'missing_cli',
+        message: error && error.message ? error.message : 'CLI not found',
+        ...withExecutorMetadata(member, {
+          command,
+        }),
+      });
+    }
+    await emitCouncilEvent(context, 'multi_ai_review.member.finish', {
+      member_name: member,
+      state: isMissing ? 'missing_cli' : 'error',
+      message: error && error.message ? error.message : 'Process error',
+      ...withExecutorMetadata(member, {
+        command,
+      }),
+    });
     process.exit(1);
   });
 
-  child.on('exit', (code, signal) => {
+  child.on('exit', async (code, signal) => {
     if (timeoutHandle) clearTimeout(timeoutHandle);
     const timedOut = Boolean(timeoutTriggered) && signal === 'SIGTERM';
     const canceled = !timedOut && signal === 'SIGTERM';
+    const state = timedOut ? 'timed_out' : canceled ? 'canceled' : code === 0 ? 'done' : 'error';
     finalize({
       member,
-      state: timedOut ? 'timed_out' : canceled ? 'canceled' : code === 0 ? 'done' : 'error',
+      state,
       message: timedOut ? `Timed out after ${timeoutSec}s` : canceled ? 'Canceled' : null,
       finishedAt: new Date().toISOString(),
       command,
@@ -221,10 +271,22 @@ function main() {
       signal: signal || null,
       pid: child.pid,
     });
+    await emitCouncilEvent(context, 'multi_ai_review.member.finish', {
+      member_name: member,
+      state,
+      exit_code: typeof code === 'number' ? code : null,
+      signal: signal || null,
+      ...withExecutorMetadata(member, {
+        command,
+      }),
+    });
     process.exit(code === 0 ? 0 : 1);
   });
 }
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    process.stderr.write(`${error && error.message ? error.message : String(error)}\n`);
+    process.exit(1);
+  });
 }

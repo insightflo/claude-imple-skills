@@ -10,6 +10,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readTasksStats } = require('../lib/tasks-status');
+const { refreshWhiteboxSummary } = require('../../whitebox/scripts/whitebox-summary');
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -33,52 +35,6 @@ function isTasksMdEdit(toolName, toolInput, projectRoot) {
   return path.basename(absPath) === 'TASKS.md';
 }
 
-function computeStats(content) {
-  const lines = content.split('\n');
-  let done = 0;
-  let total = 0;
-  let currentPhaseNum = null;
-  let activePhaseNum = null;
-  let activePhaseHasIncomplete = false;
-  let nextTask = null;
-
-  for (const line of lines) {
-    const phaseMatch = line.match(/^## Phase (\d+)/);
-    if (phaseMatch) {
-      if (activePhaseNum !== null && activePhaseHasIncomplete && currentPhaseNum === null) {
-        currentPhaseNum = activePhaseNum;
-      }
-      activePhaseNum = parseInt(phaseMatch[1], 10);
-      activePhaseHasIncomplete = false;
-      continue;
-    }
-    if (/^### \[x\]/.test(line)) {
-      done++;
-      total++;
-    } else if (/^### \[ \]/.test(line)) {
-      total++;
-      if (nextTask === null) {
-        nextTask = line.replace(/^### \[ \]\s*/, '').trim();
-      }
-      if (activePhaseNum !== null) {
-        activePhaseHasIncomplete = true;
-      }
-    }
-  }
-
-  if (currentPhaseNum === null && activePhaseNum !== null && activePhaseHasIncomplete) {
-    currentPhaseNum = activePhaseNum;
-  }
-
-  return {
-    done,
-    total,
-    current_phase: currentPhaseNum ? `Phase ${currentPhaseNum}` : null,
-    next_task: nextTask,
-    updated_at: new Date().toISOString(),
-  };
-}
-
 async function main() {
   const input = await readStdin();
   const toolName = input.tool_name || input.tool || '';
@@ -92,8 +48,7 @@ async function main() {
   const tasksPath = path.join(projectRoot, 'TASKS.md');
   if (!fs.existsSync(tasksPath)) return;
 
-  const content = fs.readFileSync(tasksPath, 'utf8');
-  const stats = computeStats(content);
+  const stats = readTasksStats(tasksPath);
 
   const cacheDir = path.join(projectRoot, '.claude', 'cache');
   fs.mkdirSync(cacheDir, { recursive: true });
@@ -102,6 +57,8 @@ async function main() {
     JSON.stringify(stats, null, 2) + '\n',
     'utf8'
   );
+
+  refreshWhiteboxSummary({ projectDir: projectRoot });
 }
 
 main().catch(() => {
