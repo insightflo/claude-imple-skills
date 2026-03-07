@@ -88,15 +88,17 @@ node skills/task-board/scripts/board-builder.js --dry-run --json | \
 ## 보드 이벤트 (task-board-sync.js 훅)
 
 `project-team/hooks/task-board-sync.js`가 PostToolUse 이벤트를 감지하여
-`.claude/collab/events.ndjson`에 자동으로 기록합니다:
+`.claude/collab/events.ndjson`에 자동으로 기록하고, `board-state.json` 재빌드가 필요하다는 stale marker 를 남깁니다.
 
-| 이벤트 | 트리거 | 보드 효과 |
-|--------|--------|-----------|
-| `task_claimed` | TaskUpdate → in_progress | Backlog → In Progress |
-| `task_done` | TaskUpdate → completed | In Progress → Done |
-| `task_blocked` | TaskUpdate → failed/timeout | In Progress → Blocked |
-| `req_escalated` | REQ status = ESCALATED | Blocked 카드 생성 |
-| `req_resolved` | REQ status = RESOLVED/REJECTED | Blocked → Done |
+| 이벤트 | 트리거 | projector 힌트 |
+|--------|--------|----------------|
+| `task_claimed` | TaskUpdate → in_progress | task가 진행 중으로 이동해야 함을 시사 |
+| `task_done` | TaskUpdate → completed | task가 Done으로 이동해야 함을 시사 |
+| `task_blocked` | TaskUpdate → failed/timeout | Blocked 이유 재계산 필요 |
+| `req_escalated` | REQ status = ESCALATED | REQ blocker 컨텍스트 갱신 |
+| `req_resolved` | REQ status = RESOLVED/REJECTED | 완료 상태 재계산 필요 |
+
+이 이벤트들은 canonical 입력일 뿐이며, `board-state.json` 자체를 직접 수정하지 않습니다. authoritative writer 는 항상 `skills/task-board/scripts/board-builder.js` 입니다.
 
 ## 파일 구조
 
@@ -108,10 +110,12 @@ skills/task-board/
     └── board-show.sh                 # 터미널 칸반 렌더러
 
 project-team/hooks/
-└── task-board-sync.js                # PostToolUse 이벤트 → board 자동 업데이트
+└── task-board-sync.js                # PostToolUse 이벤트 → canonical event log + stale marker
 
 .claude/collab/
 ├── board-state.json                  # 현재 보드 스냅샷 (파생, 직접 편집 금지)
+├── board-state.snapshot.json         # projector 체크포인트 메타데이터
+├── derived-meta.json                 # stale derived artifact markers
 └── events.ndjson                     # 이벤트 로그 (append-only)
 ```
 
