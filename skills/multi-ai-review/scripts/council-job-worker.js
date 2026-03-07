@@ -86,6 +86,11 @@ function atomicWriteJson(filePath, payload) {
 }
 
 function main() {
+  // Ignore SIGHUP so the worker survives when the parent shell session ends.
+  // This is critical for detached workers spawned from Claude Code's Bash tool,
+  // where the parent process group may terminate before the CLI finishes.
+  process.on('SIGHUP', () => {});
+
   const options = parseArgs(process.argv);
   const jobDir = options['job-dir'];
   const member = options.member;
@@ -101,6 +106,23 @@ function main() {
   const membersRoot = path.join(jobDir, 'members');
   const memberDir = path.join(membersRoot, safeMember);
   const statusPath = path.join(memberDir, 'status.json');
+
+  // Last-resort handler: if the worker crashes for any reason, record it in status.json
+  // so computeStatusPayload doesn't get stuck on a "running" state forever.
+  process.on('uncaughtException', (err) => {
+    try {
+      atomicWriteJson(statusPath, {
+        member,
+        state: 'error',
+        message: `Worker crashed: ${err && err.message ? err.message : String(err)}`,
+        finishedAt: new Date().toISOString(),
+        command,
+      });
+    } catch {
+      // Best effort — cannot do anything if the write itself fails.
+    }
+    process.exit(1);
+  });
   const outPath = path.join(memberDir, 'output.txt');
   const errPath = path.join(memberDir, 'error.txt');
 

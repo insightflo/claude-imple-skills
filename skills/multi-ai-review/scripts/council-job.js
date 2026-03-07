@@ -257,6 +257,20 @@ function buildCouncilUiPayload(statusPayload) {
   };
 }
 
+/**
+ * Check if a process is still alive by sending signal 0.
+ * Returns false if the PID does not exist or is not accessible.
+ */
+function isProcessAlive(pid) {
+  if (!pid || typeof pid !== 'number') return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function computeStatusPayload(jobDir) {
   const resolvedJobDir = path.resolve(jobDir);
   if (!fs.existsSync(resolvedJobDir)) exitWithError(`jobDir not found: ${resolvedJobDir}`);
@@ -271,7 +285,18 @@ function computeStatusPayload(jobDir) {
   for (const entry of fs.readdirSync(membersRoot)) {
     const statusPath = path.join(membersRoot, entry, 'status.json');
     const status = readJsonIfExists(statusPath);
-    if (status) members.push({ safeName: entry, ...status });
+    if (!status) continue;
+
+    // Detect zombie workers: status says "running" but PID is dead.
+    // Correct the state in-memory and persist the fix so future polls see it too.
+    if (status.state === 'running' && status.pid && !isProcessAlive(status.pid)) {
+      status.state = 'error';
+      status.message = `Worker died unexpectedly (PID ${status.pid} not found)`;
+      status.finishedAt = new Date().toISOString();
+      atomicWriteJson(statusPath, status);
+    }
+
+    members.push({ safeName: entry, ...status });
   }
 
   const totals = { queued: 0, running: 0, done: 0, error: 0, missing_cli: 0, timed_out: 0, canceled: 0 };
@@ -458,12 +483,18 @@ function cmdStart(options, prompt) {
       workerArgs.push('--timeout', String(timeoutSec));
     }
 
+    // Redirect worker stderr to a log file for post-mortem debugging
+    // when the worker dies unexpectedly. stdout is unused (worker writes to files directly).
+    const workerLogPath = path.join(memberDir, 'worker-debug.log');
+    const workerLogFd = fs.openSync(workerLogPath, 'w');
+
     const child = spawn(process.execPath, workerArgs, {
       detached: true,
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', workerLogFd],
       env: process.env,
     });
     child.unref();
+    fs.closeSync(workerLogFd);
   }
 
   if (options.json) {
@@ -869,8 +900,12 @@ ${othersOpinions}
     ];
     if (timeoutSec > 0) workerArgs.push('--timeout', String(timeoutSec));
 
-    const child = spawn(process.execPath, workerArgs, { detached: true, stdio: 'ignore', env: process.env });
+    const crossWorkerLogPath = path.join(memberDir, 'worker-debug.log');
+    const crossWorkerLogFd = fs.openSync(crossWorkerLogPath, 'w');
+
+    const child = spawn(process.execPath, workerArgs, { detached: true, stdio: ['ignore', 'ignore', crossWorkerLogFd], env: process.env });
     child.unref();
+    fs.closeSync(crossWorkerLogFd);
   }
 
   if (options.json) {
