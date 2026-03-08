@@ -40,6 +40,7 @@ const WHITEBOX_EXPLAIN_SCRIPT: &str = concat!(
 );
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(250);
 const ACTION_CONFIRM_TIMEOUT: Duration = Duration::from_secs(5);
+const SUBMIT_WORK_TIMEOUT: Duration = Duration::from_secs(5);
 const NARROW_WIDTH_THRESHOLD: u16 = 120;
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -81,7 +82,7 @@ struct NextRemediationTarget {
     remediation: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
 struct PendingApproval {
     #[serde(default)]
     gate_id: String,
@@ -198,9 +199,25 @@ struct SelectionState {
     selected_gate_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct DetailState {
     explain_report: Option<ExplainReport>,
+    current_approval: Option<PendingApproval>,
+    pending_request: Option<ExplainRequest>,
+    active_request_id: Option<u64>,
+    next_request_id: u64,
+}
+
+impl Default for DetailState {
+    fn default() -> Self {
+        Self {
+            explain_report: None,
+            current_approval: None,
+            pending_request: None,
+            active_request_id: None,
+            next_request_id: 1,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -209,6 +226,8 @@ struct TransientState {
     optimistic_action: Option<OptimisticAction>,
     recent_highlight: Option<RecentHighlight>,
     pending_submit: Option<SubmitRequest>,
+    active_submit: Option<SubmitRequest>,
+    next_submit_request_id: u64,
     quit_requested: bool,
 }
 
@@ -235,6 +254,7 @@ struct ViewState {
 enum OptimisticPhase {
     Submitting,
     Submitted,
+    PartialSuccess,
     Confirmed,
     Failed,
 }
@@ -250,27 +270,52 @@ struct OptimisticAction {
 
 #[derive(Debug, Clone)]
 struct SubmitRequest {
+    request_id: u64,
     gate_id: String,
     action: String,
 }
 
 #[derive(Debug, Clone)]
+struct ExplainRequest {
+    request_id: u64,
+    approval: PendingApproval,
+}
+
+#[derive(Debug, Clone)]
 struct SubmitResult {
+    request_id: u64,
     gate_id: String,
     action: String,
     outcome: SubmitOutcome,
 }
 
 #[derive(Debug, Clone)]
+struct ExplainResult {
+    request_id: u64,
+    approval: PendingApproval,
+    report: Option<ExplainReport>,
+}
+
+#[derive(Debug, Clone)]
 enum SubmitOutcome {
     Submitted,
+    PartialSuccess(String),
     Failed(String),
 }
 
 struct SubmitController {
-    sender: mpsc::Sender<SubmitResult>,
+    active: Option<ActiveSubmitWorker>,
+}
+
+struct ExplainController {
+    sender: mpsc::Sender<ExplainResult>,
+    receiver: mpsc::Receiver<ExplainResult>,
+}
+
+struct ActiveSubmitWorker {
+    request: SubmitRequest,
+    started_at: Duration,
     receiver: mpsc::Receiver<SubmitResult>,
-    running: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -283,6 +328,7 @@ enum AppEvent {
     ApproveSelected(Duration),
     RejectSelected(Duration),
     SubmitFinished(SubmitResult),
+    ExplainFinished(ExplainResult),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -457,35 +503,91 @@ impl ArtifactWatcher {
 
 impl SubmitController {
     fn new() -> Self {
-        let (sender, receiver) = mpsc::channel();
-        Self {
-            sender,
-            receiver,
-            running: false,
-        }
+        Self { active: None }
     }
 
-    fn dispatch(&mut self, project_dir: PathBuf, request: SubmitRequest) {
-        let sender = self.sender.clone();
-        self.running = true;
+    fn running(&self) -> bool {
+        self.active.is_some()
+    }
+
+    fn dispatch(&mut self, now: Duration, project_dir: PathBuf, request: SubmitRequest) {
+        let (sender, receiver) = mpsc::channel();
+        self.active = Some(ActiveSubmitWorker {
+            request: request.clone(),
+            started_at: now,
+            receiver,
+        });
         thread::spawn(move || {
             let result = execute_submit_request(&project_dir, &request);
             let _ = sender.send(result);
         });
     }
 
-    fn take_result(&mut self) -> Option<SubmitResult> {
-        match self.receiver.try_recv() {
+    fn take_result(&mut self, now: Duration) -> Option<SubmitResult> {
+        let state = self.active.as_mut()?;
+        if now.saturating_sub(state.started_at) >= SUBMIT_WORK_TIMEOUT {
+            let request = self.active.take()?.request;
+            return Some(SubmitResult {
+                request_id: request.request_id,
+                gate_id: request.gate_id.clone(),
+                action: request.action.clone(),
+                outcome: SubmitOutcome::Failed(format!(
+                    "{} timed out for {}",
+                    request.action, request.gate_id
+                )),
+            });
+        }
+
+        match state.receiver.try_recv() {
             Ok(result) => {
-                self.running = false;
+                self.active = None;
                 Some(result)
             }
             Err(mpsc::TryRecvError::Empty) => None,
             Err(mpsc::TryRecvError::Disconnected) => {
-                self.running = false;
-                None
+                let request = self.active.take()?.request;
+                Some(SubmitResult {
+                    request_id: request.request_id,
+                    gate_id: request.gate_id.clone(),
+                    action: request.action.clone(),
+                    outcome: SubmitOutcome::Failed(format!(
+                        "{} worker disconnected for {}",
+                        request.action, request.gate_id
+                    )),
+                })
             }
         }
+    }
+}
+
+impl ExplainController {
+    fn new() -> Self {
+        let (sender, receiver) = mpsc::channel();
+        Self { sender, receiver }
+    }
+
+    fn dispatch(&self, project_dir: PathBuf, request: ExplainRequest) {
+        let sender = self.sender.clone();
+        thread::spawn(move || {
+            let report = fetch_explain_report(&project_dir, Some(&request.approval));
+            let _ = sender.send(ExplainResult {
+                request_id: request.request_id,
+                approval: request.approval,
+                report,
+            });
+        });
+    }
+
+    fn drain_results(&self) -> Vec<ExplainResult> {
+        let mut results = Vec::new();
+        loop {
+            match self.receiver.try_recv() {
+                Ok(result) => results.push(result),
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => break,
+            }
+        }
+        results
     }
 }
 
@@ -527,6 +629,8 @@ fn load_app(project_dir: PathBuf) -> App {
             optimistic_action: None,
             recent_highlight: None,
             pending_submit: None,
+            active_submit: None,
+            next_submit_request_id: 1,
             quit_requested: false,
         },
         view: ViewState::default(),
@@ -550,14 +654,22 @@ fn submit_active(app: &App) -> bool {
 }
 
 fn submit_work_pending(app: &App, submit_controller: &SubmitController) -> bool {
-    app.transient.pending_submit.is_some() || submit_controller.running
+    app.transient.pending_submit.is_some()
+        || app.transient.active_submit.is_some()
+        || submit_controller.running()
 }
 
 fn request_quit(app: &mut App, submit_controller: &SubmitController) -> bool {
     if submit_work_pending(app, submit_controller) {
+        if app.transient.quit_requested {
+            app.transient.last_action =
+                "force quit requested; leaving while control submit is still running".to_string();
+            return true;
+        }
         app.transient.quit_requested = true;
         app.transient.last_action =
-            "quit requested; waiting for control submit to finish".to_string();
+            "quit requested; waiting for control submit to finish (press q again to force quit)"
+                .to_string();
         false
     } else {
         true
@@ -580,6 +692,24 @@ fn command_failure_message(action: &str, gate_id: &str, output: &std::process::O
     }
 }
 
+fn rebuild_failure_message(script: &str, output: &std::process::Output) -> String {
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if !stdout.is_empty() {
+        format!("{script} rebuild failed: {stdout}")
+    } else if !stderr.is_empty() {
+        format!("{script} rebuild failed: {stderr}")
+    } else {
+        format!("{script} rebuild failed")
+    }
+}
+
+fn partial_success_message(action: &str, gate_id: &str, detail: &str) -> String {
+    format!(
+        "{action} {gate_id} applied, but follow-up rebuild failed: {detail}. Control state already changed; refresh artifacts before retrying."
+    )
+}
+
 fn execute_submit_request(project_dir: &Path, request: &SubmitRequest) -> SubmitResult {
     let control_output = Command::new("node")
         .arg(WHITEBOX_CONTROL_SCRIPT)
@@ -591,25 +721,28 @@ fn execute_submit_request(project_dir: &Path, request: &SubmitRequest) -> Submit
 
     let outcome = match control_output {
         Ok(output) if output.status.success() => {
-            let rebuild_scripts = [WHITEBOX_CONTROL_STATE_SCRIPT, WHITEBOX_SUMMARY_SCRIPT];
+            let rebuild_scripts = [
+                ("whitebox-control-state.js", WHITEBOX_CONTROL_STATE_SCRIPT),
+                ("whitebox-summary.js", WHITEBOX_SUMMARY_SCRIPT),
+            ];
             let rebuild_failure = rebuild_scripts.iter().find_map(|script| {
                 match Command::new("node")
-                    .arg(script)
+                    .arg(script.1)
                     .arg(format!("--project-dir={}", project_dir.display()))
                     .output()
                 {
                     Ok(result) if result.status.success() => None,
-                    Ok(result) => Some(command_failure_message(
-                        &request.action,
-                        &request.gate_id,
-                        &result,
-                    )),
-                    Err(error) => Some(format!("{} unavailable: {}", request.action, error)),
+                    Ok(result) => Some(rebuild_failure_message(script.0, &result)),
+                    Err(error) => Some(format!("{} unavailable: {}", script.0, error)),
                 }
             });
 
             if let Some(message) = rebuild_failure {
-                SubmitOutcome::Failed(message)
+                SubmitOutcome::PartialSuccess(partial_success_message(
+                    &request.action,
+                    &request.gate_id,
+                    &message,
+                ))
             } else {
                 SubmitOutcome::Submitted
             }
@@ -623,10 +756,23 @@ fn execute_submit_request(project_dir: &Path, request: &SubmitRequest) -> Submit
     };
 
     SubmitResult {
+        request_id: request.request_id,
         gate_id: request.gate_id.clone(),
         action: request.action.clone(),
         outcome,
     }
+}
+
+fn next_submit_request_id(transient: &mut TransientState) -> u64 {
+    let request_id = transient.next_submit_request_id;
+    transient.next_submit_request_id = transient.next_submit_request_id.saturating_add(1);
+    request_id
+}
+
+fn next_explain_request_id(detail: &mut DetailState) -> u64 {
+    let request_id = detail.next_request_id;
+    detail.next_request_id = detail.next_request_id.saturating_add(1);
+    request_id
 }
 
 fn reload_app(app: &mut App, now: Duration) {
@@ -666,6 +812,7 @@ fn optimistic_phase_label(phase: OptimisticPhase) -> &'static str {
     match phase {
         OptimisticPhase::Submitting => "submitting",
         OptimisticPhase::Submitted => "submitted",
+        OptimisticPhase::PartialSuccess => "partial success",
         OptimisticPhase::Confirmed => "confirmed",
         OptimisticPhase::Failed => "failed",
     }
@@ -681,7 +828,12 @@ fn reconcile_optimistic_action(
         return;
     };
 
-    if on_reload && optimistic_action.phase == OptimisticPhase::Submitted {
+    if on_reload
+        && matches!(
+            optimistic_action.phase,
+            OptimisticPhase::Submitted | OptimisticPhase::PartialSuccess
+        )
+    {
         let still_pending = control
             .pending_approvals
             .iter()
@@ -767,8 +919,36 @@ fn fetch_explain_report(
 }
 
 fn refresh_explain_detail(app: &mut App) {
-    let selected = selected_approval(app).cloned();
-    app.detail.explain_report = fetch_explain_report(&app.project_dir, selected.as_ref());
+    let Some(selected) = selected_approval(app).cloned() else {
+        app.detail.explain_report = None;
+        app.detail.current_approval = None;
+        app.detail.pending_request = None;
+        app.detail.active_request_id = None;
+        return;
+    };
+
+    let context_changed = app.detail.current_approval.as_ref() != Some(&selected);
+    let request_id = next_explain_request_id(&mut app.detail);
+    if context_changed {
+        app.detail.explain_report = None;
+    }
+    app.detail.current_approval = Some(selected.clone());
+    app.detail.active_request_id = Some(request_id);
+    app.detail.pending_request = Some(ExplainRequest {
+        request_id,
+        approval: selected,
+    });
+}
+
+fn hydrate_explain_detail_for_snapshot(app: &mut App) {
+    let approval = app
+        .detail
+        .pending_request
+        .take()
+        .map(|request| request.approval)
+        .or_else(|| app.detail.current_approval.clone());
+    app.detail.active_request_id = None;
+    app.detail.explain_report = fetch_explain_report(&app.project_dir, approval.as_ref());
 }
 
 fn approval_detail_text(
@@ -1530,15 +1710,25 @@ fn apply_control(app: &mut App, action: &str, now: Duration) {
         phase: OptimisticPhase::Submitting,
         deadline_at: now + ACTION_CONFIRM_TIMEOUT,
     });
+    let request_id = next_submit_request_id(&mut app.transient);
     app.transient.last_action = format!("{} {} submitting", action, approval.gate_id);
     app.transient.pending_submit = Some(SubmitRequest {
+        request_id,
         gate_id: approval.gate_id,
         action: action.to_string(),
     });
 }
 
 fn handle_submit_result(app: &mut App, result: SubmitResult) {
-    app.transient.pending_submit = None;
+    let Some(active_submit) = app.transient.active_submit.as_ref() else {
+        return;
+    };
+
+    if active_submit.request_id != result.request_id {
+        return;
+    }
+
+    app.transient.active_submit = None;
 
     if let Some(optimistic_action) = app.transient.optimistic_action.as_mut() {
         if optimistic_action.gate_id != result.gate_id || optimistic_action.action != result.action
@@ -1558,12 +1748,29 @@ fn handle_submit_result(app: &mut App, result: SubmitResult) {
                     result.action, result.gate_id
                 );
             }
+            SubmitOutcome::PartialSuccess(message) => {
+                optimistic_action.phase = OptimisticPhase::PartialSuccess;
+                app.transient.last_action = message;
+            }
             SubmitOutcome::Failed(message) => {
                 optimistic_action.phase = OptimisticPhase::Failed;
                 app.transient.last_action = message;
             }
         }
     }
+}
+
+fn handle_explain_result(app: &mut App, result: ExplainResult) {
+    if app.detail.active_request_id != Some(result.request_id) {
+        return;
+    }
+
+    if app.detail.current_approval.as_ref() != Some(&result.approval) {
+        return;
+    }
+
+    app.detail.active_request_id = None;
+    app.detail.explain_report = result.report;
 }
 
 fn move_selection(app: &mut App, delta: isize) {
@@ -1600,6 +1807,7 @@ fn update(app: &mut App, event: AppEvent) {
         AppEvent::ApproveSelected(now) => apply_control(app, "approve", now),
         AppEvent::RejectSelected(now) => apply_control(app, "reject", now),
         AppEvent::SubmitFinished(result) => handle_submit_result(app, result),
+        AppEvent::ExplainFinished(result) => handle_explain_result(app, result),
     }
 }
 
@@ -1631,20 +1839,30 @@ fn run(mut app: App) -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
     let mut artifact_watcher = ArtifactWatcher::new(&app.project_dir).ok();
     let mut submit_controller = SubmitController::new();
+    let explain_controller = ExplainController::new();
     let run_started_at = Instant::now();
 
     loop {
         let now = run_started_at.elapsed();
         update(&mut app, AppEvent::Tick(now));
 
-        if !submit_controller.running {
+        if !submit_controller.running() {
             if let Some(request) = app.transient.pending_submit.take() {
-                submit_controller.dispatch(app.project_dir.clone(), request);
+                app.transient.active_submit = Some(request.clone());
+                submit_controller.dispatch(now, app.project_dir.clone(), request);
             }
         }
 
-        if let Some(result) = submit_controller.take_result() {
+        if let Some(request) = app.detail.pending_request.take() {
+            explain_controller.dispatch(app.project_dir.clone(), request);
+        }
+
+        if let Some(result) = submit_controller.take_result(now) {
             update(&mut app, AppEvent::SubmitFinished(result));
+        }
+
+        for result in explain_controller.drain_results() {
+            update(&mut app, AppEvent::ExplainFinished(result));
         }
 
         if let Some(watcher) = artifact_watcher.as_mut() {
@@ -1711,7 +1929,8 @@ fn snapshot_with_size(app: App, width: u16, height: u16) -> Result<String, Box<d
     Ok(lines.join("\n"))
 }
 
-fn snapshot(app: App) -> Result<String, Box<dyn Error>> {
+fn snapshot(mut app: App) -> Result<String, Box<dyn Error>> {
+    hydrate_explain_detail_for_snapshot(&mut app);
     snapshot_with_size(app, 160, 40)
 }
 
@@ -1768,11 +1987,49 @@ mod tests {
                 optimistic_action: None,
                 recent_highlight: None,
                 pending_submit: None,
+                active_submit: None,
+                next_submit_request_id: 1,
                 quit_requested: false,
             },
             view: ViewState::default(),
             project_dir: PathBuf::from("."),
         }
+    }
+
+    fn dispatch_pending_submit_for_test(app: &mut App) -> u64 {
+        let request = app
+            .transient
+            .pending_submit
+            .take()
+            .expect("pending submit request");
+        let request_id = request.request_id;
+        app.transient.active_submit = Some(request);
+        request_id
+    }
+
+    fn activate_pending_submit_for_test(app: &mut App) -> SubmitRequest {
+        let request = app
+            .transient
+            .pending_submit
+            .take()
+            .expect("pending submit request");
+        app.transient.active_submit = Some(request.clone());
+        request
+    }
+
+    fn submit_controller_with_active_request(
+        request: SubmitRequest,
+        started_at: Duration,
+    ) -> (SubmitController, mpsc::Sender<SubmitResult>) {
+        let (sender, receiver) = mpsc::channel();
+        let controller = SubmitController {
+            active: Some(ActiveSubmitWorker {
+                request,
+                started_at,
+                receiver,
+            }),
+        };
+        (controller, sender)
     }
 
     #[test]
@@ -1929,6 +2186,8 @@ mod tests {
             }),
             recent_highlight: None,
             pending_submit: None,
+            active_submit: None,
+            next_submit_request_id: 1,
             quit_requested: false,
         };
         let pending_control = ControlState {
@@ -1982,6 +2241,8 @@ mod tests {
             }),
             recent_highlight: None,
             pending_submit: None,
+            active_submit: None,
+            next_submit_request_id: 1,
             quit_requested: false,
         };
         reconcile_optimistic_action(
@@ -2069,6 +2330,7 @@ mod tests {
     #[test]
     fn detail_without_options_is_read_only() {
         let mut app = app_with_pending(1);
+        app.detail.current_approval = selected_approval(&app).cloned();
         app.detail.explain_report = Some(ExplainReport {
             ok: false,
             target: ExplainTarget {
@@ -2088,6 +2350,125 @@ mod tests {
 
         let snapshot = snapshot(app).expect("read-only detail snapshot renders");
         assert!(snapshot.contains("read-only detail"));
+    }
+
+    #[test]
+    fn selection_change_drops_stale_explain_result() {
+        let mut app = app_with_pending(2);
+
+        update(&mut app, AppEvent::EnterDetail);
+        let stale_request = app
+            .detail
+            .pending_request
+            .clone()
+            .expect("initial explain request");
+
+        update(&mut app, AppEvent::MoveSelection(1));
+        let active_request = app
+            .detail
+            .pending_request
+            .clone()
+            .expect("replacement explain request");
+
+        assert_eq!(app.selection.selected_approval, 1);
+        assert!(stale_request.request_id < active_request.request_id);
+
+        update(
+            &mut app,
+            AppEvent::ExplainFinished(ExplainResult {
+                request_id: stale_request.request_id,
+                approval: stale_request.approval.clone(),
+                report: Some(ExplainReport {
+                    ok: true,
+                    target: ExplainTarget {
+                        target_type: "task".to_string(),
+                        id: "T0".to_string(),
+                    },
+                    options: vec![ExplainOption {
+                        command: "approve stale".to_string(),
+                        effect: String::new(),
+                        risk: String::new(),
+                    }],
+                    ..Default::default()
+                }),
+            }),
+        );
+
+        assert!(app.detail.explain_report.is_none());
+        assert_eq!(
+            app.detail.active_request_id,
+            Some(active_request.request_id)
+        );
+        assert_eq!(
+            app.detail.current_approval.as_ref(),
+            Some(&active_request.approval)
+        );
+
+        update(
+            &mut app,
+            AppEvent::ExplainFinished(ExplainResult {
+                request_id: active_request.request_id,
+                approval: active_request.approval.clone(),
+                report: Some(ExplainReport {
+                    ok: true,
+                    target: ExplainTarget {
+                        target_type: "task".to_string(),
+                        id: "T1".to_string(),
+                    },
+                    options: vec![ExplainOption {
+                        command: "approve active".to_string(),
+                        effect: String::new(),
+                        risk: String::new(),
+                    }],
+                    ..Default::default()
+                }),
+            }),
+        );
+
+        assert_eq!(
+            app.detail
+                .explain_report
+                .as_ref()
+                .and_then(|report| report.options.first())
+                .map(|option| option.command.as_str()),
+            Some("approve active")
+        );
+        assert_eq!(app.detail.active_request_id, None);
+    }
+
+    #[test]
+    fn detail_entry_remains_responsive_while_explain_loads() {
+        let mut app = app_with_pending(2);
+
+        update(&mut app, AppEvent::EnterDetail);
+        let first_request = app
+            .detail
+            .pending_request
+            .clone()
+            .expect("detail entry queues explain request");
+
+        assert_eq!(app.view.mode, ViewMode::Detail);
+        assert!(app.detail.explain_report.is_none());
+        assert_eq!(app.detail.active_request_id, Some(first_request.request_id));
+
+        update(&mut app, AppEvent::MoveSelection(1));
+        let second_request = app
+            .detail
+            .pending_request
+            .clone()
+            .expect("selection change queues replacement explain request");
+
+        assert_eq!(app.selection.selected_approval, 1);
+        assert!(second_request.request_id > first_request.request_id);
+        assert_eq!(
+            app.detail.active_request_id,
+            Some(second_request.request_id)
+        );
+        assert_eq!(
+            app.detail.current_approval.as_ref(),
+            Some(&second_request.approval)
+        );
+        assert!(app.detail.explain_report.is_none());
     }
 
     #[test]
@@ -2132,9 +2513,12 @@ mod tests {
         update(&mut app, AppEvent::MoveSelection(1));
         assert_eq!(app.selection.selected_approval, 1);
 
+        let request_id = dispatch_pending_submit_for_test(&mut app);
+
         update(
             &mut app,
             AppEvent::SubmitFinished(SubmitResult {
+                request_id,
                 gate_id: "gate-0".to_string(),
                 action: "approve".to_string(),
                 outcome: SubmitOutcome::Submitted,
@@ -2178,6 +2562,96 @@ mod tests {
     }
 
     #[test]
+    fn stale_submit_result_is_ignored_for_newer_request() {
+        let mut app = app_with_pending(1);
+        app.transient.optimistic_action = Some(OptimisticAction {
+            gate_id: "gate-new".to_string(),
+            task_id: Some("T-new".to_string()),
+            action: "approve".to_string(),
+            phase: OptimisticPhase::Submitting,
+            deadline_at: Duration::from_secs(5),
+        });
+        app.transient.active_submit = Some(SubmitRequest {
+            request_id: 2,
+            gate_id: "gate-new".to_string(),
+            action: "approve".to_string(),
+        });
+
+        update(
+            &mut app,
+            AppEvent::SubmitFinished(SubmitResult {
+                request_id: 1,
+                gate_id: "gate-old".to_string(),
+                action: "approve".to_string(),
+                outcome: SubmitOutcome::Submitted,
+            }),
+        );
+
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::Submitting)
+        );
+        assert_eq!(
+            app.transient
+                .active_submit
+                .as_ref()
+                .map(|request| request.request_id),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn mismatched_submit_result_does_not_clear_pending_followup() {
+        let mut app = app_with_pending(1);
+        app.transient.optimistic_action = Some(OptimisticAction {
+            gate_id: "gate-active".to_string(),
+            task_id: Some("T-active".to_string()),
+            action: "approve".to_string(),
+            phase: OptimisticPhase::Submitting,
+            deadline_at: Duration::from_secs(5),
+        });
+        app.transient.active_submit = Some(SubmitRequest {
+            request_id: 1,
+            gate_id: "gate-active".to_string(),
+            action: "approve".to_string(),
+        });
+        app.transient.pending_submit = Some(SubmitRequest {
+            request_id: 2,
+            gate_id: "gate-followup".to_string(),
+            action: "reject".to_string(),
+        });
+
+        update(
+            &mut app,
+            AppEvent::SubmitFinished(SubmitResult {
+                request_id: 1,
+                gate_id: "gate-active".to_string(),
+                action: "reject".to_string(),
+                outcome: SubmitOutcome::Submitted,
+            }),
+        );
+
+        assert_eq!(
+            app.transient
+                .pending_submit
+                .as_ref()
+                .map(|request| request.request_id),
+            Some(2)
+        );
+        assert!(app.transient.active_submit.is_none());
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::Submitting)
+        );
+    }
+
+    #[test]
     fn submit_failure_marks_failed_without_blocking_loop() {
         let mut app = app_with_pending(1);
 
@@ -2186,10 +2660,12 @@ mod tests {
             AppEvent::ApproveSelected(Duration::from_millis(10)),
         );
         update(&mut app, AppEvent::MoveSelection(1));
+        let request_id = dispatch_pending_submit_for_test(&mut app);
 
         update(
             &mut app,
             AppEvent::SubmitFinished(SubmitResult {
+                request_id,
                 gate_id: "gate-0".to_string(),
                 action: "approve".to_string(),
                 outcome: SubmitOutcome::Failed("approve failed for gate-0".to_string()),
@@ -2207,6 +2683,50 @@ mod tests {
     }
 
     #[test]
+    fn control_success_with_rebuild_failure_is_partial_success() {
+        let mut app = app_with_pending(1);
+
+        update(
+            &mut app,
+            AppEvent::ApproveSelected(Duration::from_millis(10)),
+        );
+        let request_id = dispatch_pending_submit_for_test(&mut app);
+
+        let rebuild_failure = "approve gate-0 applied, but follow-up rebuild failed: whitebox-summary.js rebuild failed: summary artifact stale. Control state already changed; refresh artifacts before retrying.";
+        update(
+            &mut app,
+            AppEvent::SubmitFinished(SubmitResult {
+                request_id,
+                gate_id: "gate-0".to_string(),
+                action: "approve".to_string(),
+                outcome: SubmitOutcome::PartialSuccess(rebuild_failure.to_string()),
+            }),
+        );
+
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::PartialSuccess)
+        );
+        assert_eq!(app.transient.last_action, rebuild_failure);
+
+        update(
+            &mut app,
+            AppEvent::Tick(ACTION_CONFIRM_TIMEOUT + Duration::from_millis(1)),
+        );
+
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::PartialSuccess)
+        );
+    }
+
+    #[test]
     fn quit_event_is_processed_while_control_command_is_in_flight() {
         let mut app = app_with_pending(1);
         let submit_controller = SubmitController::new();
@@ -2217,6 +2737,7 @@ mod tests {
             AppEvent::ApproveSelected(Duration::from_millis(10)),
         );
         assert!(submit_active(&app));
+        let request_id = dispatch_pending_submit_for_test(&mut app);
 
         update(&mut app, AppEvent::BackToBoard);
 
@@ -2228,6 +2749,7 @@ mod tests {
         update(
             &mut app,
             AppEvent::SubmitFinished(SubmitResult {
+                request_id,
                 gate_id: "gate-0".to_string(),
                 action: "approve".to_string(),
                 outcome: SubmitOutcome::Submitted,
@@ -2236,6 +2758,148 @@ mod tests {
 
         let drained_controller = SubmitController::new();
         assert!(quit_ready(&app, &drained_controller));
+    }
+
+    #[test]
+    fn second_quit_forces_exit_while_submit_is_stuck() {
+        let mut app = app_with_pending(1);
+        update(
+            &mut app,
+            AppEvent::ApproveSelected(Duration::from_millis(10)),
+        );
+        let request = activate_pending_submit_for_test(&mut app);
+        let (submit_controller, _sender) =
+            submit_controller_with_active_request(request, Duration::from_millis(10));
+
+        assert!(!request_quit(&mut app, &submit_controller));
+        assert!(app.transient.quit_requested);
+        assert_eq!(
+            app.transient.last_action,
+            "quit requested; waiting for control submit to finish (press q again to force quit)"
+        );
+
+        assert!(request_quit(&mut app, &submit_controller));
+        assert_eq!(
+            app.transient.last_action,
+            "force quit requested; leaving while control submit is still running"
+        );
+    }
+
+    #[test]
+    fn timed_out_submit_releases_running_state() {
+        let mut app = app_with_pending(1);
+        update(
+            &mut app,
+            AppEvent::ApproveSelected(Duration::from_millis(0)),
+        );
+        let request = activate_pending_submit_for_test(&mut app);
+        let request_id = request.request_id;
+        let (mut submit_controller, _sender) =
+            submit_controller_with_active_request(request, Duration::from_millis(0));
+
+        let result = submit_controller
+            .take_result(SUBMIT_WORK_TIMEOUT + Duration::from_millis(1))
+            .expect("timed out result");
+
+        assert!(!submit_controller.running());
+        assert_eq!(result.request_id, request_id);
+        assert!(matches!(
+            result.outcome,
+            SubmitOutcome::Failed(ref message) if message == "approve timed out for gate-0"
+        ));
+
+        update(&mut app, AppEvent::SubmitFinished(result));
+
+        assert!(app.transient.active_submit.is_none());
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::Failed)
+        );
+        assert_eq!(app.transient.last_action, "approve timed out for gate-0");
+    }
+
+    #[test]
+    fn stale_submit_result_after_timeout_retry_is_ignored() {
+        let mut app = app_with_pending(1);
+        update(
+            &mut app,
+            AppEvent::ApproveSelected(Duration::from_millis(0)),
+        );
+        let first_request = activate_pending_submit_for_test(&mut app);
+        let first_request_id = first_request.request_id;
+        let (mut submit_controller, _sender) =
+            submit_controller_with_active_request(first_request, Duration::from_millis(0));
+
+        let timeout_result = submit_controller
+            .take_result(SUBMIT_WORK_TIMEOUT + Duration::from_millis(1))
+            .expect("timed out result");
+        update(&mut app, AppEvent::SubmitFinished(timeout_result));
+
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::Failed)
+        );
+
+        update(&mut app, AppEvent::ApproveSelected(Duration::from_secs(6)));
+        let retry_request = activate_pending_submit_for_test(&mut app);
+
+        assert!(retry_request.request_id > first_request_id);
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::Submitting)
+        );
+
+        update(
+            &mut app,
+            AppEvent::SubmitFinished(SubmitResult {
+                request_id: first_request_id,
+                gate_id: "gate-0".to_string(),
+                action: "approve".to_string(),
+                outcome: SubmitOutcome::Submitted,
+            }),
+        );
+
+        assert_eq!(
+            app.transient
+                .active_submit
+                .as_ref()
+                .map(|request| request.request_id),
+            Some(retry_request.request_id)
+        );
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::Submitting)
+        );
+
+        update(
+            &mut app,
+            AppEvent::SubmitFinished(SubmitResult {
+                request_id: retry_request.request_id,
+                gate_id: "gate-0".to_string(),
+                action: "approve".to_string(),
+                outcome: SubmitOutcome::Submitted,
+            }),
+        );
+
+        assert_eq!(
+            app.transient
+                .optimistic_action
+                .as_ref()
+                .map(|state| state.phase),
+            Some(OptimisticPhase::Submitted)
+        );
     }
 
     #[test]
@@ -2254,6 +2918,7 @@ mod tests {
             &mut app,
             AppEvent::ApproveSelected(Duration::from_millis(0)),
         );
+        let request_id = dispatch_pending_submit_for_test(&mut app);
 
         update(
             &mut app,
@@ -2270,6 +2935,7 @@ mod tests {
         update(
             &mut app,
             AppEvent::SubmitFinished(SubmitResult {
+                request_id,
                 gate_id: "gate-0".to_string(),
                 action: "approve".to_string(),
                 outcome: SubmitOutcome::Submitted,
