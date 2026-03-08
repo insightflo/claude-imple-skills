@@ -36,9 +36,27 @@ function normalizeExecutorName(value) {
   return raw;
 }
 
-async function emitRunEvent({ type, producer, data, projectDir, correlationId, causationId }) {
+function toEventWriteFailure(stage, type, error) {
+  return {
+    stage,
+    event_type: type,
+    message: error && error.message ? error.message : String(error),
+    code: error && error.code ? error.code : null,
+  };
+}
+
+async function emitRunEventDetailed({
+  type,
+  producer,
+  data,
+  projectDir,
+  correlationId,
+  causationId,
+  stage,
+  mode = 'best_effort',
+}) {
   try {
-    return await writeEvent({
+    const event = await writeEvent({
       type,
       producer,
       correlation_id: correlationId || undefined,
@@ -47,9 +65,58 @@ async function emitRunEvent({ type, producer, data, projectDir, correlationId, c
     }, {
       projectDir,
     });
-  } catch {
-    return null;
+
+    return {
+      ok: true,
+      event,
+      error: null,
+      failure: null,
+    };
+  } catch (error) {
+    const failure = toEventWriteFailure(stage || type, type, error);
+    if (mode === 'strict') {
+      const strictError = new Error(`Failed to write ${type}: ${failure.message}`);
+      strictError.code = 'WHITEBOX_EVENT_WRITE_FAILED';
+      strictError.cause = error;
+      strictError.failure = failure;
+      throw strictError;
+    }
+
+    return {
+      ok: false,
+      event: null,
+      error,
+      failure,
+    };
   }
+}
+
+async function emitRunEvent({ type, producer, data, projectDir, correlationId, causationId, stage }) {
+  const result = await emitRunEventDetailed({
+    type,
+    producer,
+    data,
+    projectDir,
+    correlationId,
+    causationId,
+    stage,
+    mode: 'best_effort',
+  });
+  return result.ok ? result.event : null;
+}
+
+async function emitRunEventStrict({ type, producer, data, projectDir, correlationId, causationId, stage }) {
+  const result = await emitRunEventDetailed({
+    type,
+    producer,
+    data,
+    projectDir,
+    correlationId,
+    causationId,
+    stage,
+    mode: 'strict',
+  });
+  return result.event;
 }
 
 function withExecutorMetadata(executor, extra = {}) {
@@ -65,7 +132,10 @@ module.exports = {
   APPROVED_EXECUTORS,
   createRunId,
   emitRunEvent,
+  emitRunEventDetailed,
+  emitRunEventStrict,
   hashText,
   normalizeExecutorName,
+  toEventWriteFailure,
   withExecutorMetadata,
 };

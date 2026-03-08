@@ -6,7 +6,12 @@
 # 기술 스택: FastAPI (Python) + React (TypeScript) + PostgreSQL
 
 ---
+mode: standard
+
 version: "1.0"
+
+compatibility:
+  legacy_aliases: true
 
 project:
   name: "ShopHub"
@@ -25,9 +30,9 @@ project:
     search: "Elasticsearch"
 
 agents:
-  project-manager:
+  lead:
     enabled: true
-    description: "ShopHub 전체 조율, 도메인 간 조정, 스프린트 관리"
+    description: "ShopHub 전체 조율, 도메인 간 조정, 스프린트 및 아키텍처 의사결정"
     model: "opus"
     permissions:
       - read_all_domains
@@ -37,26 +42,41 @@ agents:
     responsibilities:
       - 스프린트 계획 및 관리
       - 도메인 간 의존성 해결
+      - 아키텍처 및 계약 변경 의사결정
       - 이해관계자 커뮤니케이션
       - 배포 스케줄 관리
 
-  chief-architect:
+  builder:
     enabled: true
-    description: "기술 표준 정의, 아키텍처 VETO, 마이크로서비스 설계"
+    description: "프로젝트 전반 구현 지원, 도메인 간 전달, 통합 작업 실행"
+    model: "sonnet"
+    permissions:
+      - read_all_domains
+      - implement_features
+      - update_project_code
+      - coordinate_delivery
+    responsibilities:
+      - 도메인 구현 작업 지원 및 전달
+      - 계약/스펙 변경 반영
+      - 공통 구현 패턴 정리
+      - 통합 준비 및 핸드오프 관리
+
+  reviewer:
+    enabled: true
+    description: "통합 테스트, 품질 게이트, 릴리스 검증"
     model: "opus"
     permissions:
       - read_all_domains
-      - write_standards
-      - veto_architecture
-      - approve_tech_decisions
+      - approve_releases
+      - define_quality_standards
+      - veto_releases
     responsibilities:
-      - 마이크로서비스 경계 정의
-      - API 게이트웨이 아키텍처
-      - 도메인 간 통신 표준 (REST, gRPC, Events)
-      - 캐싱 전략 (Redis)
-      - 확장성 검증
+      - E2E 테스트 시나리오 정의 (사용자 여정)
+      - 결제 플로우 검증
+      - 성능 테스트 (부하 테스트)
+      - 릴리스 체크리스트 관리
 
-  chief-designer:
+  designer:
     enabled: true
     description: "UI/UX 디자인 시스템, 브랜드 일관성"
     model: "opus"
@@ -69,22 +89,6 @@ agents:
       - 반응형 디자인 검증
       - 사용자 경험 표준
       - 접근성(WCAG 2.1) 준수 감시
-
-  qa-manager:
-    enabled: true
-    description: "통합 테스트, 품질 게이트, 릴리스 승인"
-    model: "opus"
-    permissions:
-      - read_all_domains
-      - approve_releases
-      - define_quality_standards
-      - veto_releases
-    responsibilities:
-      - E2E 테스트 시나리오 정의 (사용자 여정)
-      - 결제 플로우 검증
-      - 성능 테스트 (부하 테스트)
-      - 보안 취약점 스캔
-      - 릴리스 체크리스트 관리
 
   dba:
     enabled: true
@@ -102,25 +106,41 @@ agents:
       - 백업 및 복구 정책
       - 데이터 마이그레이션 계획
 
+shared_specialists:
+  security-specialist:
+    enabled: true
+    description: "결제/인증 중심 보안 검토, 취약점 스캔, 위험 리포트"
+    model: "sonnet"
+    permissions:
+      - read_all_domains
+      - report_vulnerabilities
+    responsibilities:
+      - 결제/인증 경로 보안 검토
+      - OWASP 기반 취약점 점검
+      - 시크릿/크레덴셜 탐지
+      - 릴리스 전 보안 리포트 생성
+
 domains:
   # 도메인 1: 사용자 관리
   - name: "user"
     display_name: "User Management (사용자 관리)"
     description: "회원가입, 로그인, 프로필, 권한 관리"
 
-    lead: "User Part Leader"
+    lead: "User Lead"
 
     team:
-      - role: "part-leader"
-        name: "User Part Leader"
+      - role: "lead"
+        name: "User Lead"
         description: "사용자 도메인 리더, 인증/권한 정책 결정"
 
-      - role: "domain-designer"
-        name: "User Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "User Designer"
         description: "데이터 모델, API 설계, 인증 흐름"
 
-      - role: "domain-developer"
-        name: "User Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "User Builder"
         description: "개발, 테스트 구현"
 
     dependencies: []  # User는 다른 도메인에 의존하지 않음
@@ -144,19 +164,21 @@ domains:
     display_name: "Product Management (상품 관리)"
     description: "상품 조회, 검색, 필터링, 카테고리"
 
-    lead: "Product Part Leader"
+    lead: "Product Lead"
 
     team:
-      - role: "part-leader"
-        name: "Product Part Leader"
+      - role: "lead"
+        name: "Product Lead"
         description: "상품 도메인 리더, 카탈로그 정책 결정"
 
-      - role: "domain-designer"
-        name: "Product Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Product Designer"
         description: "상품 데이터 모델, 검색 전략, API 설계"
 
-      - role: "domain-developer"
-        name: "Product Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Product Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -180,19 +202,21 @@ domains:
     display_name: "Order Management (주문 관리)"
     description: "주문 생성, 조회, 취소, 반품"
 
-    lead: "Order Part Leader"
+    lead: "Order Lead"
 
     team:
-      - role: "part-leader"
-        name: "Order Part Leader"
+      - role: "lead"
+        name: "Order Lead"
         description: "주문 도메인 리더, 주문 정책 결정"
 
-      - role: "domain-designer"
-        name: "Order Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Order Designer"
         description: "주문 상태 머신, API 설계, 이벤트 정의"
 
-      - role: "domain-developer"
-        name: "Order Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Order Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -219,19 +243,21 @@ domains:
     display_name: "Payment Management (결제 관리)"
     description: "결제 처리, 결제 수단 관리, 영수증"
 
-    lead: "Payment Part Leader"
+    lead: "Payment Lead"
 
     team:
-      - role: "part-leader"
-        name: "Payment Part Leader"
+      - role: "lead"
+        name: "Payment Lead"
         description: "결제 도메인 리더, 결제 정책 결정"
 
-      - role: "domain-designer"
-        name: "Payment Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Payment Designer"
         description: "결제 흐름, PCI-DSS 준수 설계, API 설계"
 
-      - role: "domain-developer"
-        name: "Payment Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Payment Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -256,19 +282,21 @@ domains:
     display_name: "Inventory Management (재고 관리)"
     description: "재고 조회, 업데이트, 예약, 경고"
 
-    lead: "Inventory Part Leader"
+    lead: "Inventory Lead"
 
     team:
-      - role: "part-leader"
-        name: "Inventory Part Leader"
+      - role: "lead"
+        name: "Inventory Lead"
         description: "재고 도메인 리더, 재고 정책 결정"
 
-      - role: "domain-designer"
-        name: "Inventory Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Inventory Designer"
         description: "재고 모델, 예약 전략, API 설계"
 
-      - role: "domain-developer"
-        name: "Inventory Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Inventory Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -295,17 +323,17 @@ hooks:
     config:
       protected_paths:
         - path: ".claude/project-team.yaml"
-          write_permission: ["project-manager"]
+          write_permission: ["lead"]
         - path: ".claude/standards/"
-          write_permission: ["chief-architect"]
+          write_permission: ["lead"]
         - path: "design-system/"
-          write_permission: ["chief-designer"]
+          write_permission: ["designer"]
 
       domain_paths:
         - pattern: "src/domains/{domain}/"
-          write_permission: ["domain-developer"]
+          write_permission: ["builder"]
         - pattern: "contracts/interfaces/{domain}-api.yaml"
-          write_permission: ["domain-designer", "part-leader"]
+          write_permission: ["designer", "lead"]
 
   standards-validator:
     enabled: true
@@ -390,7 +418,7 @@ risk_areas:
   - pattern: "src/domains/payment/**"
     level: CRITICAL
     description: "결제 시스템 - 금융 데이터 민감도 높음"
-    required_approvals: ["chief-architect", "qa-manager"]
+    required_approvals: ["lead", "reviewer", "security-specialist"]
     required_tests: ["unit", "integration", "e2e"]
     security_checks: ["encryption", "pci-dss", "fraud-detection"]
 
@@ -398,7 +426,7 @@ risk_areas:
   - pattern: "src/domains/user/auth/**"
     level: CRITICAL
     description: "인증/권한 - 보안 민감도 높음"
-    required_approvals: ["chief-architect"]
+    required_approvals: ["lead", "security-specialist"]
     required_tests: ["unit", "integration", "security"]
     security_checks: ["oauth", "jwt", "xss", "csrf", "sql-injection"]
 
@@ -420,7 +448,7 @@ risk_areas:
   - pattern: "contracts/interfaces/**"
     level: HIGH
     description: "도메인 간 API 계약 - Breaking Changes 위험"
-    required_approvals: ["chief-architect"]
+    required_approvals: ["lead"]
     required_notifications: "all_consumers"
 
   # HIGH: DB 마이그레이션
@@ -480,46 +508,46 @@ collaboration:
     - step: 1
       description: "요청서 작성 (requests/to-{domain}/ 디렉토리)"
     - step: 2
-      description: "해당 Part Leader 검토"
+      description: "해당 도메인 Lead 검토"
     - step: 3
       description: "영향도 분석 (interface-validator)"
     - step: 4
-      description: "Chief Architect 승인 (major changes)"
+      description: "Lead 승인 (major changes)"
     - step: 5
       description: "구현 및 테스트"
     - step: 6
-      description: "QA Manager 승인"
+      description: "Reviewer 승인"
     - step: 7
       description: "배포"
 
   meetings:
     - type: "Architecture Sync"
       frequency: "weekly (Monday 10:00)"
-      attendees: ["chief-architect", "all-part-leaders"]
+      attendees: ["lead", "all-leads"]
       duration: "1 hour"
 
     - type: "Design Sync"
       frequency: "bi-weekly (Wednesday 14:00)"
-      attendees: ["chief-designer", "all-domain-designers"]
+      attendees: ["designer", "all-designers"]
       duration: "1 hour"
 
     - type: "QA/Release Planning"
       frequency: "weekly (Friday 15:00)"
-      attendees: ["qa-manager", "all-part-leaders"]
+      attendees: ["reviewer", "all-leads"]
       duration: "1 hour"
 
     - type: "Domain Leads Standup"
       frequency: "daily (10:30)"
-      attendees: ["project-manager", "all-part-leaders"]
+      attendees: ["lead", "all-leads"]
       duration: "30 minutes"
 
   escalation:
     - level: 1
-      description: "도메인 간 협의 (Part Leaders)"
+      description: "도메인 간 협의 (Leads)"
     - level: 2
-      description: "Project Manager 중재"
+      description: "Lead 중재"
     - level: 3
-      description: "Chief Architect 최종 결정"
+      description: "Lead 최종 결정"
 
 monitoring:
   metrics:
@@ -571,13 +599,13 @@ environments:
     description: "스테이징 환경"
     auto_deploy: false
     requires_approval: true
-    approver: "qa-manager"
+    approver: "reviewer"
 
   production:
     description: "운영 환경"
     auto_deploy: false
     requires_approval: true
-    approver: "project-manager"
+    approver: "lead"
     qa_verification: true
     monitoring: true
 

@@ -6,7 +6,11 @@
 # 기술 스택: FastAPI (Python) + React (TypeScript) + PostgreSQL
 
 ---
-version: "1.0"
+mode: standard
+version: "2.0"
+
+compatibility:
+  legacy_aliases: true
 
 project:
   name: "CloudMetrics"
@@ -26,7 +30,7 @@ project:
     search: "Elasticsearch"
 
 agents:
-  project-manager:
+  lead:
     enabled: true
     description: "CloudMetrics 전체 조율, 도메인 간 조정, 로드맵 관리"
     model: "opus"
@@ -41,22 +45,37 @@ agents:
       - 고객 요청 우선순위 결정
       - 마일스톤 관리
 
-  chief-architect:
+  builder:
     enabled: true
-    description: "멀티테넌트 아키텍처, 마이크로서비스 설계, 확장성 표준"
+    description: "프로젝트 전반 구현 조율, 주요 전달물 실행, 교차 도메인 구현 지원"
+    model: "sonnet"
+    permissions:
+      - read_all_domains
+      - implement_features
+      - update_project_code
+      - coordinate_delivery
+    responsibilities:
+      - 교차 도메인 구현 작업 조율
+      - SaaS 공통 기능 전달 지원
+      - 구현 리스크 및 블로커 공유
+      - 계약/스펙 변경 반영
+
+  reviewer:
+    enabled: true
+    description: "멀티테넌트 통합 테스트, 품질 게이트, 릴리스 검증"
     model: "opus"
     permissions:
       - read_all_domains
-      - write_standards
-      - veto_architecture
-      - approve_tech_decisions
+      - approve_releases
+      - define_quality_standards
+      - veto_releases
     responsibilities:
-      - 멀티테넌트 격리 전략 (Row-level, Schema-level)
-      - API 게이트웨이 아키텍처
-      - 데이터 파이프라인 설계
-      - 성능 및 확장성 검증
+      - 테넌트 격리 검증 (보안)
+      - 청구 정확도 테스트
+      - 대규모 데이터셋 성능 테스트
+      - 멀티테넌트 시나리오 테스트
 
-  chief-designer:
+  designer:
     enabled: true
     description: "대시보드 UI/UX, 분석 시각화, 디자인 시스템"
     model: "opus"
@@ -70,21 +89,6 @@ agents:
       - 사용성 최적화
       - 고급 사용자를 위한 커스터마이징 가이드
 
-  qa-manager:
-    enabled: true
-    description: "멀티테넌트 통합 테스트, 품질 게이트, 릴리스 승인"
-    model: "opus"
-    permissions:
-      - read_all_domains
-      - approve_releases
-      - define_quality_standards
-      - veto_releases
-    responsibilities:
-      - 테넌트 격리 검증 (보안)
-      - 청구 정확도 테스트
-      - 대규모 데이터셋 성능 테스트
-      - 멀티테넌트 시나리오 테스트
-
   dba:
     enabled: true
     description: "멀티테넌트 DB 설계, 데이터 격리, 성능 최적화"
@@ -95,10 +99,24 @@ agents:
       - approve_schema_changes
       - manage_migrations
     responsibilities:
-      - 테넌트 격리 전략 구현
+      - 멀티테넌트 격리 전략 (Row-level, Schema-level)
       - 파티셔닝 및 샤딩 설계
       - 시계열 데이터 최적화
       - 데이터 마이그레이션 계획
+
+shared_specialists:
+  security-specialist:
+    enabled: true
+    description: "멀티테넌트 인증/권한, 결제 흐름, 데이터 격리 보안 검토"
+    model: "sonnet"
+    permissions:
+      - read_all_domains
+      - report_vulnerabilities
+    responsibilities:
+      - 테넌트 경계 및 권한 검증
+      - 인증/SSO 보안 점검
+      - 청구 및 감사 로그 보안 검토
+      - 취약점 리포트 생성
 
 domains:
   # 도메인 1: 인증 및 테넌트 관리
@@ -106,19 +124,21 @@ domains:
     display_name: "Authentication & Tenant Management (인증 및 테넌트)"
     description: "SSO, SAML, 테넌트 프로비저닝, 역할 기반 접근 제어"
 
-    lead: "Auth Part Leader"
+    lead: "Auth Lead"
 
     team:
-      - role: "part-leader"
-        name: "Auth Part Leader"
+      - role: "lead"
+        name: "Auth Lead"
         description: "인증 정책, SSO 전략, 테넌트 격리 정책"
 
-      - role: "domain-designer"
-        name: "Auth Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Auth Designer"
         description: "인증 흐름, 테넌트 데이터 모델, RBAC"
 
-      - role: "domain-developer"
-        name: "Auth Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Auth Builder"
         description: "개발, 테스트 구현"
 
     dependencies: []
@@ -141,19 +161,21 @@ domains:
     display_name: "Subscription Management (구독 관리)"
     description: "플랜 관리, 구독 생성/갱신/취소, 사용 한계"
 
-    lead: "Subscription Part Leader"
+    lead: "Subscription Lead"
 
     team:
-      - role: "part-leader"
-        name: "Subscription Part Leader"
+      - role: "lead"
+        name: "Subscription Lead"
         description: "구독 정책, 플랜 설계, 제한사항 정의"
 
-      - role: "domain-designer"
-        name: "Subscription Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Subscription Designer"
         description: "구독 상태 머신, 플랜 모델, API 설계"
 
-      - role: "domain-developer"
-        name: "Subscription Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Subscription Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -176,19 +198,21 @@ domains:
     display_name: "Billing Management (청구 관리)"
     description: "인보이스 생성, 결제 처리, 환불, 세금 계산"
 
-    lead: "Billing Part Leader"
+    lead: "Billing Lead"
 
     team:
-      - role: "part-leader"
-        name: "Billing Part Leader"
+      - role: "lead"
+        name: "Billing Lead"
         description: "청구 정책, 세금 규정, 결제 전략"
 
-      - role: "domain-designer"
-        name: "Billing Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Billing Designer"
         description: "청구 계산 엔진, 인보이스 스키마, API 설계"
 
-      - role: "domain-developer"
-        name: "Billing Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Billing Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -213,19 +237,21 @@ domains:
     display_name: "Usage Tracking (사용량 추적)"
     description: "API 호출 추적, 메트릭 수집, 사용량 보고"
 
-    lead: "Usage Part Leader"
+    lead: "Usage Lead"
 
     team:
-      - role: "part-leader"
-        name: "Usage Part Leader"
+      - role: "lead"
+        name: "Usage Lead"
         description: "사용량 메트릭 정의, 추적 전략"
 
-      - role: "domain-designer"
-        name: "Usage Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Usage Designer"
         description: "메트릭 스키마, 이벤트 정의, API 설계"
 
-      - role: "domain-developer"
-        name: "Usage Domain Developer"
+      - role: "builder"
+        scope_profile: "backend"
+        name: "Usage Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -249,19 +275,21 @@ domains:
     display_name: "Analytics & Reporting (분석 및 보고)"
     description: "대시보드, 보고서 생성, 데이터 시각화"
 
-    lead: "Analytics Part Leader"
+    lead: "Analytics Lead"
 
     team:
-      - role: "part-leader"
-        name: "Analytics Part Leader"
+      - role: "lead"
+        name: "Analytics Lead"
         description: "분석 메트릭 정의, 대시보드 기획"
 
-      - role: "domain-designer"
-        name: "Analytics Domain Designer"
+      - role: "designer"
+        scope_profile: "design"
+        name: "Analytics Designer"
         description: "대시보드 설계, 시각화 전략, API 설계"
 
-      - role: "domain-developer"
-        name: "Analytics Domain Developer"
+      - role: "builder"
+        scope_profile: "frontend"
+        name: "Analytics Builder"
         description: "개발, 테스트 구현"
 
     dependencies:
@@ -290,17 +318,17 @@ hooks:
     config:
       protected_paths:
         - path: ".claude/project-team.yaml"
-          write_permission: ["project-manager"]
+          write_permission: ["lead"]
         - path: ".claude/standards/"
-          write_permission: ["chief-architect"]
+          write_permission: ["lead"]
         - path: "design-system/"
-          write_permission: ["chief-designer"]
+          write_permission: ["designer"]
 
       domain_paths:
         - pattern: "src/domains/{domain}/"
-          write_permission: ["domain-developer"]
+          write_permission: ["builder"]
         - pattern: "contracts/interfaces/{domain}-api.yaml"
-          write_permission: ["domain-designer", "part-leader"]
+          write_permission: ["designer", "lead"]
 
   standards-validator:
     enabled: true
@@ -399,7 +427,7 @@ risk_areas:
   - pattern: "src/domains/{domain}/repositories/**"
     level: "CRITICAL"
     description: "테넌트 데이터 격리 - 다중 테넌트 시스템의 보안 핵심"
-    required_approvals: ["chief-architect", "dba"]
+    required_approvals: ["lead", "dba"]
     required_tests: ["unit", "integration", "tenant-isolation"]
     security_checks: ["tenant-isolation", "sql-injection", "row-level-security"]
 
@@ -407,7 +435,7 @@ risk_areas:
   - pattern: "src/domains/billing/**"
     level: "CRITICAL"
     description: "청구 시스템 - 금융 데이터, 정확도 중요"
-    required_approvals: ["chief-architect", "qa-manager"]
+    required_approvals: ["lead", "reviewer"]
     required_tests: ["unit", "integration", "accuracy-verification"]
     security_checks: ["encryption", "audit-logging"]
 
@@ -415,7 +443,7 @@ risk_areas:
   - pattern: "src/domains/auth/**"
     level: "CRITICAL"
     description: "인증/권한 - 보안 민감도 최고"
-    required_approvals: ["chief-architect"]
+    required_approvals: ["lead", "security-specialist"]
     required_tests: ["unit", "integration", "security"]
     security_checks: ["oauth2", "saml2", "sso"]
 
@@ -436,7 +464,7 @@ risk_areas:
   - pattern: "contracts/interfaces/**"
     level: "HIGH"
     description: "도메인 간 API 계약"
-    required_approvals: ["chief-architect"]
+    required_approvals: ["lead"]
     required_notifications: "all_consumers"
 
   # HIGH: DB 마이그레이션
@@ -502,46 +530,46 @@ collaboration:
     - step: 1
       description: "요청서 작성 (requests/to-{domain}/)"
     - step: 2
-      description: "Part Leader 검토"
+      description: "Lead 검토"
     - step: 3
       description: "영향도 분석"
     - step: 4
-      description: "Chief Architect 승인 (major)"
+      description: "Lead 승인 (major)"
     - step: 5
       description: "구현 및 테스트"
     - step: 6
-      description: "QA Manager 승인"
+      description: "Reviewer 승인"
     - step: 7
       description: "배포"
 
   meetings:
     - type: "Architecture Sync"
       frequency: "weekly (Monday 10:00)"
-      attendees: ["chief-architect", "dba", "all-part-leaders"]
+      attendees: ["lead", "dba", "all-leads"]
       duration: "1.5 hours"
 
     - type: "Design & UX Sync"
       frequency: "bi-weekly (Wednesday 14:00)"
-      attendees: ["chief-designer", "analytics-pl"]
+      attendees: ["designer", "analytics-lead"]
       duration: "1 hour"
 
     - type: "Billing & Subscription Review"
       frequency: "weekly (Thursday 15:00)"
-      attendees: ["billing-pl", "subscription-pl", "dba"]
+      attendees: ["billing-lead", "subscription-lead", "dba"]
       duration: "1 hour"
 
     - type: "QA/Release Planning"
       frequency: "weekly (Friday 10:00)"
-      attendees: ["qa-manager", "all-part-leaders"]
+      attendees: ["reviewer", "all-leads"]
       duration: "1.5 hours"
 
   escalation:
     - level: 1
-      description: "도메인 간 협의 (Part Leaders)"
+      description: "도메인 간 협의 (Leads)"
     - level: 2
-      description: "Project Manager 중재"
+      description: "Lead 중재"
     - level: 3
-      description: "Chief Architect 최종 결정"
+      description: "Lead 최종 결정"
 
 monitoring:
   metrics:
@@ -596,14 +624,14 @@ environments:
     description: "스테이징 (테스트 테넌트)"
     auto_deploy: false
     requires_approval: true
-    approver: "qa-manager"
+    approver: "reviewer"
     isolation_level: "full"  # 프로덕션과 동일하게 격리
 
   production:
     description: "운영 환경 (실제 고객)"
     auto_deploy: false
     requires_approval: true
-    approver: "project-manager"
+    approver: "lead"
     qa_verification: true
     monitoring: true
     disaster_recovery: true

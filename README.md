@@ -21,7 +21,7 @@ cd claude-imple-skills
 TUI-based installer lets you select:
 - Install scope (global / project)
 - Skill categories (Core, Orchestration, Quality, Analysis, Tasks)
-- Project Team (10 agents + 15 hooks)
+- Project Team topology by mode (`lite`/`standard`/`full`)
 - Multi-AI routing (Claude + Gemini + Codex)
 
 Whitebox MVP policy after install:
@@ -50,8 +50,8 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main
 | Component | Count | Purpose |
 |-----------|-------|---------|
 | **Skills** | 20 | Task execution, analysis, automation |
-| **Agents** | 10 | Role-based specialist team |
-| **Hooks** | 17 | Auto-validation (security, quality, impact) |
+| **Agents** | 6 canonical roles | Mode-based topology (core + specialists) |
+| **Hooks** | 4/7/17 by mode | Auto-validation from lite to full |
 | **Templates** | 7 | Protocols, ADR, contracts |
 
 ---
@@ -108,33 +108,32 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main
 
 ## Project Team
 
-For larger projects, deploy an **AI agent team** with automatic quality gates:
+For larger projects, deploy a **mode-based canonical AI team** with automatic quality gates:
 
 ```
 project-team/
-├── agents/          # 9 specialists
-├── hooks/           # 17 auto-validators
+├── agents/          # Canonical roles + one-release compatibility aliases
+├── hooks/           # Mode-scaled validators (lite/standard/full)
 ├── scripts/         # collaboration & conflict resolution
 ├── references/      # communication protocols
 ├── skills/          # 5 maintenance tools
 └── templates/       # protocols & contracts
 ```
 
-### Agents (10)
+### Canonical Roles
 
 | Role | Responsibility |
 |------|----------------|
-| **Project Manager** | Coordination, task routing |
-| **Chief Architect** | Standards, ADR, VETO authority |
-| **Chief Designer** | Design system consistency |
-| **QA Manager** | Quality gates, testing standards |
+| **Lead** | Coordination, planning, decision ownership |
+| **Builder** | Core implementation and delivery |
+| **Reviewer** | Quality gates, validation, release readiness |
+| **Designer** | Design system consistency |
 | **DBA** | Database schema, migrations |
 | **Security Specialist** | Vulnerability scanning |
-| **Frontend Specialist** | UI/UX implementation |
-| **Backend Specialist** | API, business logic |
-| **Maintenance Analyst** | Production impact analysis |
 
-### Hooks (17)
+Compatibility aliases such as `ProjectManager`, `ChiefArchitect`, `QAManager`, `FrontendSpecialist`, and `BackendSpecialist` are provided for **one-release compatibility only** and are not the primary topology.
+
+### Hooks (Mode-Scaled, up to 17)
 
 Automatic validations that run before/after file edits:
 
@@ -150,9 +149,9 @@ Automatic validations that run before/after file edits:
 
 | Mode | When to use | Components |
 |------|-------------|------------|
-| **Lite** | MVP, startups | 3 agents, 2 hooks |
-| **Standard** | Most projects | 7 agents, 4 gates |
-| **Full** | Regulated industries | All agents, all hooks |
+| **lite** | MVP, startups | Lead/Builder/Reviewer + baseline hooks |
+| **standard** | Most projects | lite + Designer/DBA/Security Specialist + extended hooks |
+| **full** | Regulated industries | standard + compatibility profile surfaces + widest hook set |
 
 See `project-team/docs/MODES.md` for details.
 
@@ -188,16 +187,27 @@ Start
   └─ If interrupted ───────────── /recover
 ```
 
-`/whitebox` is the MVP inspection surface for the control plane:
-- `/whitebox status` (overview)
-- `/whitebox explain` (why blocked/denied)
+`/whitebox` is the terminal product surface for observation + decision support + control:
+- `/whitebox status` (overview + pending approvals)
+- `/whitebox explain` (why blocked/paused + evidence-backed options)
+- `/whitebox approvals` (list/show/approve/reject via canonical CLI control path)
 - `/whitebox health` (CLI/auth + artifact integrity checks)
 
 The whitebox surfaces read file-based artifacts instead of hidden state:
 - canonical log: `.claude/collab/events.ndjson`
+- canonical operator intents: `.claude/collab/control.ndjson`
 - derived board: `.claude/collab/board-state.json`
+- derived control state: `.claude/collab/control-state.json`
 - derived summary: `.claude/collab/whitebox-summary.json`
 - stale markers: `.claude/collab/derived-meta.json`
+
+New-user operator flow:
+1. start work with `/orchestrate-standalone`
+2. inspect `/whitebox status`
+3. review `/whitebox explain`
+4. list pending gates with `/whitebox approvals list`
+5. approve or reject with `/whitebox approvals approve|reject --gate-id=...`
+6. watch the updated state in `/whitebox status` or `/task-board`
 
 ### Do you need an agent team?
 
@@ -238,8 +248,8 @@ claude-imple-skills/
 │
 ├── project-team/              # Agent team system
 │   ├── install.sh             # Installation script
-│   ├── agents/                # 10 agent definitions
-│   ├── hooks/                 # 17 auto-validation hooks
+│   ├── agents/                # Canonical roles + one-release compatibility aliases
+│   ├── hooks/                 # Mode-scaled hooks (4/7/17)
 │   ├── scripts/               # Collaboration & conflict resolution scripts
 │   ├── references/            # Communication protocols & specs
 │   ├── skills/                # 5 maintenance skills
@@ -282,9 +292,9 @@ cd project-team
 
 Choose a mode:
 ```bash
-./install.sh --mode=lite      # 3 agents, 2 hooks
-./install.sh --mode=standard  # 7 agents, 4 hooks (default)
-./install.sh --mode=full      # All agents, all hooks
+./install.sh --mode=lite      # Lead/Builder/Reviewer + 4 baseline hooks
+./install.sh --mode=standard  # lite + specialists + 7 hooks (default)
+./install.sh --mode=full      # standard + compatibility profiles + 17 hooks
 ```
 
 ---

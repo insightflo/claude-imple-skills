@@ -11,39 +11,28 @@
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { writeEvent } = require('../../../../project-team/scripts/lib/whitebox-events');
 const {
   createRunId,
+  emitRunEventDetailed,
   withExecutorMetadata,
 } = require('../../../../project-team/scripts/lib/whitebox-run');
 
 const STATE_FILE = '.claude/orchestrate-state.json';
 
-function toEventWriteError(stage, type, error) {
-  return {
-    stage,
-    event_type: type,
-    message: error && error.message ? error.message : String(error),
-    code: error && error.code ? error.code : null,
-  };
-}
-
 async function emitCanonicalEvent(type, data, projectDir = process.cwd(), correlationId = null, stage = type) {
-  try {
-    await writeEvent({
-      type,
-      producer: 'orchestrate-worker',
-      correlation_id: correlationId || undefined,
-      data,
-    }, {
-      projectDir,
-    });
-    return { ok: true, error: null, failure: null };
-  } catch (error) {
-    const failure = toEventWriteError(stage, type, error);
-    writeStderr(`[worker] canonical event write failed (${type}): ${failure.message}`);
-    return { ok: false, error, failure };
+  const result = await emitRunEventDetailed({
+    type,
+    producer: 'orchestrate-worker',
+    correlationId,
+    projectDir,
+    data,
+    stage,
+    mode: 'best_effort',
+  });
+  if (!result.ok) {
+    writeStderr(`[worker] canonical event write failed (${type}): ${result.failure.message}`);
   }
+  return result;
 }
 
 function writeStderr(message) {
@@ -77,7 +66,7 @@ function persistTaskState(statePath, taskId, status, data = {}) {
 }
 
 async function updateTaskState(statePath, taskId, status, data = {}, options = {}) {
-  const { emitEvent = true } = options;
+  const { emitEvent = true, emitMode = 'best_effort' } = options;
 
   try {
     const { previousStatus } = persistTaskState(statePath, taskId, status, data);
@@ -95,28 +84,20 @@ async function updateTaskState(statePath, taskId, status, data = {}, options = {
     }, projectDir, taskId, 'task_status_changed');
 
     if (!eventResult.ok) {
+      if (emitMode === 'strict') {
       const error = new Error(`Failed to write orchestrate.task.status_changed for ${taskId}: ${eventResult.failure.message}`);
       error.code = 'WHITEBOX_EVENT_WRITE_FAILED';
       error.failure = eventResult.failure;
       throw error;
+      }
+
+      writeStderr(`Failed to write orchestrate.task.status_changed for ${taskId}: ${eventResult.failure.message}`);
     }
 
-    return { ok: true, previousStatus };
+    return { ok: true, previousStatus, eventWarning: eventResult.ok ? null : eventResult.failure };
   } catch (error) {
     writeStderr(`Failed to update state: ${error.message}`);
     throw error;
-  }
-}
-
-function persistEventWriteFailure(statePath, taskId, failureStatus, failure, data = {}) {
-  try {
-    persistTaskState(statePath, taskId, failureStatus, {
-      ...data,
-      error: failure.message,
-      event_write_error: failure,
-    });
-  } catch (stateError) {
-    writeStderr(`Failed to persist event write failure: ${stateError.message}`);
   }
 }
 
@@ -262,7 +243,7 @@ Please complete this task and report back when done.
     const { command, args, model, requestedExecutor, routeSource, fallbackReason } = resolveCliCommand(task, projectDir, claudePath);
     process.stderr.write(`[worker] Task ${task.id} → ${command} (model: ${model})\n`);
 
-    const routeSelectedResult = await emitCanonicalEvent('multi_ai_run.route.selected', {
+    await emitCanonicalEvent('multi_ai_run.route.selected', {
       run_id: runId,
       task_id: task.id,
       owner: task.owner || 'default',
@@ -272,16 +253,8 @@ Please complete this task and report back when done.
       ...withExecutorMetadata(model),
     }, projectDir, task.id, 'route_selected');
 
-    if (!routeSelectedResult.ok) {
-      persistEventWriteFailure(statePath, task.id, 'failed', routeSelectedResult.failure, {
-        intended_status: 'in_progress',
-      });
-      reject(new Error(`Canonical event write failed for ${task.id}: ${routeSelectedResult.failure.message}`));
-      return;
-    }
-
     if (fallbackReason) {
-      const fallbackResult = await emitCanonicalEvent('multi_ai_run.route.fallback', {
+      await emitCanonicalEvent('multi_ai_run.route.fallback', {
         run_id: runId,
         task_id: task.id,
         owner: task.owner || 'default',
@@ -293,16 +266,9 @@ Please complete this task and report back when done.
         ...withExecutorMetadata(model),
       }, projectDir, task.id, 'route_fallback');
 
-      if (!fallbackResult.ok) {
-        persistEventWriteFailure(statePath, task.id, 'failed', fallbackResult.failure, {
-          intended_status: 'in_progress',
-        });
-        reject(new Error(`Canonical event write failed for ${task.id}: ${fallbackResult.failure.message}`));
-        return;
-      }
     }
 
-    const startResult = await emitCanonicalEvent('orchestrate.execution.start', {
+    await emitCanonicalEvent('orchestrate.execution.start', {
       run_id: runId,
       task_id: task.id,
       domain: task.domain || 'general',
@@ -313,25 +279,10 @@ Please complete this task and report back when done.
       ...withExecutorMetadata(model),
     }, projectDir, task.id, 'execution_start');
 
-    if (!startResult.ok) {
-      persistEventWriteFailure(statePath, task.id, 'failed', startResult.failure, {
-        intended_status: 'in_progress',
-      });
-      reject(new Error(`Canonical event write failed for ${task.id}: ${startResult.failure.message}`));
-      return;
-    }
-
     // Update state to "in_progress"
     try {
       await updateTaskState(statePath, task.id, 'in_progress', { worker: 'worker-' + process.pid % 4 });
     } catch (error) {
-      if (error && error.failure) {
-        persistEventWriteFailure(statePath, task.id, 'failed', error.failure, {
-          intended_status: 'in_progress',
-        });
-        reject(new Error(`Canonical event write failed for ${task.id}: ${error.failure.message}`));
-        return;
-      }
       reject(error);
       return;
     }
@@ -365,7 +316,7 @@ Please complete this task and report back when done.
         ...result.stateData,
       };
 
-      const finishResult = await emitCanonicalEvent('orchestrate.execution.finish', {
+      await emitCanonicalEvent('orchestrate.execution.finish', {
         run_id: runId,
         task_id: task.id,
         outcome: result.outcome,
@@ -375,26 +326,9 @@ Please complete this task and report back when done.
         ...withExecutorMetadata(model),
       }, projectDir, task.id, 'execution_finish');
 
-      if (!finishResult.ok) {
-        persistEventWriteFailure(statePath, task.id, 'failed', finishResult.failure, {
-          intended_status: result.status,
-          duration,
-        });
-        reject(new Error(`Canonical event write failed for ${task.id}: ${finishResult.failure.message}`));
-        return;
-      }
-
       try {
         await updateTaskState(statePath, task.id, result.status, stateData);
       } catch (error) {
-        if (error && error.failure) {
-          persistEventWriteFailure(statePath, task.id, 'failed', error.failure, {
-            intended_status: result.status,
-            duration,
-          });
-          reject(new Error(`Canonical event write failed for ${task.id}: ${error.failure.message}`));
-          return;
-        }
         reject(error);
         return;
       }

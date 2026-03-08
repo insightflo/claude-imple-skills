@@ -10,6 +10,7 @@ const {
   readMarkers,
 } = require('../../../project-team/scripts/collab-derived-meta');
 const { readTasksStats } = require('../../statusline/lib/tasks-status');
+const { readControlState } = require('./whitebox-control-state');
 
 const WHITEBOX_SUMMARY_SCHEMA_VERSION = '1.0';
 const WHITEBOX_SUMMARY_REL_PATH = '.claude/collab/whitebox-summary.json';
@@ -83,7 +84,7 @@ function latestRunCard(cards) {
   })[0] || null;
 }
 
-function nextRemediation(staleMarkers, blockedCards, tasksStats) {
+function nextRemediation(staleMarkers, pendingApprovals, blockedCards, tasksStats) {
   if (staleMarkers.length > 0) {
     const marker = staleMarkers[0];
     return {
@@ -91,6 +92,16 @@ function nextRemediation(staleMarkers, blockedCards, tasksStats) {
       id: marker.artifact,
       reason: marker.reason || 'stale derived artifact',
       remediation: 'Rebuild the stale derived artifact before trusting whitebox status.',
+    };
+  }
+
+  if (pendingApprovals.length > 0) {
+    const gate = pendingApprovals[0];
+    return {
+      type: 'approval',
+      id: gate.gate_id,
+      reason: `Approval required for ${gate.task_id || gate.gate_name || gate.gate_id}`,
+      remediation: 'Review the approval details and run approve or reject through /whitebox approvals.',
     };
   }
 
@@ -116,8 +127,9 @@ function nextRemediation(staleMarkers, blockedCards, tasksStats) {
   return null;
 }
 
-function computeGateStatus(staleMarkers, blockedCards, inProgressCards, tasksStats) {
+function computeGateStatus(staleMarkers, pendingApprovals, blockedCards, inProgressCards, tasksStats) {
   if (staleMarkers.length > 0) return 'stale';
+  if (pendingApprovals.length > 0) return 'approval_required';
   if (blockedCards.length > 0) return 'blocked';
   if (inProgressCards.length > 0) return 'running';
   if (tasksStats.total > 0 && tasksStats.done === tasksStats.total) return 'clear';
@@ -131,21 +143,36 @@ function buildWhiteboxSummary(projectDir) {
     derived_from: {},
   });
   const tasksStats = loadTasksStats(projectDir);
+  const controlState = readControlState(projectDir, {
+    pending_approval_count: 0,
+    pending_approvals: [],
+    control_health: null,
+  });
   const staleMarkers = readMarkers(projectDir).filter((entry) => entry && !entry.cleared_by);
   const blockedCards = Array.isArray(board.columns?.Blocked) ? board.columns.Blocked : [];
   const inProgressCards = Array.isArray(board.columns?.['In Progress']) ? board.columns['In Progress'] : [];
   const allCards = flattenColumns(board.columns);
   const runCard = latestRunCard(allCards);
-  const next = nextRemediation(staleMarkers, blockedCards, tasksStats);
+  const pendingApprovals = Array.isArray(controlState.pending_approvals) ? controlState.pending_approvals : [];
+  const next = nextRemediation(staleMarkers, pendingApprovals, blockedCards, tasksStats);
 
   return {
     schema_version: WHITEBOX_SUMMARY_SCHEMA_VERSION,
     generated_at: new Date().toISOString(),
-    ok: staleMarkers.length === 0,
+    ok: staleMarkers.length === 0 && pendingApprovals.length === 0,
     run_id: runCard ? runCard.run_id : null,
     run_id_short: runCard && runCard.run_id ? String(runCard.run_id).slice(0, 12) : null,
-    gate_status: computeGateStatus(staleMarkers, blockedCards, inProgressCards, tasksStats),
+    gate_status: computeGateStatus(staleMarkers, pendingApprovals, blockedCards, inProgressCards, tasksStats),
     blocked_count: blockedCards.length,
+    pending_approval_count: pendingApprovals.length,
+    pending_approvals: pendingApprovals.slice(0, 10).map((gate) => ({
+      gate_id: gate.gate_id,
+      gate_name: gate.gate_name || null,
+      task_id: gate.task_id || null,
+      correlation_id: gate.correlation_id || null,
+      created_at: gate.created_at || gate.required_at || null,
+      evidence_paths: Array.isArray(gate.evidence_paths) ? gate.evidence_paths : [],
+    })),
     stale_artifact_count: staleMarkers.length,
     stale_artifacts: staleMarkers.map((entry) => ({
       artifact: entry.artifact,
@@ -171,6 +198,7 @@ function buildWhiteboxSummary(projectDir) {
     })),
     derived_from: {
       board_state: BOARD_STATE_REL_PATH,
+      control_state: '.claude/collab/control-state.json',
       tasks_cache: TASKS_STATUS_REL_PATH,
       board_schema_version: board.schema_version || null,
       board_fingerprint: board.derived_from && board.derived_from.fingerprint ? board.derived_from.fingerprint : null,

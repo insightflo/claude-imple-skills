@@ -28,6 +28,20 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const AgentAuthService = require('../services/auth');
+const {
+  globToRegex: sharedGlobToRegex,
+  matchesAnyPattern: sharedMatchesAnyPattern,
+  resolveRoleIdentity,
+  resolveDeterministicWriteScope,
+  checkDomainBoundary: sharedCheckDomainBoundary
+} = require('./lib/deterministic-policy');
+
+const {
+  resolveTokenSecret,
+  normalizeTokenExpiration,
+  isTokenExpired
+} = AgentAuthService;
 
 // ---------------------------------------------------------------------------
 // 0. Agent Authentication (Signed Token)
@@ -71,8 +85,10 @@ function signAgentTokenPayload(payloadB64, secret) {
  * @returns {{ ok: true, role: string } | { ok: false, reason: string }}
  */
 function verifyAgentToken(token, secret, nowMs = Date.now()) {
-  if (!secret) {
-    return { ok: false, reason: 'Missing token verification secret (CLAUDE_HOOK_SECRET or PERMISSION_CHECKER_SECRET).' };
+  const resolvedSecret = secret === undefined ? resolveTokenSecret() : secret;
+
+  if (!resolvedSecret) {
+    return { ok: false, reason: 'Missing token verification secret (CLAUDE_HOOK_SECRET, AGENT_JWT_SECRET, or PERMISSION_CHECKER_SECRET).' };
   }
   if (!token || typeof token !== 'string') {
     return { ok: false, reason: 'Missing agent authentication token (CLAUDE_AGENT_TOKEN or tool_input.agent_token).' };
@@ -83,13 +99,79 @@ function verifyAgentToken(token, secret, nowMs = Date.now()) {
 
   if (parts.length === 3) {
     // JWT format: header.payload.signature
-    return verifyJWTToken(token, secret, nowMs);
+    return verifyJWTToken(token, resolvedSecret, nowMs);
   } else if (parts.length === 2) {
     // Legacy format: payload.signature
-    return verifyLegacyToken(token, secret, nowMs);
+    return verifyLegacyToken(token, resolvedSecret, nowMs);
   } else {
     return { ok: false, reason: 'Invalid agent_token format (expected JWT or legacy "payload.signature").' };
   }
+}
+
+function buildVerifiedTokenResult(payload, role) {
+  const result = {
+    ok: true,
+    role: role.toLowerCase().replace(/\s+/g, '-')
+  };
+
+  if (typeof payload.domain === 'string' && payload.domain.trim() !== '') {
+    result.domain = payload.domain;
+  }
+
+  if (typeof payload.scope_id === 'string' && payload.scope_id.trim() !== '') {
+    result.scopeId = payload.scope_id;
+  }
+
+  if (Array.isArray(payload.allowed_paths)) {
+    result.allowedPaths = payload.allowed_paths;
+  }
+
+  if (typeof payload.review_only === 'boolean') {
+    result.reviewOnly = payload.review_only;
+  }
+
+  if (payload.agentId) {
+    result.agentId = payload.agentId;
+  }
+
+  if (payload.type) {
+    result.type = payload.type;
+  }
+
+  if (payload.requestor) {
+    result.requestor = payload.requestor;
+  }
+
+  if (payload.target) {
+    result.target = payload.target;
+  }
+
+  if (payload.reason) {
+    result.reasonText = payload.reason;
+  }
+
+  if (Array.isArray(payload.allowed_tools)) {
+    result.allowedTools = payload.allowed_tools;
+  }
+
+  if (Array.isArray(payload.denied_tools)) {
+    result.deniedTools = payload.denied_tools;
+  }
+
+  if (typeof payload.advisory_only === 'boolean') {
+    result.advisoryOnly = payload.advisory_only;
+  }
+
+  if (typeof payload.iat === 'number' && Number.isFinite(payload.iat)) {
+    result.iat = payload.iat;
+  }
+
+  const normalizedExp = normalizeTokenExpiration(payload.exp);
+  if (normalizedExp !== null) {
+    result.exp = normalizedExp;
+  }
+
+  return result;
 }
 
 /**
@@ -144,35 +226,25 @@ function verifyJWTToken(token, secret, nowMs) {
   }
 
   // Check role
+  const exp = normalizeTokenExpiration(payload.exp);
+  if (exp === null) {
+    return { ok: false, reason: 'JWT payload missing exp.' };
+  }
+
+  if (isTokenExpired(payload.exp, nowMs)) {
+    return { ok: false, reason: 'JWT token has expired.' };
+  }
+
   const role = payload.role || payload.agentId?.role;
+  if (payload.type === 'escalation' && (typeof role !== 'string' || role.trim() === '')) {
+    return buildVerifiedTokenResult(payload, 'escalation');
+  }
+
   if (typeof role !== 'string' || role.trim() === '') {
     return { ok: false, reason: 'JWT payload missing role.' };
   }
 
-  // Check expiration
-  const exp = payload.exp;
-  if (typeof exp !== 'number' || !Number.isFinite(exp)) {
-    return { ok: false, reason: 'JWT payload missing exp.' };
-  }
-
-  const nowSec = Math.floor(nowMs / 1000);
-  if (exp <= nowSec) {
-    return { ok: false, reason: 'JWT token has expired.' };
-  }
-
-  // Check token type (optional, for escalation tokens)
-  if (payload.type === 'escalation') {
-    return {
-      ok: true,
-      role: role.toLowerCase().replace(/\s+/g, '-'),
-      escalation: true,
-      requestor: payload.requestor,
-      target: payload.target
-    };
-  }
-
-  const roleLower = role.toLowerCase().replace(/\s+/g, '-');
-  return { ok: true, role: roleLower };
+  return buildVerifiedTokenResult(payload, role);
 }
 
 /**
@@ -223,17 +295,34 @@ function verifyLegacyToken(token, secret, nowMs) {
   if (typeof payload.role !== 'string' || payload.role.trim() === '') {
     return { ok: false, reason: 'Token payload missing role.' };
   }
-  if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) {
+  const exp = normalizeTokenExpiration(payload.exp);
+  if (exp === null) {
     return { ok: false, reason: 'Token payload missing exp.' };
   }
 
-  const nowSec = Math.floor(nowMs / 1000);
-  if (payload.exp <= nowSec) {
+  if (isTokenExpired(payload.exp, nowMs)) {
     return { ok: false, reason: 'Token has expired.' };
   }
 
-  const roleLower = payload.role.toLowerCase().replace(/\s+/g, '-');
-  return { ok: true, role: roleLower };
+  return buildVerifiedTokenResult(payload, payload.role);
+}
+
+function resolveVerifiedRoleContext(verified) {
+  const identity = resolveRoleIdentity(verified.role);
+  if (identity.recognized) {
+    return {
+      role: identity.compatibilityAlias || identity.canonicalRole,
+      canonicalRole: identity.canonicalRole,
+      domain: identity.domain || verified.domain || null,
+      originalRole: identity.normalizedRole || verified.role
+    };
+  }
+
+  return {
+    role: null,
+    canonicalRole: null,
+    domain: verified.domain || null
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -557,17 +646,7 @@ function generateDomainDeveloperPermissions(domain) {
  * @returns {RegExp}
  */
 function globToRegex(pattern) {
-  // Escape regex special characters except * and /
-  let regex = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    // Handle ** (match anything including /)
-    .replace(/\*\*/g, '<<DOUBLESTAR>>')
-    // Handle * (match anything except /)
-    .replace(/\*/g, '[^/]*')
-    // Restore **
-    .replace(/<<DOUBLESTAR>>/g, '.*');
-
-  return new RegExp('^' + regex + '$');
+  return sharedGlobToRegex(pattern);
 }
 
 /**
@@ -577,18 +656,7 @@ function globToRegex(pattern) {
  * @returns {boolean}
  */
 function matchesAnyPattern(relativePath, patterns) {
-  if (!patterns || patterns.length === 0) return false;
-
-  for (const pattern of patterns) {
-    // Skip negation patterns in cannot (they use special syntax)
-    if (pattern.includes('!(')) continue;
-
-    const regex = globToRegex(pattern);
-    if (regex.test(relativePath)) {
-      return true;
-    }
-  }
-  return false;
+  return sharedMatchesAnyPattern(relativePath, patterns);
 }
 
 /**
@@ -705,36 +773,7 @@ function resolvePermissions(role, domain) {
  * @returns {{ violation: boolean, targetDomain: string|null }}
  */
 function checkDomainBoundary(relativePath, agentDomain) {
-  if (!agentDomain) return { violation: false, targetDomain: null };
-
-  // Check src/domains/{other-domain}/ pattern
-  const domainMatch = relativePath.match(/^src\/domains\/([^/]+)\//);
-  if (domainMatch) {
-    const targetDomain = domainMatch[1];
-    if (targetDomain !== agentDomain) {
-      return { violation: true, targetDomain };
-    }
-  }
-
-  // Check tests/{other-domain}/ pattern
-  const testDomainMatch = relativePath.match(/^tests\/([^/]+)\//);
-  if (testDomainMatch) {
-    const targetDomain = testDomainMatch[1];
-    if (targetDomain !== agentDomain) {
-      return { violation: true, targetDomain };
-    }
-  }
-
-  // Check design/{other-domain}/ pattern
-  const designDomainMatch = relativePath.match(/^design\/([^/]+)\//);
-  if (designDomainMatch) {
-    const targetDomain = designDomainMatch[1];
-    if (targetDomain !== agentDomain) {
-      return { violation: true, targetDomain };
-    }
-  }
-
-  return { violation: false, targetDomain: null };
+  return sharedCheckDomainBoundary(relativePath, agentDomain);
 }
 
 // ---------------------------------------------------------------------------
@@ -927,7 +966,7 @@ async function main() {
 
   // Authenticate agent identity using signed token
   const agentToken = toolInput.agent_token || process.env.CLAUDE_AGENT_TOKEN || '';
-  const tokenSecret = process.env.CLAUDE_HOOK_SECRET || process.env.PERMISSION_CHECKER_SECRET || '';
+  const tokenSecret = resolveTokenSecret();
   const verified = verifyAgentToken(agentToken, tokenSecret);
   if (!verified.ok) {
     outputDeny(verified.reason);
@@ -935,7 +974,7 @@ async function main() {
   }
 
   // Derive role/domain from verified token claim
-  const { role, domain } = parseAgentRoleString(verified.role);
+  const { role, domain } = resolveVerifiedRoleContext(verified);
   if (!role) {
     outputDeny(`Invalid role in agent_token: "${verified.role}".`);
     return;
@@ -950,8 +989,39 @@ async function main() {
   }
   const relativePath = safePath.relativePath;
 
-  // Perform permission check
-  const result = checkPermission(role, domain, relativePath);
+  const identity = resolveRoleIdentity(verified.role);
+  const boundary = checkDomainBoundary(relativePath, identity.domain || domain);
+  if (boundary.violation) {
+    outputDeny(formatBoundaryViolationMessage({
+      agentRole: identity.originalRole || role,
+      agentDomain: identity.domain || domain,
+      targetDomain: boundary.targetDomain,
+      filePath: relativePath
+    }));
+    return;
+  }
+
+  const scope = resolveDeterministicWriteScope({
+    identity,
+    allowedPaths: verified.allowedPaths,
+    reviewOnly: verified.reviewOnly,
+    selfCheck: toolInput.self_check === true,
+    changedFiles: toolInput.changed_files || toolInput.changedFiles,
+    relativePath
+  });
+
+  if (!scope.recognized) {
+    outputDeny(`Unknown authenticated role in agent_token: "${verified.role}".`);
+    return;
+  }
+
+  const result = scope.writePaths.length > 0 && matchesAnyPattern(relativePath, scope.writePaths)
+    ? { allowed: true }
+    : {
+      allowed: false,
+      reason: `File path "${relativePath}" is not within the deterministic write scope for role "${identity.normalizedRole}" (${scope.source}).`,
+      type: 'not-in-write-paths'
+    };
 
   if (result.allowed) {
     // Permission granted - no output (silent allow)
@@ -1001,6 +1071,7 @@ if (typeof module !== 'undefined' && module.exports) {
     toRelativePath,
     toSafeProjectRelativePath,
     parseAgentRoleString,
+    resolveVerifiedRoleContext,
     verifyAgentToken,
     verifyJWTToken,
     verifyLegacyToken,

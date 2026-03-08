@@ -54,8 +54,8 @@ cd claude-imple-skills/project-team
 | 구성요소 | 개수 | 용도 |
 |----------|-------|------|
 | **스킬** | 20개 | 작업 실행, 분석, 자동화 |
-| **에이전트** | 10개 | 역할 기반 전문가 팀 |
-| **훅** | 17개 | 자동 검증 (보안, 품질, 영향도) |
+| **에이전트** | 6개 canonical 역할 | 모드 기반 토폴로지 (코어 + specialist) |
+| **훅** | 모드별 4/7/17개 | lite에서 full까지 단계적 자동 검증 |
 | **템플릿** | 7개 | 프로토콜, ADR, 계약 |
 
 ---
@@ -116,29 +116,28 @@ cd claude-imple-skills/project-team
 
 ```
 project-team/
-├── agents/          # 9명 전문가
-├── hooks/           # 17개 자동 검증기
+├── agents/          # canonical 역할 + one-release compatibility alias
+├── hooks/           # 모드별 검증기 (lite/standard/full)
 ├── scripts/         # 협업 & 충돌 해결
 ├── references/      # 통신 프로토콜 명세
 ├── skills/          # 5개 유지보수 도구
 └── templates/       # 프로토콜 & 계약
 ```
 
-### 에이전트 (10명)
+### Canonical 역할
 
 | 역할 | 책임 |
 |------|------|
-| **Project Manager** | 조율, 태스크 라우팅 |
-| **Chief Architect** | 표준, ADR, 거부권 |
-| **Chief Designer** | 디자인 시스템 일관성 |
-| **QA Manager** | 품질 게이트, 테스트 표준 |
+| **Lead** | 조율, 계획, 의사결정 책임 |
+| **Builder** | 핵심 구현 및 전달 |
+| **Reviewer** | 품질 게이트, 검증, 릴리즈 준비 |
+| **Designer** | 디자인 시스템 일관성 |
 | **DBA** | DB 스키마, 마이그레이션 |
 | **Security Specialist** | 취약점 스캔 |
-| **Frontend Specialist** | UI/UX 구현 |
-| **Backend Specialist** | API, 비즈니스 로직 |
-| **Maintenance Analyst** | 프로덕션 영향도 분석 |
 
-### 훅 (17개)
+`ProjectManager`, `ChiefArchitect`, `QAManager`, `FrontendSpecialist`, `BackendSpecialist` 같은 legacy 이름은 **one-release compatibility alias**로만 제공되며, 기본 토폴로지가 아닙니다.
+
+### 훅 (모드별, 최대 17개)
 
 파일 수정 전후 자동 실행되는 검증:
 
@@ -154,9 +153,9 @@ project-team/
 
 | 모드 | 사용 시기 | 구성요소 |
 |------|-----------|----------|
-| **Lite** | MVP, 스타트업 | 3 에이전트, 2 훅 |
-| **Standard** | 일반적인 프로젝트 | 7 에이전트, 4 게이트 |
-| **Full** | 규제 산업 | 전체 에이전트, 전체 훅 |
+| **lite** | MVP, 스타트업 | `Lead/Builder/Reviewer` + baseline 훅 |
+| **standard** | 일반적인 프로젝트 | `lite` + `Designer/DBA/Security Specialist` + 확장 훅 |
+| **full** | 규제/고신뢰 환경 | `standard` + compatibility profile surface + 가장 넓은 훅 세트 |
 
 자세한 내용은 `project-team/docs/MODES.md` 참조.
 
@@ -192,16 +191,27 @@ project-team/
   └─ 중단 시 ──────────────────── /recover
 ```
 
-`/whitebox`는 MVP 관찰 표면입니다:
-- `/whitebox status` — 현재 run, gate, blocked 개수, stale artifact 요약
-- `/whitebox explain` — 특정 task/REQ/gate 가 왜 막혔는지 근거 기반 설명
+`/whitebox`는 관찰 + 의사결정 지원 + 제어를 묶는 터미널 제품 표면입니다:
+- `/whitebox status` — 현재 run, pending approval, blocked/stale 상태 요약
+- `/whitebox explain` — 왜 막혔는지와 approve/reject 같은 근거 기반 선택지
+- `/whitebox approvals` — `list|show|approve|reject` canonical control CLI 경로
 - `/whitebox health` — 구독형 CLI 인증/부착 상태 + artifact 무결성 점검
 
 화이트박스는 다음 파일 기반 아티팩트를 읽습니다:
 - canonical 로그: `.claude/collab/events.ndjson`
+- canonical operator-intent 로그: `.claude/collab/control.ndjson`
 - 파생 보드: `.claude/collab/board-state.json`
+- 파생 control state: `.claude/collab/control-state.json`
 - 파생 요약: `.claude/collab/whitebox-summary.json`
 - stale marker: `.claude/collab/derived-meta.json`
+
+신규 사용자 흐름:
+1. `/orchestrate-standalone` 로 작업을 시작한다.
+2. `/whitebox status` 로 paused gate 와 pending approval 을 본다.
+3. `/whitebox explain` 로 근거와 선택지를 확인한다.
+4. `/whitebox approvals list|show` 로 gate 를 조회한다.
+5. `/whitebox approvals approve|reject --gate-id=...` 로 제어한다.
+6. `/whitebox status` 또는 `/task-board` 로 resumed / blocked 상태를 다시 확인한다.
 
 ### 에이전트 팀이 필요한가?
 
@@ -220,7 +230,7 @@ project-team/
 
 ```
 claude-imple-skills/
-├── skills/                    # 19개 스킬
+├── skills/                    # 18개 스킬
 │   ├── workflow-guide/        # 메타 허브
 │   ├── governance-setup/      # Phase 0 설정
 │   ├── agile/                 # 레이어별 스프린트
@@ -242,8 +252,8 @@ claude-imple-skills/
 │
 ├── project-team/              # 에이전트 팀 시스템
 │   ├── install.sh             # 설치 스크립트
-│   ├── agents/                # 10개 에이전트 정의
-│   ├── hooks/                 # 17개 자동 검증 훅
+│   ├── agents/                # canonical 역할 + one-release compatibility alias
+│   ├── hooks/                 # 모드별 훅 (4/7/17)
 │   ├── scripts/               # 협업 & 충돌 해결 스크립트
 │   ├── references/            # 통신 프로토콜 & 명세
 │   ├── skills/                # 5개 유지보수 스킬
@@ -286,9 +296,9 @@ cd project-team
 
 모드 선택:
 ```bash
-./install.sh --mode=lite      # 3 에이전트, 2 훅
-./install.sh --mode=standard  # 7 에이전트, 4 게이트 (기본값)
-./install.sh --mode=full      # 전체 에이전트, 전체 훅
+./install.sh --mode=lite      # Lead/Builder/Reviewer + 4 baseline 훅
+./install.sh --mode=standard  # lite + specialists + 7 훅 (기본값)
+./install.sh --mode=full      # standard + compatibility profiles + 17 훅
 ```
 
 ---

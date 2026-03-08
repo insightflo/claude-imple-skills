@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "test": "npx --yes jest --runInBand"
+    "test": "npx --yes jest --runInBand",
+    "test:acceptance": "npx --yes jest --runInBand hooks/__tests__/acceptance-harness.test.js"
   },
   "devDependencies": {
     "jest": "^30.2.0"

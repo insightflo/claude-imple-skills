@@ -12,19 +12,35 @@ This directory contains Claude Code hooks that enforce project standards and tea
 **Tools**: `Edit`, `Write`
 **Task**: P2-T1
 
-Validates agent file access permissions based on role-specific access rights matrix.
+Validates `Edit`/`Write` requests against canonical token claims and deterministic path-scoped write boundaries.
 
 **Features**:
-- Static role permissions (project-manager, chief-architect, chief-designer, dba, qa-manager, maintenance-analyst)
-- Domain-scoped template roles (part-leader, designer, developer)
-- Domain boundary violation detection
-- Clear escalation guidance
+- Canonical topology roles: `lead`, `builder`, `reviewer`, `designer`, `dba`, `security-specialist`
+- Deterministic write scope for `Edit`/`Write` from either token `allowed_paths` or role-default paths (`src/**`, `tests/**`, etc.)
+- Domain boundary violation detection for domain-scoped compatibility profiles
+- Canonical JWT claim support (`role`, `scope_id`, `allowed_paths`, `review_only`, `iat`, `exp`) with one-release legacy millisecond `exp` compatibility
+- Advisory `allowed_tools` / `denied_tools` / `advisory_only` claims are metadata only in v1 and do not gate tool execution
+- Legacy role/profile names are accepted as one-release compatibility aliases only
 
 **Usage**:
 ```bash
-export CLAUDE_AGENT_ROLE="auth-developer"
-# Edit/Write operations will be validated against access_rights
+export CLAUDE_HOOK_SECRET="$(openssl rand -base64 32)"
+export CLAUDE_AGENT_TOKEN="<signed-jwt>"
+# permission-checker resolves secrets in this order:
+# CLAUDE_HOOK_SECRET -> AGENT_JWT_SECRET -> PERMISSION_CHECKER_SECRET
+# Edit/Write operations are validated against deterministic write scope
 ```
+
+**JWT claims used by permission-checker**:
+- Required: `role`, `scope_id`, `iat`, `exp`
+- Optional policy claims: `allowed_paths`, `review_only`, `domain`, `type`
+- Optional compatibility claims: `agentId`
+- Advisory-only in v1: `allowed_tools`, `denied_tools`, `advisory_only`
+
+**Deterministic boundary (v1)**:
+- `allowed_paths` present in token -> source is `token.allowed_paths`
+- Else reviewer self-check (`review_only` or `self_check`) on low-risk docs/tests edits -> source is `reviewer.low-risk-self-check` with `tests/**`, `docs/**`
+- Else -> source is `role-default` write paths from canonical role identity
 
 **Test**:
 ```bash
@@ -193,9 +209,15 @@ To use these hooks in a Claude Code project:
 
 3. Configure environment variables (for permission-checker):
    ```bash
-   export CLAUDE_AGENT_ROLE="your-agent-role"
+   export CLAUDE_HOOK_SECRET="$(openssl rand -base64 32)"
+   export CLAUDE_AGENT_TOKEN="<signed-jwt-with-canonical-claims>"
    export CLAUDE_PROJECT_DIR="$(pwd)"
    ```
+
+   Secret resolution order is deterministic:
+   `CLAUDE_HOOK_SECRET` -> `AGENT_JWT_SECRET` -> `PERMISSION_CHECKER_SECRET`.
+
+   `CLAUDE_AGENT_ROLE` / `CLAUDE_AGENT_NAME` remain one-release compatibility inputs for legacy/unit-test paths, but runtime authorization is token-first.
 
 4. Hooks will automatically run on `Edit` and `Write` tool calls.
 
@@ -252,9 +274,13 @@ Key principles:
 
 ### Permission checker denying legitimate access
 
-1. Verify `CLAUDE_AGENT_ROLE` environment variable
-2. Check role permissions in `permission-checker.js` PERMISSION_MATRIX
-3. Review access_rights in agent definition files
+1. Verify `CLAUDE_AGENT_TOKEN` exists and contains canonical claims (`role`, `scope_id`, `iat`, `exp`)
+2. Confirm shared secret resolution order (`CLAUDE_HOOK_SECRET` -> `AGENT_JWT_SECRET` -> `PERMISSION_CHECKER_SECRET`) matches your signer
+3. Check deterministic write source:
+   - token `allowed_paths`, or
+   - reviewer low-risk self-check (`tests/**`, `docs/**`), or
+   - canonical role default paths
+4. If using legacy role/profile names, treat them as one-release compatibility aliases only and migrate to canonical role names
 
 ### Design validator false positives
 

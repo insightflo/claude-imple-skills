@@ -1,17 +1,19 @@
 # Hierarchical Agent Communication Protocol
 
 ## 1. Overview
-The agent collaboration system utilizes a file-based communication bus to manage cross-domain change requests. This allows the Orchestrator layer (Project Manager and Chief Architect) and Domain Workers (BackendSpecialist, FrontendSpecialist, DBSpecialist, QASpecialist) to communicate asynchronously and maintain a verifiable audit trail of all architectural and implementation decisions.
+The agent collaboration system uses a file-based communication bus to manage cross-scope change requests. This lets canonical roles (Lead, Builder, Reviewer, and specialists such as Designer/DBA/Security Specialist) communicate asynchronously while preserving a verifiable audit trail for planning, execution, and final decisions.
 
 ## 2. Directory Structure
 All communication happens within the `.claude/collab/` directory structure:
 
 ```text
 .claude/collab/
-├── contracts/    # ChiefArchitect-only write (Wave 0 outputs), all agents read
+├── contracts/    # Lead-owned write (Wave 0 outputs), all roles read
 ├── requests/     # REQ-*.md files for cross-domain change requests (OPEN/PENDING)
-├── decisions/    # DEC-*.md files issued by ChiefArchitect (FINAL rulings)
+├── decisions/    # DEC-*.md files issued by Lead (FINAL rulings)
 ├── locks/        # JSON lock files for concurrency control (TTL: 10 min)
+├── control.ndjson      # Canonical operator-intent log (append-only)
+├── control-state.json  # Derived control query state (rebuildable, never edit directly)
 └── archive/      # Resolved, rejected, or closed REQ/DEC files (wave-end archival)
 ```
 
@@ -25,8 +27,8 @@ Requests must use the following structure containing YAML frontmatter and a Mark
 ---
 id: REQ-YYYYMMDD-NNN
 thread_id: thread-{domain}-{topic}
-from: BackendSpecialist
-to: FrontendSpecialist
+from: Builder
+to: Reviewer
 task_ref: T2.3
 status: OPEN
 max_negotiation: 2
@@ -48,28 +50,28 @@ timestamp: ISO8601
 OPEN → PENDING (receiver acknowledged, under analysis)
 PENDING → RESOLVED (accepted and implemented)
 PENDING → REJECTED (denied, justification in Response section)
-PENDING → ESCALATED (negotiation_count >= max_negotiation → ChiefArchitect intervenes)
-ESCALATED → RESOLVED (ChiefArchitect creates DEC file, ruling enforced)
+PENDING → ESCALATED (negotiation_count >= max_negotiation → Lead intervenes)
+ESCALATED → RESOLVED (Lead creates DEC file, ruling enforced)
 ```
 
 ## 5. REQ Lifecycle Rules
 
 - **Negotiation Limit**: `max_negotiation: 2` (default). If `negotiation_count` reaches this limit, status must transition to `ESCALATED`.
 - **Thread Management**: Use the same `thread_id` for related follow-ups. Prevents duplicate REQs for the same issue.
-- **Escalation Trigger**: When a REQ reaches `ESCALATED`, ChiefArchitect takes ownership and creates a corresponding DEC file. All agents must comply with the DEC ruling.
+- **Escalation Trigger**: When a REQ reaches `ESCALATED`, Lead takes ownership and creates a corresponding DEC file. All roles must comply with the DEC ruling.
 - **Context Limit**: Change Summary must be ≤500 characters. Include only what the receiving agent needs to decide.
 - **Wave Archive**: At wave completion, all RESOLVED/REJECTED REQs move to `.claude/collab/archive/wave-N/`.
 
 ## 6. DEC File Format
 
-Decisions issued by the ChiefArchitect:
+Decisions issued by Lead:
 
 ```markdown
 ---
 id: DEC-YYYYMMDD-NNN
 ref_req: REQ-YYYYMMDD-NNN
-from: ChiefArchitect
-to: [BackendSpecialist, FrontendSpecialist]
+from: Lead
+to: [Builder, Reviewer]
 status: FINAL
 timestamp: ISO8601
 ---
@@ -80,8 +82,8 @@ timestamp: ISO8601
 [Brief summary of the escalated issue and why negotiation failed]
 
 ## Required Actions
-- BackendSpecialist: [specific steps]
-- FrontendSpecialist: [specific steps]
+- Builder: [specific implementation steps]
+- Reviewer: [specific validation and release-readiness steps]
 ```
 
 **File naming**: `DEC-YYYYMMDD-NNN.md` in `.claude/collab/decisions/`
@@ -93,7 +95,7 @@ Before modifying any REQ/DEC file, agents create a JSON lock in `.claude/collab/
 ```json
 {
   "file": "REQ-20260305-001.md",
-  "locked_by": "FrontendSpecialist",
+  "locked_by": "Builder",
   "timestamp": "2026-03-05T10:30:00Z",
   "ttl_seconds": 600
 }
@@ -107,28 +109,28 @@ Before modifying any REQ/DEC file, agents create a JSON lock in `.claude/collab/
 
 ## 8. Domain Boundary Rules
 
-| Agent | Can Write To | Cannot Write To |
+| Role | Can Write To | Cannot Write To |
 |-------|-------------|-----------------|
-| BackendSpecialist | `src/domains/`, `src/api/`, `src/services/` | `src/components/`, `database/`, `contracts/` |
-| FrontendSpecialist | `src/components/`, `src/pages/`, `src/hooks/` | `src/api/`, `database/`, `contracts/` |
-| DBSpecialist | `src/db/`, `migrations/`, `prisma/` | `src/components/`, `src/api/` |
-| QASpecialist | `tests/`, `*.test.*`, `*.spec.*` | `src/` (non-test), `database/` |
-| ChiefArchitect | `contracts/`, `.claude/collab/contracts/`, `.claude/collab/decisions/` | `src/` |
-| Any Agent | `.claude/collab/requests/`, `.claude/collab/locks/` | — |
+| Builder (backend scope) | `src/domains/`, `src/api/`, `src/services/` | `src/components/`, `database/`, `contracts/` |
+| Builder (frontend scope) | `src/components/`, `src/pages/`, `src/hooks/` | `src/api/`, `database/`, `contracts/` |
+| DBA (specialist) | `src/db/`, `migrations/`, `prisma/` | `src/components/`, `src/api/` |
+| Reviewer (test scope) | `tests/`, `*.test.*`, `*.spec.*` | `src/` (non-test), `database/` |
+| Lead | `contracts/`, `.claude/collab/contracts/`, `.claude/collab/decisions/` | `src/` |
+| Any Role | `.claude/collab/requests/`, `.claude/collab/locks/` | — |
 
 Cross-domain writes are blocked by `project-team/hooks/domain-boundary-enforcer.js`.
 To request a cross-domain change, create a REQ file instead.
 
 ## 9. Workflow Example
 
-**Scenario**: BackendSpecialist adds a `role` field to JWT; FrontendSpecialist's AuthGuard needs updating.
+**Scenario**: A Builder working in auth scope adds a `role` field to JWT; a Builder working in UI scope needs an AuthGuard update.
 
-1. **Create REQ**: BackendSpecialist creates `REQ-20260305-001.md` (status: `OPEN`) describing the JWT change.
-2. **Acknowledge**: FrontendSpecialist creates lock file, updates status to `PENDING`, reviews the request.
-3. **Negotiate** (if conflict): FrontendSpecialist proposes alternative in Response section, increments `negotiation_count`.
-4. **Resolve**: BackendSpecialist accepts, FrontendSpecialist sets status to `RESOLVED` and implements AuthGuard update.
+1. **Create REQ**: Builder (auth scope) creates `REQ-20260305-001.md` (status: `OPEN`) describing the JWT change.
+2. **Acknowledge**: Builder (UI scope) creates lock file, updates status to `PENDING`, reviews the request.
+3. **Negotiate** (if conflict): Builder (UI scope) proposes an alternative in the Response section, increments `negotiation_count`.
+4. **Resolve**: Builder (auth scope) accepts, Builder (UI scope) sets status to `RESOLVED` and implements the AuthGuard update.
 5. **Escalate** (if no agreement after 2 rounds): status auto-set to `ESCALATED` by `conflict-resolver.js`.
-6. **Mediate**: ChiefArchitect reads both positions, creates `DEC-20260305-001.md` with final ruling.
+6. **Mediate**: Lead reads both positions, creates `DEC-20260305-001.md` with a final ruling.
 7. **Archive**: After wave completion, REQ and DEC move to `.claude/collab/archive/wave-N/`.
 
 ## 10. Kanban Board Status Mapping
@@ -167,10 +169,10 @@ The task board (`/task-board`) unifies two status systems into four visual colum
 ## 11. Wave Integration
 
 ```
-Wave 0: ChiefArchitect (solo)
+Wave 0: Lead (solo)
 └── Runs collab-init.js + creates contracts/
 
-Wave N: Domain Workers (parallel)
+Wave N: Builders and specialists (parallel)
 ├── Read contracts/ (read-only)
 ├── Create REQ files for cross-domain needs
 └── Respond to incoming REQs
@@ -178,7 +180,7 @@ Wave N: Domain Workers (parallel)
 Wave Barrier (after each wave):
 └── conflict-resolver.js scans requests/
     ├── Exit 0: all clear → next wave begins
-    └── Exit 2: ESCALATED REQs → ChiefArchitect mediates first
+    └── Exit 2: ESCALATED REQs → Lead mediates first
 ```
 
 See also: `docs/plan/hierarchical-agent-collab-plan.md`
@@ -206,3 +208,107 @@ Schema policy and stale markers:
 - Readers/projectors support schema `N` and `N-1`.
 - Unsupported events are handled with skip+warn behavior.
 - Stale derived artifact markers are tracked in `.claude/collab/derived-meta.json`.
+
+## 13. Whitebox Approval Gate Inventory and Migration Policy
+
+### Current Interactive Gate Inventory
+
+The current orchestrator family has multiple human-input gate paths. They are not all MVP whitebox-control targets.
+
+| Gate | Source | Current actions | MVP whitebox target | Modify policy |
+|------|--------|-----------------|---------------------|---------------|
+| Contract Gate | `skills/orchestrate-standalone/scripts/auto/auto-orchestrator.js` | `approve`, `reject`, `modify` | Yes | `modify` remains legacy interactive fallback in Phase 1; whitebox UI/CLI exposes `approve`/`reject` only |
+| Define Failure Gate | `skills/orchestrate-standalone/scripts/auto/auto-orchestrator.js` | `approve`, `reject`, `modify` | Yes, but only for the approval/rejection branch | `modify` remains legacy interactive fallback; manual JSON entry stays outside MVP whitebox control |
+| Decompose Gate | `skills/orchestrate-standalone/scripts/auto/auto-orchestrator.js` | `approve`, `reject`, `modify` | Yes | `modify` remains legacy interactive fallback in Phase 1 |
+| Final Gate | `skills/orchestrate-standalone/scripts/auto/auto-orchestrator.js` | `approve`, `reject`, `modify` via adjust loop | Yes | `modify` remains legacy interactive fallback by routing to existing adjust feedback path |
+| Sprint Review Gate | `skills/orchestrate-standalone/scripts/engine/sprint-review.js` | `approve`, `modify`, `stop` | No (Phase 1) | stays on the existing sprint-state machine until a later migration |
+
+### MVP Scope
+
+- Phase 1 whitebox control only standardizes `approve` and `reject` for approval-style gates.
+- `modify` is explicitly out of MVP whitebox control.
+- `modify` remains supported only through the existing interactive fallback paths in `auto-orchestrator.js` and sprint review flows.
+- Sprint review state transitions (`approve`, `modify`, `stop`, `resume`) remain part of the sprint engine contract, not the whitebox approval-control MVP.
+
+### Single Surface Contract
+
+- `/whitebox` is the only user-facing product boundary.
+- The terminal TUI is the `/whitebox` interactive renderer/operator shell.
+- The CLI control script is the internal mutation API plus the headless/scriptable surface.
+- `task-board` is a renderer within the whitebox product surface, not a separate product.
+
+### Canonical Control Command Rules
+
+- `.claude/collab/control.ndjson` is the canonical operator-intent log; it is append-only and existing lines are never edited or deleted.
+- `.claude/collab/control-state.json` is a derived query model; it is disposable and rebuildable from canonical command/event logs.
+- Node `whitebox-control.js` is the only command writer and the only mutation/audit owner for whitebox control actions.
+- The CLI control surface is the shared mutation path and headless/scriptable surface for whitebox control.
+- TUI mutations must delegate by spawning the CLI control command as a subprocess; TUI never writes command or derived files directly.
+- Writers use advisory `flock(LOCK_EX)` for append serialization.
+- Appliers consume commands using a persisted offset tracker or correlation-aware duplicate filtering.
+- Idempotency is enforced per gate/action intent using `idempotency_key` plus duplicate filtering keyed by gate/correlation context.
+
+### Canonical Control Artifact Ownership
+
+| Artifact | Role | Ownership rule |
+|----------|------|----------------|
+| `.claude/collab/events.ndjson` | canonical facts log | Append-only whitebox facts/events only; never overloaded with operator commands |
+| `.claude/collab/control.ndjson` | canonical operator-intent log | Append-only operator commands only; written only by Node `whitebox-control.js` |
+| `.claude/collab/control-state.json` | derived control query state | Projected/read-only surface for status, explain, CLI read verbs, and TUI rendering |
+| `.claude/collab/board-state.json` | derived task-board query state | Rebuildable renderer state; never a mutation target |
+
+### Canonical Control Command Schema
+
+Every line in `.claude/collab/control.ndjson` is one JSON object with these required keys:
+
+| Field | Meaning |
+|-------|---------|
+| `command_id` | unique command envelope ID |
+| `ts` | ISO8601 timestamp for command creation |
+| `type` | MVP control action type; Phase 1 allows only `approve` or `reject` |
+| `producer` | emitting surface, for example CLI or TUI subprocess delegate |
+| `target` | target descriptor for the approval gate being addressed |
+| `actor` | operator identity or execution actor issuing the command |
+| `reason` | optional human rationale attached to the command |
+| `correlation_id` | correlation link to the gate lifecycle |
+| `causation_id` | causation link to the triggering event or prior command |
+| `idempotency_key` | stable dedupe key for replay/duplicate suppression |
+
+The `target` object is reserved for gate targeting and must be explicit enough for deterministic routing. At minimum it carries the `gate_id`; later tasks may include additional stable identifiers but must not rename the envelope keys above.
+
+### Approval Gate Payload Schema
+
+Approval-required lifecycle events in `.claude/collab/events.ndjson` use the normal whitebox event envelope and reserve these gate payload fields inside `data`:
+
+| Field | Meaning |
+|-------|---------|
+| `gate_id` | stable approval gate identifier |
+| `task_id` | task blocked by the gate |
+| `run_id` | owning run or orchestrator execution identifier |
+| `choices` | explicit available actions; MVP values are `approve` and `reject` |
+| `default_behavior` | documented default gate policy when no operator action arrives |
+| `timeout_policy` | timeout behavior for the paused gate |
+
+These payload fields freeze the contract for later appliers/projectors. Phase 1 must not expand the whitebox control action family beyond `approve` and `reject`.
+
+### Lifecycle Oracle
+
+The approval lifecycle oracle is frozen for whitebox-controlled approval gates:
+
+1. `approval_required`
+2. `execution_paused`
+3. `approval_granted` or `approval_rejected`
+4. `execution_resumed` only after `approval_granted`
+
+Additional rules:
+
+- `execution_paused` is canonical for whitebox-controlled approval gates and must be present in protocol-aligned tests.
+- Rejection ends the gate without emitting `execution_resumed` for the same correlation.
+- Duplicate approval/rejection commands are idempotent and must not create duplicate terminal lifecycle events.
+
+### Migration Policy
+
+- `promptGate()` call sites in `auto-orchestrator.js` are the primary migration targets for file-based approval control.
+- The migration replaces inline `approve/reject` handling with canonical command consumption.
+- `modify` handling is preserved as a legacy interactive fallback in Phase 1 so the orchestrator can keep accepting guided revisions without inventing new whitebox semantics.
+- Sprint review is explicitly deferred from the approval-control MVP to avoid conflating sprint-state transitions with whitebox approval gates.

@@ -176,6 +176,26 @@ function normalizeAssessmentCache(cache = {}) {
   );
 }
 
+function normalizePendingGate(gate = null) {
+  if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
+    return null;
+  }
+
+  return {
+    gate_id: typeof gate.gate_id === 'string' ? gate.gate_id : '',
+    gate_name: typeof gate.gate_name === 'string' ? gate.gate_name : '',
+    stage: typeof gate.stage === 'string' ? gate.stage : '',
+    task_id: typeof gate.task_id === 'string' ? gate.task_id : null,
+    run_id: typeof gate.run_id === 'string' ? gate.run_id : '',
+    correlation_id: typeof gate.correlation_id === 'string' ? gate.correlation_id : '',
+    choices: Array.isArray(gate.choices) ? gate.choices.map(String) : [],
+    default_behavior: typeof gate.default_behavior === 'string' ? gate.default_behavior : 'wait_for_operator',
+    timeout_policy: typeof gate.timeout_policy === 'string' ? gate.timeout_policy : 'wait_for_operator',
+    created_at: typeof gate.created_at === 'string' ? gate.created_at : null,
+    preview: typeof gate.preview === 'string' ? gate.preview : '',
+  };
+}
+
 /**
  * Normalize the full auto-state payload before persistence.
  *
@@ -198,6 +218,7 @@ function normalizeAutoState(state, projectDir = process.cwd()) {
     last_assessment: state && state.last_assessment && typeof state.last_assessment === 'object'
       ? state.last_assessment
       : null,
+    pending_gate: normalizePendingGate(state && state.pending_gate ? state.pending_gate : null),
     tasks_md_hash: state && Object.prototype.hasOwnProperty.call(state, 'tasks_md_hash')
       ? state.tasks_md_hash
       : computeFileHash(tasksPath)
@@ -387,7 +408,8 @@ function writeBridge(autoState, projectDir = process.cwd()) {
     tasks: Array.isArray(previousBridge.tasks) ? previousBridge.tasks : [],
     current_layer: autoState && autoState.budget ? autoState.budget.current_iteration : 0,
     total_layers: autoState && autoState.budget ? autoState.budget.max_iterations : 0,
-    mode: 'auto'
+    mode: 'auto',
+    pending_gate: autoState && autoState.pending_gate ? autoState.pending_gate : null,
   };
 
   saveState(bridgeState, projectDir);

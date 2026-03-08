@@ -18,50 +18,21 @@
  */
 
 const path = require('path');
-const fs = require('fs');
+const AgentAuthService = require('../services/auth');
 const { emitHookDecision } = require('./lib/hook-decision-event');
+const {
+  resolveTokenSecret
+} = AgentAuthService;
+const {
+  resolveRoleIdentity,
+  resolveDeterministicWriteScope,
+  matchesAnyPattern: sharedMatchesAnyPattern,
+  checkDomainBoundary,
+  normalizeRole
+} = require('./lib/deterministic-policy');
 
 // ---------------------------------------------------------------------------
-// 1. Permission Matrix (from permission-checker.js)
-// ---------------------------------------------------------------------------
-
-const PERMISSION_MATRIX = {
-  'project-manager': {
-    write: ['management/**', 'docs/**'],
-    cannot: ['src/**', 'contracts/standards/**', 'database/**']
-  },
-  'chief-architect': {
-    write: ['contracts/standards/**', 'management/decisions/**', 'docs/architecture/**'],
-    cannot: ['src/**', 'design/**']
-  },
-  'chief-designer': {
-    write: ['contracts/standards/design-system.md', 'design/**'],
-    cannot: ['src/**', 'database/**']
-  },
-  'dba': {
-    write: ['contracts/standards/database-standards.md', 'database/**'],
-    cannot: ['src/**/services/**', 'design/**']
-  },
-  'qa-manager': {
-    write: ['qa/**', 'management/responses/from-qa/**'],
-    cannot: ['src/**', 'contracts/standards/**']
-  },
-  'security-specialist': {
-    write: ['security/**', 'docs/security/**', '.claude/security/**'],
-    cannot: ['src/**'] // Reports only, doesn't modify code
-  },
-  'backend-specialist': {
-    write: ['src/**/api/**', 'src/**/services/**', 'src/**/repositories/**'],
-    cannot: ['design/**', 'database/schema/**']
-  },
-  'frontend-specialist': {
-    write: ['src/**/components/**', 'src/**/pages/**', 'src/**/hooks/**', 'src/**/styles/**'],
-    cannot: ['database/**', 'src/**/api/**']
-  }
-};
-
-// ---------------------------------------------------------------------------
-// 2. Standards Rules (from standards-validator.js - simplified)
+// 1. Standards Rules (from standards-validator.js - simplified)
 // ---------------------------------------------------------------------------
 
 const FORBIDDEN_PATTERNS = [
@@ -112,7 +83,7 @@ const NAMING_RULES = {
 };
 
 // ---------------------------------------------------------------------------
-// 3. Path Matching Utilities
+// 2. Path Matching Utilities
 // ---------------------------------------------------------------------------
 
 function globToRegex(pattern) {
@@ -125,12 +96,7 @@ function globToRegex(pattern) {
 }
 
 function matchesAnyPattern(relativePath, patterns) {
-  if (!patterns || patterns.length === 0) return false;
-  for (const pattern of patterns) {
-    if (pattern.includes('!(')) continue;
-    if (globToRegex(pattern).test(relativePath)) return true;
-  }
-  return false;
+  return sharedMatchesAnyPattern(relativePath, patterns);
 }
 
 function toRelativePath(filePath) {
@@ -143,34 +109,39 @@ function toRelativePath(filePath) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Permission Check (PreToolUse)
+// 3. Permission Check (PreToolUse)
 // ---------------------------------------------------------------------------
 
 function checkPermission(role, relativePath) {
-  const permissions = PERMISSION_MATRIX[role];
-  if (!permissions) {
-    return { allowed: true }; // Unknown role = allow (fallback)
-  }
-
-  // Check cannot rules
-  if (permissions.cannot && matchesAnyPattern(relativePath, permissions.cannot)) {
+  const identity = resolveRoleIdentity(role);
+  if (!identity.recognized) {
     return {
       allowed: false,
-      reason: `Role "${role}" cannot write to "${relativePath}" (restricted area).`
+      reason: `Unknown role "${role}" has no deterministic write scope.`
     };
   }
 
-  // Check write rules
-  if (permissions.write && matchesAnyPattern(relativePath, permissions.write)) {
+  const boundary = checkDomainBoundary(relativePath, identity.domain);
+  if (boundary.violation) {
+    return {
+      allowed: false,
+      reason: `Role "${role}" cannot write across domain boundary to "${relativePath}".`
+    };
+  }
+
+  const scope = resolveDeterministicWriteScope({ identity, relativePath });
+  if (scope.writePaths.length > 0 && matchesAnyPattern(relativePath, scope.writePaths)) {
     return { allowed: true };
   }
 
-  // Default: allow if no explicit rules match
-  return { allowed: true };
+  return {
+    allowed: false,
+    reason: `Role "${role}" cannot write to "${relativePath}" (${scope.source}).`
+  };
 }
 
 // ---------------------------------------------------------------------------
-// 5. Standards Validation (PostToolUse)
+// 4. Standards Validation (PostToolUse)
 // ---------------------------------------------------------------------------
 
 function validateContent(content, filePath) {
@@ -250,7 +221,7 @@ function formatViolationReport(violations, filePath) {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Main Entry Point
+// 5. Main Entry Point
 // ---------------------------------------------------------------------------
 
 function readStdin() {
@@ -295,26 +266,72 @@ async function main() {
   }
 
   // Detect agent role
-  const agentRole = process.env.CLAUDE_AGENT_ROLE?.toLowerCase().replace(/\s+/g, '-') || '';
+  const agentRole = normalizeRole(process.env.CLAUDE_AGENT_ROLE);
+  const agentToken = toolInput.agent_token || process.env.CLAUDE_AGENT_TOKEN || '';
 
   // PreToolUse: Permission check
   if (hookEvent.startsWith('PreToolUse')) {
-    if (agentRole) {
-      const result = checkPermission(agentRole, relativePath);
-      if (!result.allowed) {
-        await emitHookDecision(input, {
-          hook: 'policy-gate',
-          decision: 'deny',
-          severity: 'error',
-          summary: 'Write denied by role policy.',
-          remediation: 'Request an authorized role or target an allowed path.',
-        });
-        process.stdout.write(JSON.stringify({
-          decision: 'deny',
-          reason: result.reason
-        }));
-        return;
+    let permissionResult = null;
+
+    if (agentToken) {
+      const auth = new AgentAuthService({ secretKey: resolveTokenSecret() });
+      const verified = auth.verifyToken(agentToken);
+
+      if (!verified.valid) {
+        permissionResult = {
+          allowed: false,
+          reason: 'Invalid agent authentication token for policy gate.'
+        };
+      } else {
+        const identity = resolveRoleIdentity(verified.role);
+        if (!identity.recognized) {
+          permissionResult = {
+            allowed: false,
+            reason: `Unknown authenticated role "${verified.role}" has no deterministic write scope.`
+          };
+        } else {
+          const boundary = checkDomainBoundary(relativePath, identity.domain || verified.domain);
+          if (boundary.violation) {
+            permissionResult = {
+              allowed: false,
+              reason: `Role "${verified.role}" cannot write across domain boundary to "${relativePath}".`
+            };
+          } else {
+            const scope = resolveDeterministicWriteScope({
+              identity,
+              allowedPaths: verified.allowedPaths,
+              reviewOnly: verified.reviewOnly,
+              selfCheck: toolInput.self_check === true,
+              changedFiles: toolInput.changed_files || toolInput.changedFiles,
+              relativePath
+            });
+
+            permissionResult = scope.writePaths.length > 0 && matchesAnyPattern(relativePath, scope.writePaths)
+              ? { allowed: true }
+              : {
+                allowed: false,
+                reason: `Write to "${relativePath}" is outside the deterministic write scope for role "${verified.role}" (${scope.source}).`
+              };
+          }
+        }
       }
+    } else if (agentRole) {
+      permissionResult = checkPermission(agentRole, relativePath);
+    }
+
+    if (permissionResult && !permissionResult.allowed) {
+      await emitHookDecision(input, {
+        hook: 'policy-gate',
+        decision: 'deny',
+        severity: 'error',
+        summary: 'Write denied by role policy.',
+        remediation: 'Request an authorized role or target an allowed path.',
+      });
+      process.stdout.write(JSON.stringify({
+        decision: 'deny',
+        reason: permissionResult.reason
+      }));
+      return;
     }
     await emitHookDecision(input, {
       hook: 'policy-gate',
@@ -381,7 +398,6 @@ main().catch(() => {});
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    PERMISSION_MATRIX,
     FORBIDDEN_PATTERNS,
     checkPermission,
     validateContent,

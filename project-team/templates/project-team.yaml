@@ -9,7 +9,7 @@
 # 사용 방법:
 #   1. 이 파일을 프로젝트 루트의 .claude/ 디렉토리에 복사
 #   2. 프로젝트 정보와 도메인을 입력
-#   3. 각 도메인별로 Part Leader 정보를 추가
+#   3. 각 도메인별 팀 정보를 추가
 #   4. Hook 설정을 조정하고 위험 영역 정의
 #
 # 예시:
@@ -33,9 +33,9 @@ modes:
   lite:
     description: "스타트업/MVP용 최소 구성"
     agents:
-      - project-manager
-      - chief-architect
-      - security-specialist
+      - lead
+      - builder
+      - reviewer
     hooks:
       - policy-gate
       - security-scan
@@ -49,20 +49,19 @@ modes:
   standard:
     description: "일반 프로젝트 권장 구성"
     agents:
-      - project-manager
-      - chief-architect
-      - chief-designer
-      - qa-manager
+      - lead
+      - builder
+      - reviewer
       - security-specialist
-      - backend-specialist
-      - frontend-specialist
+      - dba
+      - designer
     hooks:
       - policy-gate
       - quality-gate
       - contract-gate
       - security-scan
     domains:
-      team_size: 2  # Part Leader + Domain Specialist
+      team_size: 2
     features:
       veto_authority: true
       cross_domain_notification: true
@@ -70,10 +69,16 @@ modes:
 
   full:
     description: "엔터프라이즈/규제 산업용 전체 구성"
-    agents: all
+    agents:
+      - lead
+      - builder
+      - reviewer
+      - security-specialist
+      - dba
+      - designer
     hooks: all
     domains:
-      team_size: 3  # Part Leader + Domain Designer + Domain Developer
+      team_size: 3
     features:
       veto_authority: true
       cross_domain_notification: true
@@ -85,6 +90,9 @@ modes:
 # 1. 프로젝트 기본 정보
 # ============================================================================
 version: "2.0"
+
+compatibility:
+  legacy_aliases: true
 
 project:
   # 프로젝트 이름
@@ -114,8 +122,7 @@ project:
 # 2. 프로젝트 레벨 에이전트 (전체 관장)
 # ============================================================================
 agents:
-  # 프로젝트 매니저: 전체 조율, 도메인 간 조정
-  project-manager:
+  lead:
     enabled: true
     description: "프로젝트 전체 조율, 도메인 간 조정, 일정 및 리소스 관리"
     model: "opus"
@@ -131,25 +138,39 @@ agents:
       - 일정 및 리소스 관리
       - 이해관계자 커뮤니케이션
 
-  # Chief Architect: 전체 기술 표준, 아키텍처 VETO
-  chief-architect:
+  builder:
     enabled: true
-    description: "전체 아키텍처, 기술 표준, 아키텍처 VETO"
+    description: "프로젝트 전반 구현, 전달, 도메인별 실행 지원"
+    model: "sonnet"
+    permissions:
+      - read_all_domains
+      - implement_features
+      - update_project_code
+      - coordinate_delivery
+    responsibilities:
+      - 구현 작업 수행 및 전달
+      - 도메인별 변경 실행 지원
+      - 구현 리스크 및 블로커 공유
+      - 계약/스펙 변경 반영
+      - 테스트 가능 상태로 산출물 정리
+
+  reviewer:
+    enabled: true
+    description: "통합 테스트, 품질 게이트, 릴리스 검증"
     model: "opus"
     permissions:
       - read_all_domains
-      - write_standards
-      - veto_architecture
-      - approve_tech_decisions
+      - approve_releases
+      - define_quality_standards
+      - veto_releases
     responsibilities:
-      - 전체 시스템 아키텍처 설계
-      - 기술 표준 및 Best Practices 정의
-      - 도메인 간 아키텍처 호환성 검증
-      - 주요 기술 의사결정 승인/거부
-      - 마이그레이션 전략 수립
+      - 통합 테스트 계획 수립
+      - 품질 게이트 정의 및 실행
+      - 릴리스 조건 검증
+      - 버그 심각도 판정 및 우선순위 지정
+      - 성능 및 보안 기준 설정
 
-  # Chief Designer: 디자인 시스템, 일관성 감시
-  chief-designer:
+  designer:
     enabled: true
     description: "디자인 시스템, 디자인 가이드, 일관성 감시"
     model: "opus"
@@ -163,23 +184,6 @@ agents:
       - 도메인 간 디자인 일관성 감시
       - 디자인 검리 및 승인
       - 접근성(Accessibility) 표준 관리
-
-  # QA Manager: 통합 테스트, 품질 게이트, 릴리스 승인
-  qa-manager:
-    enabled: true
-    description: "통합 테스트, 품질 게이트, 릴리스 승인"
-    model: "opus"
-    permissions:
-      - read_all_domains
-      - approve_releases
-      - define_quality_standards
-      - veto_releases
-    responsibilities:
-      - 통합 테스트 계획 수립
-      - 품질 게이트 정의 및 실행
-      - 릴리스 조건 검증
-      - 버그 심각도 판정 및 우선순위 지정
-      - 성능 및 보안 기준 설정
 
   # DBA: 전체 DB 스키마, 데이터 표준
   dba:
@@ -224,43 +228,6 @@ shared_specialists:
       - 권한 경계 검증
       - 보안 리포트 생성
 
-  # Backend Specialist: API, 트랜잭션, 성능
-  backend-specialist:
-    enabled: true
-    description: "API 설계, 트랜잭션 패턴, 에러 핸들링, 성능 최적화"
-    model: "sonnet"
-    cli_command: "codex"
-    cli_fallback: true
-    standards_ref: "templates/standards/backend-standards.md"
-    permissions:
-      - read_all_domains
-      - implement_backend
-    responsibilities:
-      - API 설계/구현 표준
-      - 트랜잭션/캐시 패턴
-      - 에러 핸들링 표준
-      - 성능 최적화
-      - 데이터베이스 접근 패턴
-
-  # Frontend Specialist: 상태관리, 성능, 접근성
-  frontend-specialist:
-    enabled: true
-    description: "상태 관리, 렌더링 성능, 접근성 검증, 디자인 시스템 구현"
-    model: "sonnet"
-    cli_command: "gemini"
-    cli_fallback: true
-    mcp: ["gemini"]  # Gemini MCP로 디자인 코딩 위임
-    standards_ref: "templates/standards/frontend-standards.md"
-    permissions:
-      - read_all_domains
-      - implement_frontend
-    responsibilities:
-      - 상태 관리 패턴
-      - 렌더링 성능 최적화
-      - 접근성 (a11y) 검증
-      - 디자인 시스템 구현
-      - 컴포넌트 아키텍처
-
   # Test Specialist: TDD, E2E, 커버리지 (Phase 5)
   test-specialist:
     enabled: false  # Phase 5에서 활성화
@@ -297,34 +264,36 @@ shared_specialists:
 # 3. 도메인 정의 (모드에 따라 팀 규모 변경)
 # ============================================================================
 # - lite 모드: Domain Specialist 1명 (Designer+Developer 통합)
-# - standard 모드: Part Leader + Domain Specialist 2명
-# - full 모드: Part Leader + Domain Designer + Domain Developer 3명
+# - standard 모드: core + specialist 2명
+# - full 모드: core + specialist 3명
 domains:
   # 도메인 예시: user, product, order, payment, inventory, etc.
   #
   # 각 도메인은 다음 구성원을 가집니다:
-  # - Part Leader (PL): 도메인 리더, 스펙 정의, 타 도메인 협의
-  # - Domain Designer: 도메인 설계, 데이터 모델, API 설계
-  # - Domain Developer: 개발/테스트 구현
+  # - lead: 도메인 리더, 스펙 정의, 타 도메인 협의
+  # - designer: 도메인 설계, 데이터 모델, API 설계
+  # - builder: 개발/테스트 구현
 
   - name: "{{ DOMAIN_1_NAME }}"
     display_name: "{{ DOMAIN_1_DISPLAY_NAME }}"
     description: "{{ DOMAIN_1_DESCRIPTION }}"
 
-    # 도메인 책임자 (Part Leader)
+    # 도메인 책임자
     lead: "{{ DOMAIN_1_PL_NAME }}"
 
     # 도메인 멤버
     team:
-      - role: "part-leader"
+      - role: "lead"
         name: "{{ DOMAIN_1_PL_NAME }}"
         description: "도메인 리더, 스펙 정의, 타 도메인 협의"
 
-      - role: "domain-designer"
+      - role: "designer"
+        scope_profile: "design"
         name: "{{ DOMAIN_1_DESIGNER_NAME }}"
         description: "도메인 설계, 데이터 모델, API 설계"
 
-      - role: "domain-developer"
+      - role: "builder"
+        scope_profile: "fullstack"
         name: "{{ DOMAIN_1_DEVELOPER_NAME }}"
         description: "개발/테스트 구현"
 
@@ -365,18 +334,18 @@ hooks:
       # 프로젝트 레벨 파일은 해당 에이전트만 수정 가능
       protected_paths:
         - path: ".claude/project-team.yaml"
-          write_permission: ["project-manager"]
+          write_permission: ["lead"]
         - path: ".claude/standards/"
-          write_permission: ["chief-architect"]
+          write_permission: ["lead"]
         - path: "design-system/"
-          write_permission: ["chief-designer"]
+          write_permission: ["designer"]
 
-      # 도메인 폴더는 해당 Part Leader만 수정 가능 (API 변경)
+      # 도메인 폴더는 해당 lead 승인 하에 수정 가능 (API 변경)
       domain_paths:
         - pattern: "src/domains/{domain}/"
-          write_permission: ["domain-developer"]
+          write_permission: ["builder"]
         - pattern: "contracts/interfaces/{domain}-api.yaml"
-          write_permission: ["domain-designer", "part-leader"]
+          write_permission: ["designer", "lead"]
 
   # 표준 검증: 코딩 표준, 아키텍처 표준
   standards-validator:
@@ -481,7 +450,7 @@ risk_areas:
   - pattern: "**/payment/**"
     level: CRITICAL
     description: "결제 시스템 - 금융 데이터 민감도 높음"
-    required_approvals: ["chief-architect", "security-specialist"]
+    required_approvals: ["lead", "security-specialist"]
     required_tests: ["unit", "integration", "e2e"]
     security_checks: ["encryption", "pci-dss"]
 
@@ -489,7 +458,7 @@ risk_areas:
   - pattern: "**/auth/**"
     level: CRITICAL
     description: "인증/권한 시스템 - 보안 민감도 높음"
-    required_approvals: ["chief-architect", "security-specialist"]
+    required_approvals: ["lead", "security-specialist"]
     required_tests: ["unit", "integration", "security"]
     security_checks: ["oauth", "jwt", "xss", "csrf"]
 
@@ -504,7 +473,7 @@ risk_areas:
   - pattern: "contracts/interfaces/**"
     level: HIGH
     description: "도메인 간 API 계약 - Breaking Changes 위험"
-    required_approvals: ["chief-architect"]
+    required_approvals: ["lead"]
     required_notifications: "all_consumers"
 
   # 추가 위험 영역들...
@@ -572,11 +541,11 @@ collaboration:
     - step: 1
       description: "요청서 제출 (requests/to-{domain}/ 디렉토리)"
     - step: 2
-      description: "Part Leader 검토"
+      description: "Lead 검토"
     - step: 3
       description: "영향도 분석 (interface-validator)"
     - step: 4
-      description: "필요시 Chief Architect 승인"
+      description: "필요시 lead 승인"
     - step: 5
       description: "구현 및 테스트"
     - step: 6
@@ -586,27 +555,27 @@ collaboration:
   meetings:
     - type: "Architecture Sync"
       frequency: "weekly"
-      attendees: ["chief-architect", "all-part-leaders"]
+      attendees: ["lead", "all-leads"]
       duration: "1 hour"
 
     - type: "Design Sync"
       frequency: "bi-weekly"
-      attendees: ["chief-designer", "all-domain-designers"]
+      attendees: ["designer", "all-designers"]
       duration: "1 hour"
 
     - type: "QA/Release Planning"
       frequency: "weekly"
-      attendees: ["qa-manager", "all-part-leaders"]
+      attendees: ["reviewer", "all-leads"]
       duration: "1 hour"
 
   # 문제 해결 에스컬레이션 프로세스
   escalation:
     - level: 1
-      description: "도메인 간 협의 (Part Leaders)"
+      description: "도메인 간 협의 (Leads)"
     - level: 2
-      description: "Project Manager 중재"
+      description: "lead 중재"
     - level: 3
-      description: "Chief Architect 최종 결정"
+      description: "lead 최종 결정"
 
 # ============================================================================
 # 8. 모니터링 및 메트릭
@@ -655,13 +624,13 @@ environments:
     description: "스테이징 환경"
     auto_deploy: false
     requires_approval: true
-    approver: "qa-manager"
+    approver: "reviewer"
 
   production:
     description: "운영 환경"
     auto_deploy: false
     requires_approval: true
-    approver: "project-manager"
+    approver: "lead"
     qa_verification: true
 
 # ============================================================================

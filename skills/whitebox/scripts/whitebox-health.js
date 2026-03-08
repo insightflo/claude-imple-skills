@@ -6,6 +6,7 @@ const path = require('path');
 
 const { buildReport } = require('../../../project-team/scripts/subscription-policy-check');
 const { validateEvents } = require('../../../project-team/scripts/lib/whitebox-events');
+const { validateControlCommands } = require('../../../project-team/scripts/lib/whitebox-control');
 
 function parseArgs(argv = process.argv.slice(2)) {
   const options = {
@@ -30,9 +31,13 @@ function artifactStatus(filePath) {
 
 function buildHealth(projectDir) {
   const currentDir = process.cwd();
-  process.chdir(projectDir);
-  const policy = buildReport();
-  process.chdir(currentDir);
+  let policy;
+  try {
+    process.chdir(projectDir);
+    policy = buildReport();
+  } finally {
+    process.chdir(currentDir);
+  }
 
   const artifacts = {
     tasks: artifactStatus(path.join(projectDir, 'TASKS.md')),
@@ -41,20 +46,24 @@ function buildHealth(projectDir) {
     board_state: artifactStatus(path.join(projectDir, '.claude', 'collab', 'board-state.json')),
     whitebox_summary: artifactStatus(path.join(projectDir, '.claude', 'collab', 'whitebox-summary.json')),
     events: artifactStatus(path.join(projectDir, '.claude', 'collab', 'events.ndjson')),
+    control_log: artifactStatus(path.join(projectDir, '.claude', 'collab', 'control.ndjson')),
+    control_state: artifactStatus(path.join(projectDir, '.claude', 'collab', 'control-state.json')),
   };
 
   const eventsFile = '.claude/collab/events.ndjson';
   const eventsIntegrity = validateEvents({ projectDir, file: eventsFile });
+  const controlIntegrity = validateControlCommands({ projectDir });
   const artifactsOk = Object.values(artifacts).every((entry) => entry.exists || entry.path.endsWith('/orchestrate/orchestrate-state.json'));
   const executorsOk = Object.values(policy.executors).every((state) => state === 'ok' || state === 'host_not_attached');
   const forbiddenOk = !policy.forbidden_integration.detected;
 
   return {
-    ok: artifactsOk && executorsOk && forbiddenOk && eventsIntegrity.ok,
+    ok: artifactsOk && executorsOk && forbiddenOk && eventsIntegrity.ok && controlIntegrity.ok,
     executors: policy.executors,
     forbidden_integration: policy.forbidden_integration,
     artifacts,
     events_integrity: eventsIntegrity,
+    control_integrity: controlIntegrity,
   };
 }
 
@@ -64,6 +73,7 @@ function printHuman(report) {
   process.stdout.write(`codex: ${report.executors.codex}\n`);
   process.stdout.write(`gemini: ${report.executors.gemini}\n`);
   process.stdout.write(`events: ${report.events_integrity.ok ? 'ok' : 'invalid'}\n`);
+  process.stdout.write(`control: ${report.control_integrity.ok ? 'ok' : 'invalid'}\n`);
 }
 
 function main() {

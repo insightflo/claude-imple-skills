@@ -6,7 +6,7 @@ This file provides guidance to AI agents (Warp, Claude, Cursor, etc.) when worki
 
 **claude-imple-skills** — A standalone-first implementation skill pack for Claude Code.
 
-A collection of **17 skills** and **agent team system** that help you build software with AI. No external dependencies required.
+A collection of **17 skills** and a **canonical project-team topology** that help you build software with AI. No external dependencies required.
 
 ### Core Philosophy
 - **Layer-based incremental implementation**: Build projects in three stages - Skeleton (structure), Muscles (functionality), Skin (polish)
@@ -61,6 +61,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 cd project-team && ./install.sh --global
 ```
 
+Project Team installs by mode:
+- **lite**: Lead, Builder, Reviewer + baseline hooks
+- **standard**: lite + Designer, DBA, Security Specialist + extended hooks
+- **full**: standard + compatibility profile surfaces and widest hook set
+
+Legacy role names (for example `ProjectManager`, `ChiefArchitect`, `QAManager`, `FrontendSpecialist`, `BackendSpecialist`) are supported as **one-release compatibility aliases only**, not as the primary topology.
+
 ### What Installation Does
 - Creates symbolic links from `skills/` to `~/.claude/skills/`
 - Makes all 17 skills available to Claude Desktop
@@ -91,9 +98,9 @@ claude-imple-skills/
 │   ├── changelog/               # Change history analysis
 │   ├── architecture/            # Architecture visualization
 │   └── coverage/                # Test coverage analysis
-├── project-team/                # Enterprise agent coordination system
-│   ├── agents/                  # 9 specialized AI agents
-│   ├── hooks/                   # 16 automated hooks
+├── project-team/                # Mode-based canonical coordination system
+│   ├── agents/                  # Canonical roles: Lead/Builder/Reviewer (+ Designer/DBA/Security Specialist)
+│   ├── hooks/                   # Mode-scaled validation hooks (lite/standard/full)
 │   └── templates/               # Configuration templates
 ├── scripts/                     # Installation scripts
 ├── README.md                    # User documentation

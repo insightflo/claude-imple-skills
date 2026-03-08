@@ -20,7 +20,7 @@ cd claude-imple-skills
 TUI 모드로 다음을 선택할 수 있습니다:
 - 설치 위치 (전역/프로젝트)
 - 스킬 카테고리
-- Project Team (에이전트 + 훅)
+- Project Team 토폴로지 (Lite/Standard/Full)
 - Multi-AI 라우팅 설정
 
 ### 2. Non-Interactive
@@ -58,19 +58,21 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main
 
 ## Project Team
 
-Project Team은 10명의 전문 에이전트와 15개의 자동 검증 훅을 포함합니다.
+Project Team은 canonical registry를 기준으로 설치됩니다.
 
-### 에이전트
-- FrontendSpecialist (Gemini CLI)
-- BackendSpecialist (Codex CLI)
-- TestSpecialist, SecuritySpecialist, DevOpsSpecialist
-- APIDesigner, DBA, QAManager
-- ChiefArchitect, ProjectManager
+### Canonical Roles
+- **Lite baseline**: Lead, Builder, Reviewer
+- **Standard add-ons**: Designer, DBA, Security Specialist
+- canonical 역할 정의는 `project-team/agents/Lead.md`, `project-team/agents/Builder.md`, `project-team/agents/Reviewer.md`를 기준으로 동작
 
-### 훅 (Hook Modes)
-- **lite**: 에이전트만 (훅 없음)
-- **standard**: 권한 체크 훅
-- **full**: 모든 검증 훅
+### Hook Modes
+- **lite**: canonical baseline (`Lead/Builder/Reviewer`) + 기본 훅 세트
+- **standard**: lite + specialists (`Designer/DBA/Security Specialist`) + 확장 검증 훅
+- **full**: standard + compatibility profile surfaces + 가장 넓은 훅 세트
+
+### Compatibility Aliases (One Release)
+- `ProjectManager`, `ChiefArchitect`, `FrontendSpecialist`, `BackendSpecialist` 등 legacy 이름은 **one-release compatibility alias/stub**로만 유지됩니다.
+- alias는 연속성 보조용이며 primary 설치 모델은 canonical role topology입니다.
 
 ---
 
@@ -122,11 +124,19 @@ JSON 결과에서 executor별 상태(`missing_cli`, `missing_auth`, `host_not_at
 node skills/whitebox/scripts/whitebox-status.js --project-dir=. --json
 node skills/whitebox/scripts/whitebox-explain.js --task-id=T0.1 --project-dir=. --json
 node skills/whitebox/scripts/whitebox-health.js --project-dir=. --json
+
+# pending approval 조회 및 제어
+node skills/whitebox/scripts/whitebox-control.js list --project-dir=. --json
+node skills/whitebox/scripts/whitebox-control.js show --project-dir=. --gate-id=<gate-id> --json
+node skills/whitebox/scripts/whitebox-control.js approve --project-dir=. --gate-id=<gate-id> --json
+node skills/whitebox/scripts/whitebox-control.js reject --project-dir=. --gate-id=<gate-id> --json
 ```
 
 화이트박스 아티팩트는 모두 `.claude/collab/` 아래에 생성됩니다:
 - `events.ndjson` - canonical append-only log
+- `control.ndjson` - canonical operator-intent log
 - `board-state.json` - 파생 board view
+- `control-state.json` - 파생 control query state
 - `whitebox-summary.json` - 빠른 status/health summary
 - `derived-meta.json` - stale derived artifact markers
 
@@ -152,11 +162,19 @@ node skills/whitebox/scripts/whitebox-health.js --project-dir=. --json
 │   ├── orchestrate-standalone/
 │   └── ...
 ├── agents/                   # Project Team 에이전트
-│   ├── FrontendSpecialist.md
-│   ├── BackendSpecialist.md
+│   ├── Lead.md
+│   ├── Builder.md
+│   ├── Reviewer.md
+│   ├── Designer.md
+│   ├── DBA.md
+│   ├── SecuritySpecialist.md
+│   ├── ProjectManager.md      # one-release compatibility alias
+│   ├── ChiefArchitect.md      # one-release compatibility alias
 │   └── ...
 ├── hooks/                    # 자동 검증 훅
 │   ├── permission-checker.js
+│   ├── policy-gate.js
+│   ├── security-scan.js
 │   └── ...
 ├── templates/                # 템플릿
 │   ├── project-team.yaml
@@ -198,12 +216,17 @@ rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/hooks ~/.claude/templates
 # 1. Claude Code 실행
 claude
 
-# 2. 워크플로우 가이드
-> /workflow
-
-# 3. 오케스트레이션 시작
+# 2. 구현 오케스트레이션 시작
 > /orchestrate-standalone
 
-# 4. 멀티 AI 리뷰
+# 3. 화이트박스 상태/선택지 확인
+> /whitebox status
+> /whitebox explain
+
+# 4. pending approval 조회 및 승인/거절
+> /whitebox approvals list
+> /whitebox approvals approve --gate-id=<gate-id>
+
+# 5. 멀티 AI 리뷰
 > /multi-ai-review
 ```
