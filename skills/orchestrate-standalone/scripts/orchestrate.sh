@@ -138,6 +138,18 @@ rebuild_board_state() {
     "$NODE_CMD" "$BOARD_BUILDER_SCRIPT" --project-dir="$PROJECT_DIR" >/dev/null 2>&1 || true
 }
 
+build_wave_plan() {
+    if [ "$MODE" != "wave" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$TASKS_FILE" ]; then
+        return 0
+    fi
+
+    "$NODE_CMD" "$SCRIPT_DIR/engine/scheduler.js" "$TASKS_FILE" wave 30 >/dev/null 2>&1 || true
+}
+
 show_whitebox_board() {
     local phase="${1:-status}"
     local auto_open_tui="${WHITEBOX_AUTO_OPEN_TUI:-1}"
@@ -263,6 +275,7 @@ TASKS_FILE="$PROJECT_DIR/TASKS.md"
 ensure_node_runtime
 ensure_collab_bus
 rebuild_board_state
+build_wave_plan
 show_whitebox_board "startup"
 
 if [ ! -f "$TASKS_FILE" ]; then
@@ -453,18 +466,33 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
         fi
     done < <(echo "$LAYER_TASKS" | "$NODE_CMD" -e "JSON.parse(require('fs').readFileSync(0,'utf8')).forEach(t=>console.log(JSON.stringify(t)))")
 
-    # Execute tasks in this layer (parallel)
     log_info "Executing $TASK_COUNT tasks with $WORKER_COUNT workers..."
-    # TODO: Implement parallel execution using worker.js
-    # For now, sequential execution as placeholder
     while IFS= read -r taskJson; do
         taskId=$("$NODE_CMD" -pe "JSON.parse(process.argv[1]).id" "$taskJson")
         log_info "  → $taskId"
-        "$NODE_CMD" "$SCRIPT_DIR/engine/worker.js" "$taskJson" "$PROJECT_DIR" &>/dev/null &
     done < <(echo "$LAYER_TASKS" | "$NODE_CMD" -e "JSON.parse(require('fs').readFileSync(0,'utf8')).forEach(t=>console.log(JSON.stringify(t)))")
 
-    # Wait for all tasks in this layer
-    wait
+    LAYER_RESULTS=$(LAYER_TASKS_JSON="$LAYER_TASKS" WORKER_COUNT="$WORKER_COUNT" PROJECT_DIR="$PROJECT_DIR" "$NODE_CMD" - <<NODE
+const worker = require('${SCRIPT_DIR}/engine/worker.js');
+
+(async () => {
+  const layer = JSON.parse(process.env.LAYER_TASKS_JSON || '[]');
+  const workerCount = parseInt(process.env.WORKER_COUNT || '4', 10) || 4;
+  const projectDir = process.env.PROJECT_DIR || process.cwd();
+  process.chdir(projectDir);
+  const results = await worker.executeLayer(layer, workerCount);
+  process.stdout.write(JSON.stringify(results));
+})().catch((error) => {
+  process.stderr.write(String(error && error.stack ? error.stack : error));
+  process.exit(1);
+});
+NODE
+)
+
+    LAYER_FAILED=$(printf '%s' "$LAYER_RESULTS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).filter((item) => item && item.status === 'failed').length")
+    if [ "$LAYER_FAILED" -gt 0 ]; then
+        log_warn "Layer $LAYER_NUM recorded $LAYER_FAILED failed task(s)"
+    fi
 
     # Post-task gate
     log_info "Running post-task gate..."
