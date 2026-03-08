@@ -491,7 +491,9 @@ NODE
 
     LAYER_FAILED=$(printf '%s' "$LAYER_RESULTS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).filter((item) => item && item.status === 'failed').length")
     if [ "$LAYER_FAILED" -gt 0 ]; then
-        log_warn "Layer $LAYER_NUM recorded $LAYER_FAILED failed task(s)"
+        FAILED_TASK_IDS=$(printf '%s' "$LAYER_RESULTS" | "$NODE_CMD" -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).filter((item) => item && item.status === 'failed').map((item) => item.id).join(', ')")
+        log_error "Layer $LAYER_NUM recorded $LAYER_FAILED failed task(s): $FAILED_TASK_IDS"
+        exit_with_board 1 "task execution"
     fi
 
     # Post-task gate

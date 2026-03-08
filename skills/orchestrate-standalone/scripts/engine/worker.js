@@ -297,7 +297,8 @@ async function executeTask(task, options = {}) {
   const {
     claudePath = 'claude',
     projectDir = process.cwd(),
-    timeout = 300000 // 5 minutes default
+    timeout = 300000, // 5 minutes default
+    taskControl = null
   } = options;
 
   const statePath = path.join(projectDir, STATE_FILE);
@@ -307,6 +308,18 @@ async function executeTask(task, options = {}) {
     const startTime = Date.now();
     let timeoutHandle = null;
     let finalized = false;
+    const layerAbortMessage = `Task ${task.id} cancelled because another task in the same layer failed`;
+
+    if (taskControl && typeof taskControl === 'object') {
+      taskControl.cancelRequested = false;
+      taskControl.abortExecution = null;
+      taskControl.cancel = () => {
+        taskControl.cancelRequested = true;
+        if (typeof taskControl.abortExecution === 'function') {
+          taskControl.abortExecution();
+        }
+      };
+    }
 
     // Prepare prompt
     const prompt = `
@@ -323,6 +336,24 @@ Please complete this task and report back when done.
 
     // Resolve which CLI to use based on routing rules
     const runId = task.run_id || createRunId('multi-ai-run', task.id);
+
+    async function maybeFinalizeLayerAbort() {
+      if (!(taskControl && taskControl.cancelRequested)) return false;
+
+      clearTaskDecisions(statePath, task.id);
+      await finalizeExecution({
+        status: 'failed',
+        outcome: 'error',
+        exitCode: null,
+        stateData: {
+          error: 'Cancelled because another task in the same layer failed',
+          code: 'LAYER_ABORTED',
+        },
+        error: new Error(layerAbortMessage),
+      });
+      return true;
+    }
+
     const { command, args, model, requestedExecutor, routeSource, fallbackReason } = resolveCliCommand(task, projectDir, claudePath);
     process.stderr.write(`[worker] Task ${task.id} → ${command} (model: ${model})\n`);
 
@@ -335,6 +366,8 @@ Please complete this task and report back when done.
       command,
       ...withExecutorMetadata(model),
     }, projectDir, task.id, 'route_selected');
+
+    if (await maybeFinalizeLayerAbort()) return;
 
     if (fallbackReason) {
       await emitCanonicalEvent('multi_ai_run.route.fallback', {
@@ -351,6 +384,8 @@ Please complete this task and report back when done.
 
     }
 
+    if (await maybeFinalizeLayerAbort()) return;
+
     await emitCanonicalEvent('orchestrate.execution.start', {
       run_id: runId,
       task_id: task.id,
@@ -362,6 +397,8 @@ Please complete this task and report back when done.
       ...withExecutorMetadata(model),
     }, projectDir, task.id, 'execution_start');
 
+    if (await maybeFinalizeLayerAbort()) return;
+
     // Update state to "in_progress"
     try {
       await updateTaskState(statePath, task.id, 'in_progress', { worker: 'worker-' + process.pid % 4 });
@@ -369,6 +406,8 @@ Please complete this task and report back when done.
       reject(error);
       return;
     }
+
+    if (await maybeFinalizeLayerAbort()) return;
 
     // Spawn the selected CLI
     const cli = spawn(command, args, {
@@ -382,6 +421,13 @@ Please complete this task and report back when done.
       }
     });
 
+    if (taskControl && typeof taskControl === 'object') {
+      taskControl.abortExecution = () => {
+        void maybeFinalizeLayerAbort();
+        cli.kill('SIGTERM');
+      };
+    }
+
     let output = '';
     let errorOutput = '';
 
@@ -391,6 +437,9 @@ Please complete this task and report back when done.
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
         timeoutHandle = null;
+      }
+      if (taskControl && typeof taskControl === 'object') {
+        taskControl.abortExecution = null;
       }
 
       const duration = Number.isFinite(result.durationMs) ? result.durationMs : (Date.now() - startTime);
@@ -508,29 +557,48 @@ Please complete this task and report back when done.
 async function executeLayer(layer, workerCount = 2) {
   const results = [];
   const executing = [];
+  let stopScheduling = false;
+
+  function cancelSiblingTasks(excludeTaskId) {
+    for (const entry of executing) {
+      if (entry.task.id === excludeTaskId) continue;
+      if (entry.control && typeof entry.control.cancel === 'function') {
+        entry.control.cancel();
+      }
+    }
+  }
 
   for (const task of layer) {
-    const p = executeTask(task)
+    if (stopScheduling) break;
+
+    const control = { cancel: null };
+    const entry = { task, control, promise: null };
+    const p = executeTask(task, { taskControl: control })
       .then(result => {
-        executing.splice(executing.indexOf(p), 1);
+        executing.splice(executing.indexOf(entry), 1);
         results.push(result);
         return result;
       })
       .catch(error => {
-        executing.splice(executing.indexOf(p), 1);
+        executing.splice(executing.indexOf(entry), 1);
+        if (!stopScheduling) {
+          stopScheduling = true;
+          cancelSiblingTasks(task.id);
+        }
         const res = { id: task.id, status: 'failed', error: error.message };
         results.push(res);
         return res;
       });
 
-    executing.push(p);
+    entry.promise = p;
+    executing.push(entry);
 
     if (executing.length >= workerCount) {
-      await Promise.race(executing);
+      await Promise.race(executing.map(item => item.promise));
     }
   }
 
-  await Promise.all(executing);
+  await Promise.all(executing.map(item => item.promise));
   return results;
 }
 

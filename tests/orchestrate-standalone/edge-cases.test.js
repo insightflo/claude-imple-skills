@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -72,6 +73,33 @@ function makeTask(id, deps) {
     domain: null,
     risk: 'low'
   };
+}
+
+function installLocalOrchestrateRuntime(projectDir) {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const skillsDir = path.join(projectDir, '.claude', 'skills');
+  const projectTeamDir = path.join(projectDir, '.claude', 'project-team');
+
+  fs.mkdirSync(skillsDir, { recursive: true });
+  fs.mkdirSync(projectTeamDir, { recursive: true });
+
+  fs.cpSync(
+    path.join(repoRoot, 'skills', 'orchestrate-standalone'),
+    path.join(skillsDir, 'orchestrate-standalone'),
+    { recursive: true }
+  );
+  fs.cpSync(
+    path.join(repoRoot, 'skills', 'task-board'),
+    path.join(skillsDir, 'task-board'),
+    { recursive: true }
+  );
+  fs.cpSync(
+    path.join(repoRoot, 'project-team', 'scripts'),
+    path.join(projectTeamDir, 'scripts'),
+    { recursive: true }
+  );
+
+  return path.join(skillsDir, 'orchestrate-standalone', 'scripts', 'orchestrate.sh');
 }
 
 runTest('T0-10a: Empty TASKS.md returns empty array', async () => {
@@ -362,6 +390,127 @@ runTest('T0-10r: resolveCliCommand maps \'sonnet\'/\'opus\'/\'haiku\' to claude'
       assert.strictEqual(resolved.routeSource, 'task.model');
       assert.strictEqual(resolved.fallbackReason, null);
     }
+  });
+});
+
+runTest('T0-10s: orchestrate exits fast with failed task ids when a layer task fails', async () => {
+  await withTempDir('orch-edge-', async projectDir => {
+    const orchestratePath = installLocalOrchestrateRuntime(projectDir);
+    const binDir = path.join(projectDir, 'bin');
+    const claudeStub = path.join(binDir, 'claude');
+
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(claudeStub, '#!/bin/sh\nexit 7\n', { mode: 0o755 });
+
+    writeTasksFile(projectDir, `
+      - [ ] T0.1: Deterministic failing task
+        - deps: []
+        - domain: shared
+        - risk: low
+        - owner: backend-specialist
+        - model: sonnet
+
+      - [ ] T0.2: Downstream task must not run
+        - deps: [T0.1]
+        - domain: shared
+        - risk: low
+        - owner: backend-specialist
+        - model: sonnet
+    `);
+
+    const result = spawnSync('bash', [orchestratePath, '--mode=wave'], {
+      cwd: projectDir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH || ''}`,
+        WHITEBOX_AUTO_OPEN_TUI: '0',
+      },
+      timeout: 120000,
+    });
+
+    const combinedOutput = `${result.stdout || ''}\n${result.stderr || ''}`;
+    const statePath = path.join(projectDir, '.claude', 'orchestrate-state.json');
+    const stateData = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const failedTask = stateData.tasks.find((task) => task.id === 'T0.1');
+
+    assert.strictEqual(result.status, 1);
+    assert.match(combinedOutput, /Layer 1 recorded 1 failed task\(s\): T0\.1/);
+    assert.doesNotMatch(combinedOutput, /Layer 2\/2/);
+    assert.ok(failedTask);
+    assert.strictEqual(failedTask.status, 'failed');
+    assert.ok(!stateData.tasks.some((task) => task.id === 'T0.2'));
+  });
+});
+
+runTest('T0-10t: orchestrate cancels running same-layer siblings after first failure', async () => {
+  await withTempDir('orch-edge-', async projectDir => {
+    const orchestratePath = installLocalOrchestrateRuntime(projectDir);
+    const binDir = path.join(projectDir, 'bin');
+    const claudeStub = path.join(binDir, 'claude');
+    const siblingMarker = path.join(projectDir, 'sibling-completed.txt');
+
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(
+      claudeStub,
+      [
+        '#!/bin/sh',
+        'case "$CLAUDE_TASK_ID" in',
+        '  T0.1)',
+        '    sleep 1',
+        '    exit 7',
+        '    ;;',
+        '  T0.2)',
+        '    trap "exit 9" TERM',
+        `    sleep 5; printf "done" > "${siblingMarker}"; exit 0`,
+        '    ;;',
+        '  *)',
+        '    exit 0',
+        '    ;;',
+        'esac',
+      ].join('\n') + '\n',
+      { mode: 0o755 }
+    );
+
+    writeTasksFile(projectDir, `
+      - [ ] T0.1: Immediate failure
+        - deps: []
+        - domain: backend
+        - risk: low
+        - owner: backend-specialist
+        - model: sonnet
+
+      - [ ] T0.2: Long-running sibling
+        - deps: []
+        - domain: frontend
+        - risk: low
+        - owner: backend-specialist
+        - model: sonnet
+    `);
+
+    const result = spawnSync('bash', [orchestratePath, '--mode=wave'], {
+      cwd: projectDir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH || ''}`,
+        WHITEBOX_AUTO_OPEN_TUI: '0',
+      },
+      timeout: 120000,
+    });
+
+    const statePath = path.join(projectDir, '.claude', 'orchestrate-state.json');
+    const stateData = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const taskOne = stateData.tasks.find((task) => task.id === 'T0.1');
+    const taskTwo = stateData.tasks.find((task) => task.id === 'T0.2');
+
+    assert.strictEqual(result.status, 1);
+    assert.ok(taskOne);
+    assert.ok(taskTwo);
+    assert.strictEqual(taskOne.status, 'failed');
+    assert.strictEqual(taskTwo.status, 'failed');
+    assert.strictEqual(taskTwo.code, 'LAYER_ABORTED');
+    assert.ok(!fs.existsSync(siblingMarker));
   });
 });
 
