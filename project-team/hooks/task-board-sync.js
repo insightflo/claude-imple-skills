@@ -4,7 +4,7 @@
  *
  * Emits normalized board events to:
  *   .claude/collab/events.ndjson      (append-only event log)
- *   .claude/collab/board-state.json   (current board snapshot)
+ * and marks board-state.json stale for the authoritative projector rebuild.
  *
  * Event types:
  *   task_claimed    — agent begins a task (in_progress)
@@ -29,28 +29,15 @@
 
 const fs = require('fs');
 const path = require('path');
+const { writeEvent } = require('../scripts/lib/whitebox-events');
+const { setStaleMarker } = require('../scripts/collab-derived-meta');
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const COLLAB_DIR = path.join(PROJECT_DIR, '.claude', 'collab');
-const EVENTS_FILE = path.join(COLLAB_DIR, 'events.ndjson');
-const BOARD_FILE = path.join(COLLAB_DIR, 'board-state.json');
-
-const COLUMN_MAP = {
-  pending: 'Backlog',
-  in_progress: 'In Progress',
-  failed: 'Blocked',
-  timeout: 'Blocked',
-  completed: 'Done',
-  OPEN: 'In Progress',
-  PENDING: 'In Progress',
-  ESCALATED: 'Blocked',
-  RESOLVED: 'Done',
-  REJECTED: 'Done',
-};
+const TASK_STARTED_ARCHIVE_DIR = path.join(PROJECT_DIR, '.claude', 'collab', 'archive', 'task-started');
 
 // ---------------------------------------------------------------------------
 // I/O helpers
@@ -69,73 +56,51 @@ function readStdin() {
   });
 }
 
-function ensureCollabDir() {
-  if (!fs.existsSync(COLLAB_DIR)) {
-    fs.mkdirSync(COLLAB_DIR, { recursive: true });
-  }
+function logStderr(msg) {
+  process.stderr.write(`[task-board-sync] ${msg}\n`);
 }
 
-function appendEvent(event) {
-  ensureCollabDir();
-  fs.appendFileSync(EVENTS_FILE, JSON.stringify(event) + '\n', 'utf8');
+function taskStartedMarkerPath(runId, taskId) {
+  return path.join(TASK_STARTED_ARCHIVE_DIR, `${runId}--${taskId}.json`);
 }
 
-function readBoardState() {
-  if (!fs.existsSync(BOARD_FILE)) {
-    return {
-      version: '1.0',
-      generated_at: new Date().toISOString(),
-      columns: {
-        Backlog: [],
-        'In Progress': [],
-        Blocked: [],
-        Done: [],
-      },
-    };
-  }
-  try {
-    return JSON.parse(fs.readFileSync(BOARD_FILE, 'utf8'));
-  } catch {
-    // Return null on parse error — do NOT overwrite with empty state
-    return null;
-  }
+function readTaskContext() {
+  const taskId = process.env.CLAUDE_TASK_ID || '';
+  const runId = process.env.WHITEBOX_RUN_ID || '';
+  if (!taskId || !runId) return null;
+  return {
+    task_id: taskId,
+    run_id: runId,
+  };
 }
 
-function writeBoardState(state) {
-  ensureCollabDir();
-  state.generated_at = new Date().toISOString();
-  const tmp = BOARD_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
-  fs.renameSync(tmp, BOARD_FILE);
+function markTaskStarted(runId, taskId, filePath) {
+  const markerPath = taskStartedMarkerPath(runId, taskId);
+  if (fs.existsSync(markerPath)) return false;
+
+  fs.mkdirSync(path.dirname(markerPath), { recursive: true });
+  fs.writeFileSync(markerPath, JSON.stringify({
+    run_id: runId,
+    task_id: taskId,
+    file_path: filePath || null,
+    created_at: new Date().toISOString(),
+  }, null, 2), 'utf8');
+  return true;
 }
 
-// ---------------------------------------------------------------------------
-// Board state mutations
-// ---------------------------------------------------------------------------
+async function appendEvent(event) {
+  const payload = { ...event };
+  const eventType = payload.type;
+  delete payload.type;
+  const correlationId = payload.task_id || payload.req_id || null;
 
-function removeCardFromAllColumns(state, cardId) {
-  for (const col of Object.values(state.columns)) {
-    const idx = col.findIndex((c) => c.id === cardId);
-    if (idx >= 0) col.splice(idx, 1);
-  }
-}
-
-function upsertCard(state, card) {
-  const targetCol = COLUMN_MAP[card.status] || 'Backlog';
-  // Preserve existing title/agent before removing
-  let existing = null;
-  for (const col of Object.values(state.columns)) {
-    const found = col.find((c) => c.id === card.id);
-    if (found) { existing = found; break; }
-  }
-  removeCardFromAllColumns(state, card.id);
-  if (!state.columns[targetCol]) state.columns[targetCol] = [];
-  state.columns[targetCol].push({
-    id: card.id,
-    title: (card.title && card.title !== card.id) ? card.title : (existing?.title || card.id),
-    status: card.status,
-    agent: card.agent || existing?.agent || null,
-    updated_at: new Date().toISOString(),
+  await writeEvent({
+    type: eventType,
+    producer: 'task-board-sync',
+    correlation_id: correlationId,
+    data: payload,
+  }, {
+    projectDir: PROJECT_DIR,
   });
 }
 
@@ -196,30 +161,23 @@ function handleReqFileEdit(filePath, newContent) {
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Apply event to board state
-// ---------------------------------------------------------------------------
+function handleTaskStartedEdit(filePath) {
+  const taskContext = readTaskContext();
+  if (!taskContext) return null;
+  if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') return null;
 
-function applyEventToBoard(state, event) {
-  if (!event) return;
+  const normalizedPath = path.relative(PROJECT_DIR, path.resolve(PROJECT_DIR, filePath)).replace(/\\/g, '/');
+  const created = markTaskStarted(taskContext.run_id, taskContext.task_id, normalizedPath);
+  if (!created) return null;
 
-  if (event.type === 'task_claimed' || event.type === 'task_done' || event.type === 'task_blocked' || event.type === 'task_updated') {
-    upsertCard(state, {
-      id: event.task_id,
-      title: event.task_id,
-      status: event.status,
-      agent: event.agent,
-    });
-  }
-
-  if (event.type === 'req_escalated' || event.type === 'req_resolved') {
-    upsertCard(state, {
-      id: event.req_id,
-      title: `REQ: ${event.req_id}`,
-      status: event.status,
-      agent: null,
-    });
-  }
+  return {
+    type: 'task_started',
+    task_id: taskContext.task_id,
+    run_id: taskContext.run_id,
+    file_path: normalizedPath,
+    agent: process.env.CLAUDE_AGENT_ROLE || null,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -234,10 +192,11 @@ async function main() {
 
   if (!hookEvent.startsWith('PostToolUse')) return;
 
-  let event = null;
+  let events = [];
 
   if (toolName === 'TaskUpdate') {
-    event = handleTaskUpdate(toolInput);
+    const taskEvent = handleTaskUpdate(toolInput);
+    if (taskEvent) events.push(taskEvent);
   } else if (toolName === 'Edit' || toolName === 'Write') {
     const filePath = toolInput.file_path || toolInput.path || '';
     // PostToolUse: file is already written — read from filesystem for full content
@@ -247,19 +206,32 @@ async function main() {
       const fullPath = path.resolve(PROJECT_DIR, filePath);
       if (fs.existsSync(fullPath)) content = fs.readFileSync(fullPath, 'utf8');
     } catch { /* ignore read errors */ }
-    event = handleReqFileEdit(filePath, content);
+    const taskStartedEvent = handleTaskStartedEdit(filePath);
+    if (taskStartedEvent) events.push(taskStartedEvent);
+    const reqEvent = handleReqFileEdit(filePath, content);
+    if (reqEvent) events.push(reqEvent);
   }
 
-  if (!event) return;
+  if (events.length === 0) return;
+
+  for (const event of events) {
+    try {
+      await appendEvent(event);
+    } catch (err) {
+      logStderr(`event append failed: ${err.message}`);
+      return;
+    }
+  }
 
   try {
-    appendEvent(event);
-    const state = readBoardState();
-    if (!state) return; // Parse error — skip write to avoid board wipe
-    applyEventToBoard(state, event);
-    writeBoardState(state);
-  } catch {
-    // Never block the workflow — board sync is best-effort
+    setStaleMarker({
+      projectDir: PROJECT_DIR,
+      artifact: '.claude/collab/board-state.json',
+      schemaVersion: '1.1',
+      reason: `incremental event ${events.map((event) => event.type).join(',')}; rebuild required`,
+    });
+  } catch (err) {
+    logStderr(`stale marker set failed: ${err.message}`);
   }
 }
 
@@ -273,9 +245,8 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     handleTaskUpdate,
     handleReqFileEdit,
-    applyEventToBoard,
-    upsertCard,
-    removeCardFromAllColumns,
-    COLUMN_MAP,
+    handleTaskStartedEdit,
+    readTaskContext,
+    taskStartedMarkerPath,
   };
 }

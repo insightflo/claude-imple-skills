@@ -26,12 +26,13 @@ const {
   checkPermission,
   toRelativePath,
   toSafeProjectRelativePath,
-  parseAgentRoleString,
   verifyAgentToken,
+  resolveVerifiedRoleContext,
   formatDenialMessage,
   formatBoundaryViolationMessage,
   formatUnknownAgentWarning
 } = require('../permission-checker');
+const AgentAuthService = require('../../services/auth');
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -723,7 +724,96 @@ describe('verifyAgentToken', () => {
     const token = makeToken({ role: 'Project Manager', exp: nowSec + 60 }, secret);
 
     const res = verifyAgentToken(token, secret);
-    expect(res).toEqual({ ok: true, role: 'project-manager' });
+    expect(res).toMatchObject({ ok: true, role: 'project-manager', exp: nowSec + 60 });
+  });
+
+  test('accepts canonical JWTs from auth service and preserves advisory claims', () => {
+    const auth = new AgentAuthService({ secretKey: 'test-secret' });
+    const token = auth.issueToken('builder-1', 'auth-developer', 'auth', 3600000, {
+      scopeId: 'auth-scope',
+      allowedPaths: ['src/domains/auth/**'],
+      reviewOnly: false,
+      allowedTools: ['Read', 'Edit'],
+      deniedTools: ['Bash'],
+      advisoryOnly: true
+    });
+
+    const res = verifyAgentToken(token, 'test-secret');
+    expect(res).toMatchObject({
+      ok: true,
+      role: 'auth-developer',
+      domain: 'auth',
+      scopeId: 'auth-scope',
+      allowedPaths: ['src/domains/auth/**'],
+      reviewOnly: false,
+      agentId: 'builder-1',
+      allowedTools: ['Read', 'Edit'],
+      deniedTools: ['Bash'],
+      advisoryOnly: true
+    });
+  });
+
+  test('accepts legacy millisecond exp in JWTs for compatibility', () => {
+    const secret = 'test-secret';
+    const token = (() => {
+      const headerB64 = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+      const payloadB64 = base64UrlEncode(JSON.stringify({
+        role: 'project-manager',
+        scope_id: 'project-manager',
+        allowed_paths: [],
+        review_only: false,
+        iat: Date.now(),
+        exp: Date.now() + 60000
+      }));
+      const sigB64 = sign(`${headerB64}.${payloadB64}`, secret);
+      return `${headerB64}.${payloadB64}.${sigB64}`;
+    })();
+
+    const res = verifyAgentToken(token, secret);
+    expect(res).toMatchObject({ ok: true, role: 'project-manager' });
+  });
+
+  test('resolves verification secret from canonical environment order', () => {
+    const previousEnv = { ...process.env };
+
+    try {
+      process.env.CLAUDE_HOOK_SECRET = 'hook-secret';
+      process.env.AGENT_JWT_SECRET = 'jwt-secret';
+      process.env.PERMISSION_CHECKER_SECRET = 'legacy-secret';
+
+      const auth = new AgentAuthService({ secretKey: process.env.CLAUDE_HOOK_SECRET });
+      const token = auth.issueToken('agent-1', 'project-manager', null);
+      const res = verifyAgentToken(token);
+      expect(res).toMatchObject({ ok: true, role: 'project-manager' });
+    } finally {
+      process.env = previousEnv;
+    }
+  });
+});
+
+describe('resolveVerifiedRoleContext', () => {
+  test('maps canonical builder role directly', () => {
+    expect(resolveVerifiedRoleContext({ role: 'builder' })).toMatchObject({
+      role: 'builder',
+      canonicalRole: 'builder',
+      domain: null
+    });
+  });
+
+  test('maps legacy alias to canonical reviewer role', () => {
+    expect(resolveVerifiedRoleContext({ role: 'qa-manager' })).toMatchObject({
+      role: 'qa-manager',
+      canonicalRole: 'reviewer',
+      domain: null
+    });
+  });
+
+  test('maps legacy domain alias to canonical builder with domain', () => {
+    expect(resolveVerifiedRoleContext({ role: 'auth-developer' })).toMatchObject({
+      role: 'domain-developer',
+      canonicalRole: 'builder',
+      domain: 'auth'
+    });
   });
 });
 

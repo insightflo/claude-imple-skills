@@ -8,7 +8,7 @@ updated: 2026-03-05
 
 # Task Board
 
-> **AI 에이전트 태스크의 실시간 칸반 시각화**
+> **화이트박스 제품 표면 안에서 동작하는 AI 에이전트 태스크의 실시간 칸반 렌더러**
 >
 > TASKS.md + `.claude/orchestrate-state.json` + `.claude/collab/requests/` 를 통합하여
 > Backlog / In Progress / Blocked / Done 칸반 보드를 터미널에 렌더링합니다.
@@ -18,12 +18,14 @@ updated: 2026-03-05
 - **단일 진실 원천**: `TASKS.md` + `orchestrate-state.json` 이 canonical. `board-state.json`은 파생 데이터.
 - **Standalone-first**: 외부 MCP 서버 없이 동작. 파일 기반.
 - **Derived, never edit**: `board-state.json`은 직접 편집 금지. `board-builder.js`로 재생성.
+- **Whitebox renderer**: `/task-board`는 별도 제품이 아니라 `/whitebox`의 renderer/TUI surface 다.
+- **Control query separation**: `control.ndjson` 은 canonical operator-intent log, `control-state.json` 은 파생 control query state 다.
 
 ## 명령어
 
-### `/task-board show` — 보드 표시
+### `/task-board show` — 보드 + pending approvals 표시
 
-현재 `board-state.json`을 읽어 터미널에 칸반 렌더링:
+현재 `board-state.json`과 `control-state.json`을 읽어 칸반 + pending approval shell 을 렌더링:
 
 ```bash
 bash skills/task-board/scripts/board-show.sh
@@ -52,7 +54,7 @@ node skills/task-board/scripts/board-builder.js --project-dir=/path
 node project-team/scripts/collab-init.js
 ```
 
-`.claude/collab/` 디렉토리 구조 + 빈 `board-state.json` + `events.ndjson` 생성.
+`.claude/collab/` 디렉토리 구조 + `board-state.json`/`control-state.json` 파생 파일 + `events.ndjson`/`control.ndjson` canonical log 를 준비한다.
 
 ### `/task-board health` — 보드 상태 점검
 
@@ -106,15 +108,26 @@ node skills/task-board/scripts/decision-gate.js resolve --id=DEC-TASKSYNC-T0.1 -
 ## 보드 이벤트 (task-board-sync.js 훅)
 
 `project-team/hooks/task-board-sync.js`가 PostToolUse 이벤트를 감지하여
-`.claude/collab/events.ndjson`에 자동으로 기록합니다:
+`.claude/collab/events.ndjson`에 자동으로 기록하고, `board-state.json` 재빌드가 필요하다는 stale marker 를 남깁니다.
 
-| 이벤트 | 트리거 | 보드 효과 |
-|--------|--------|-----------|
-| `task_claimed` | TaskUpdate → in_progress | Backlog → In Progress |
-| `task_done` | TaskUpdate → completed | In Progress → Done |
-| `task_blocked` | TaskUpdate → failed/timeout | In Progress → Blocked |
-| `req_escalated` | REQ status = ESCALATED | Blocked 카드 생성 |
-| `req_resolved` | REQ status = RESOLVED/REJECTED | Blocked → Done |
+| 이벤트 | 트리거 | projector 힌트 |
+|--------|--------|----------------|
+| `task_claimed` | TaskUpdate → in_progress | task가 진행 중으로 이동해야 함을 시사 |
+| `task_done` | TaskUpdate → completed | task가 Done으로 이동해야 함을 시사 |
+| `task_blocked` | TaskUpdate → failed/timeout | Blocked 이유 재계산 필요 |
+| `req_escalated` | REQ status = ESCALATED | REQ blocker 컨텍스트 갱신 |
+| `req_resolved` | REQ status = RESOLVED/REJECTED | 완료 상태 재계산 필요 |
+
+이 이벤트들은 canonical 입력일 뿐이며, `board-state.json` 자체를 직접 수정하지 않습니다. authoritative writer 는 항상 `skills/task-board/scripts/board-builder.js` 입니다. Control 관련 상태 역시 `control.ndjson`/`events.ndjson` 에서 projector 가 만드는 `control-state.json` 을 읽어야 하며 renderer 가 직접 수정하면 안 됩니다.
+
+## Ratatui MVP keybindings
+
+- navigation: `j/k` 또는 화살표
+- `a`: selected pending approval approve (`whitebox-control.js approve` subprocess)
+- `r`: selected pending approval reject (`whitebox-control.js reject` subprocess)
+- `q` / `esc`: 종료
+
+Snapshot 모드(`WHITEBOX_TUI_CAPTURE=1` 또는 `--snapshot`)도 동일한 approval hints 를 표시한다.
 
 ## 파일 구조
 
@@ -126,22 +139,20 @@ skills/task-board/
     └── board-show.sh                 # 터미널 칸반 렌더러
 
 project-team/hooks/
-└── task-board-sync.js                # PostToolUse 이벤트 → board 자동 업데이트
+└── task-board-sync.js                # PostToolUse 이벤트 → canonical event log + stale marker
 
 .claude/collab/
 ├── board-state.json                  # 현재 보드 스냅샷 (파생, 직접 편집 금지)
+├── control-state.json                # 현재 control query state (파생, 직접 편집 금지)
+├── board-state.snapshot.json         # projector 체크포인트 메타데이터
+├── derived-meta.json                 # stale derived artifact markers
+├── control.ndjson                    # operator-intent log (canonical, append-only)
 └── events.ndjson                     # 이벤트 로그 (append-only)
 ```
 
 ## 설치
 
-`task-board-sync.js` 훅은 `project-team/install.sh`에서 자동 설치됩니다:
-
-```bash
-./project-team/install.sh
-```
-
-또는 수동으로 Claude Code 설정에 추가:
+`task-board-sync.js`는 Claude Code PostToolUse 훅으로 연결해야 합니다. 프로젝트 설정에 아직 없으면 수동으로 추가하세요:
 
 ```json
 {

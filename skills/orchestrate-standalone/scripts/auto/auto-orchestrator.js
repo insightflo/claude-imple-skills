@@ -38,6 +38,15 @@ const {
   syncToLinear,
   isLinearSyncAvailable
 } = require('./linear-sync');
+const {
+  readControlCommands,
+} = require('../../../../project-team/scripts/lib/whitebox-control');
+const {
+  readEvents: readWhiteboxEvents,
+} = require('../../../../project-team/scripts/lib/whitebox-events');
+const {
+  emitRunEventStrict,
+} = require('../../../../project-team/scripts/lib/whitebox-run');
 
 const { executeLayer } = require('../engine/worker');
 
@@ -48,6 +57,8 @@ const DEFAULT_MAX_DYNAMIC_TASKS = 20;
 const DEFAULT_WORKER_COUNT = 2;
 const DEFAULT_MAX_CONSECUTIVE_FAILURES = 2;
 const SUBAGENT_TIMEOUT_MS = 120000;
+const DEFAULT_APPROVAL_POLL_INTERVAL_MS = 250;
+const DEFAULT_APPROVAL_WAIT_MS = 60000;
 
 // ---------------------------------------------------------------------------
 // Prompt Utilities
@@ -60,7 +71,7 @@ const SUBAGENT_TIMEOUT_MS = 120000;
  */
 function createPromptInterface() {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error('Human gates require an interactive TTY');
+    return null;
   }
 
   return readline.createInterface({
@@ -77,6 +88,9 @@ function createPromptInterface() {
  * @returns {Promise<string>} User input.
  */
 function askQuestion(rl, prompt) {
+  if (!rl) {
+    throw new Error('Human gate prompt requires an interactive TTY');
+  }
   return new Promise(resolve => {
     rl.question(prompt, answer => resolve(String(answer || '').trim()));
   });
@@ -90,6 +104,7 @@ function askQuestion(rl, prompt) {
  * @returns {Promise<boolean>} True only when the user explicitly answers yes.
  */
 async function askOptionalYesNo(rl, prompt) {
+  if (!rl) return false;
   const answer = (await askQuestion(rl, prompt)).toLowerCase();
   return answer === 'y' || answer === 'yes';
 }
@@ -135,6 +150,138 @@ async function promptGate(rl, gateName, preview, modifyPrompt = 'Modification in
 
     process.stdout.write('Enter one of: approve, reject, modify\n');
   }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function createGateId(stage, autoState) {
+  const sessionId = autoState && autoState.session_id ? autoState.session_id : crypto.randomUUID();
+  const token = crypto.randomBytes(3).toString('hex');
+  return `${String(stage || 'gate').replace(/[^a-zA-Z0-9_-]+/g, '-').toLowerCase()}-${sessionId}-${token}`;
+}
+
+function normalizePendingGate(autoState, gateName, preview, options = {}) {
+  const existing = autoState && autoState.pending_gate ? autoState.pending_gate : null;
+  if (existing && existing.stage === options.stage && existing.gate_name === gateName) {
+    return existing;
+  }
+
+  return {
+    gate_id: createGateId(options.stage || gateName, autoState),
+    gate_name: gateName,
+    stage: options.stage || gateName,
+    task_id: options.taskId || null,
+    run_id: autoState && autoState.session_id ? autoState.session_id : '',
+    correlation_id: autoState && autoState.session_id
+      ? `gate:${autoState.session_id}:${options.stage || gateName}`
+      : createGateId('correlation', autoState),
+    choices: ['approve', 'reject'],
+    default_behavior: 'wait_for_operator',
+    timeout_policy: options.timeoutPolicy || `wait_${options.approvalWaitMs || DEFAULT_APPROVAL_WAIT_MS}ms`,
+    created_at: new Date().toISOString(),
+    preview,
+  };
+}
+
+async function emitApprovalLifecycle(type, gate, actor, projectDir) {
+  const data = {
+    actor,
+    gate_id: gate.gate_id,
+    task_id: gate.task_id,
+    run_id: gate.run_id,
+  };
+
+  if (type === 'approval_required') {
+    data.choices = gate.choices;
+    data.default_behavior = gate.default_behavior;
+    data.timeout_policy = gate.timeout_policy;
+  }
+
+  await emitRunEventStrict({
+    type,
+    producer: 'orchestrate-auto',
+    projectDir,
+    correlationId: gate.correlation_id,
+    data,
+    stage: type,
+  });
+}
+
+function findGateCommand(gate, projectDir) {
+  const parsed = readControlCommands({ projectDir });
+  return parsed.commands.find((command) => command
+    && (command.type === 'approve' || command.type === 'reject')
+    && command.target
+    && command.target.gate_id === gate.gate_id
+    && command.correlation_id === gate.correlation_id);
+}
+
+function hasLifecycleEvent(projectDir, correlationId, type) {
+  const parsed = readWhiteboxEvents({ projectDir, tolerateTrailingPartialLine: true });
+  return parsed.events.some((event) => event
+    && event.correlation_id === correlationId
+    && event.type === type);
+}
+
+async function waitForFileGateDecision(autoState, gateName, preview, options = {}) {
+  const projectDir = options.projectDir || process.cwd();
+  const approvalPollIntervalMs = Number.isInteger(options.approvalPollIntervalMs)
+    ? options.approvalPollIntervalMs
+    : DEFAULT_APPROVAL_POLL_INTERVAL_MS;
+  const approvalWaitMs = Number.isInteger(options.approvalWaitMs)
+    ? options.approvalWaitMs
+    : DEFAULT_APPROVAL_WAIT_MS;
+  const gate = normalizePendingGate(autoState, gateName, preview, {
+    stage: options.stage,
+    taskId: options.taskId,
+    timeoutPolicy: options.timeoutPolicy,
+    approvalWaitMs,
+  });
+
+  if (!autoState.pending_gate || autoState.pending_gate.gate_id !== gate.gate_id) {
+    autoState.pending_gate = gate;
+    saveAutoState(autoState, projectDir);
+    await emitApprovalLifecycle('approval_required', gate, 'system', projectDir);
+    await emitApprovalLifecycle('execution_paused', gate, 'system', projectDir);
+  }
+
+  const deadline = Date.now() + approvalWaitMs;
+  while (Date.now() <= deadline) {
+    const command = findGateCommand(gate, projectDir);
+    if (command) {
+      const actor = command.actor && command.actor.id ? command.actor.id : 'user';
+      if (command.type === 'approve') {
+        if (!hasLifecycleEvent(projectDir, gate.correlation_id, 'approval_granted')) {
+          await emitApprovalLifecycle('approval_granted', gate, actor, projectDir);
+        }
+        if (!hasLifecycleEvent(projectDir, gate.correlation_id, 'execution_resumed')) {
+          await emitApprovalLifecycle('execution_resumed', gate, 'system', projectDir);
+        }
+      } else {
+        if (!hasLifecycleEvent(projectDir, gate.correlation_id, 'approval_rejected')) {
+          await emitApprovalLifecycle('approval_rejected', gate, actor, projectDir);
+        }
+      }
+
+      autoState.pending_gate = null;
+      saveAutoState(autoState, projectDir);
+      return { action: command.type, command, gate };
+    }
+
+    await sleep(approvalPollIntervalMs);
+  }
+
+  throw new Error(`Timed out waiting for control command for ${gate.gate_id}`);
+}
+
+async function resolveGateDecision(rl, gateName, preview, modifyPrompt, autoState, options = {}) {
+  if (rl) {
+    return promptGate(rl, gateName, preview, modifyPrompt);
+  }
+
+  return waitForFileGateDecision(autoState, gateName, preview, options);
 }
 
 // ---------------------------------------------------------------------------
@@ -1005,11 +1152,16 @@ async function runDefineStage(goal, autoState, rl, options = {}) {
       contract
     }, projectDir);
 
-    const decision = await promptGate(
+    const decision = await resolveGateDecision(
       rl,
       'Contract Gate',
       `${JSON.stringify(contract, null, 2)}\n`,
-      'Contract modification instructions: '
+      'Contract modification instructions: ',
+      autoState,
+      {
+        ...options,
+        stage: 'define_contract',
+      }
     );
 
     if (decision.action === 'approve') {
@@ -1090,11 +1242,16 @@ async function runDecomposeStage(contract, autoState, rl, options = {}) {
         task_count: tasks.length
       }, projectDir);
 
-      const decision = await promptGate(
+      const decision = await resolveGateDecision(
         rl,
         'Decompose Gate',
         `${content}\n`,
-        'TASKS modification instructions: '
+        'TASKS modification instructions: ',
+        autoState,
+        {
+          ...options,
+          stage: 'decompose',
+        }
       );
 
       if (decision.action === 'approve') {
@@ -1614,11 +1771,16 @@ async function runFailureGate(rl, autoState, reason, options = {}) {
     checkpoint_tag: checkpointTag
   }, projectDir);
 
-  return promptGate(
+  return resolveGateDecision(
     rl,
     'Failure Gate',
     `Budget or failure threshold exceeded.\nReason: ${reason}\nBudget: ${JSON.stringify(autoState.budget, null, 2)}\nLatest checkpoint: ${checkpointTag || 'none'}\napprove=grant one more loop, reject=abort${checkpointTag ? ' (rollback will be offered)' : ''}, modify=grant one more loop with guidance\n`,
-    'Failure gate guidance: '
+    'Failure gate guidance: ',
+    autoState,
+    {
+      ...options,
+      stage: 'adjust_failure',
+    }
   );
 }
 
@@ -1654,7 +1816,7 @@ async function runAdjustStage(assessment, autoState, rl, options = {}, feedback 
       const checkpointTag = getLatestCheckpointTag(projectDir);
       let rolledBack = false;
 
-      if (checkpointTag) {
+      if (checkpointTag && rl) {
         const rollbackAnswer = (await askQuestion(
           rl,
           `Rollback tracked files to ${checkpointTag}? [y/N]: `
@@ -1804,11 +1966,16 @@ async function main(goal, options = {}) {
       autoState = refreshAutoStateSummary(autoState, plan.tasks, normalizedOptions.projectDir);
 
       if (assessment.verdict === 'PASS') {
-        const decision = await promptGate(
+        const decision = await resolveGateDecision(
           rl,
           'Final Gate',
           `All checks passed.\nCompletion rate: ${assessment.completion_rate}%\nverify_cmd: ${assessment.verify.command}\n`,
-          'Final gate feedback: '
+          'Final gate feedback: ',
+          autoState,
+          {
+            ...normalizedOptions,
+            stage: 'final_gate',
+          }
         );
 
         if (decision.action === 'approve') {
@@ -1886,7 +2053,9 @@ async function main(goal, options = {}) {
     if (process.cwd() !== originalCwd) {
       process.chdir(originalCwd);
     }
-    rl.close();
+    if (rl) {
+      rl.close();
+    }
   }
 }
 
@@ -1913,6 +2082,8 @@ if (require.main === module) {
 module.exports = {
   main,
   parseCliArgs,
+  resolveGateDecision,
+  waitForFileGateDecision,
   shouldTriggerMultiAiReview,
   runDefineStage,
   runDecomposeStage,

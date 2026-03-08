@@ -11,6 +11,11 @@
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const {
+  createRunId,
+  emitRunEventDetailed,
+  withExecutorMetadata,
+} = require('../../../../project-team/scripts/lib/whitebox-run');
 
 const STATE_FILE = '.claude/orchestrate-state.json';
 
@@ -47,251 +52,53 @@ function buildTaskSyncDecision(task, output) {
   };
 }
 
+async function emitCanonicalEvent(type, data, projectDir = process.cwd(), correlationId = null, stage = type) {
+  const result = await emitRunEventDetailed({
+    type,
+    producer: 'orchestrate-worker',
+    correlationId,
+    projectDir,
+    data,
+    stage,
+    mode: 'best_effort',
+  });
+  if (!result.ok) {
+    writeStderr(`[worker] canonical event write failed (${type}): ${result.failure.message}`);
+  }
+  return result;
+}
+
 function writeStderr(message) {
   process.stderr.write(`${message}\n`);
 }
 
-// ---------------------------------------------------------------------------
-// Routing Management
-// ---------------------------------------------------------------------------
+function persistTaskState(statePath, taskId, status, data = {}) {
+  let state = { tasks: [], decisions: [], started_at: new Date().toISOString() };
 
-/**
- * Parses .claude/model-routing.yaml without external dependencies
- */
-function loadModelRouting(projectDir) {
-  const routingPath = path.join(projectDir, '.claude', 'model-routing.yaml');
-  const routing = { default: 'claude', routing: {} };
-
-  if (fs.existsSync(routingPath)) {
-    try {
-      const content = fs.readFileSync(routingPath, 'utf8');
-
-      const defaultMatch = content.match(/^default:\s*([^\s]+)/m);
-      if (defaultMatch) routing.default = defaultMatch[1];
-
-      const parts = content.split(/^routing:/m);
-      const routingSection = parts.length > 1 ? parts[1] : null;
-
-      if (routingSection) {
-        const regex = /^\s+([a-zA-Z0-9_-]+):\s*([^\s]+)/gm;
-        let match;
-        while ((match = regex.exec(routingSection)) !== null) {
-          routing.routing[match[1]] = match[2].replace(/['"]/g, '');
-        }
-      }
-    } catch (e) {
-      writeStderr(`Failed to parse model-routing.yaml: ${e.message}`);
-    }
+  if (fs.existsSync(statePath)) {
+    state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
   }
 
-  return routing;
-}
+  if (!Array.isArray(state.tasks)) state.tasks = [];
+  if (!Array.isArray(state.decisions)) state.decisions = [];
 
-/**
- * Determines the appropriate CLI command based on task routing
- * Priority: task.model > model-routing.yaml[task.owner] > default (claude)
- */
-function resolveCliCommand(task, projectDir, defaultClaudePath = 'claude') {
-  let model = task.model;
+  const taskIndex = state.tasks.findIndex((task) => task.id === taskId);
+  const previous = taskIndex >= 0 ? state.tasks[taskIndex] : null;
+  const taskState = {
+    id: taskId,
+    status,
+    updated_at: new Date().toISOString(),
+    ...data,
+  };
 
-  // 1. task.model이 없으면 model-routing.yaml에서 task.owner 기반으로 탐색
-  if (!model) {
-    const routingConfig = loadModelRouting(projectDir);
-    if (task.owner && routingConfig.routing[task.owner]) {
-      model = routingConfig.routing[task.owner];
-    } else {
-      model = routingConfig.default || 'claude';
-    }
-  }
-
-  const rawModel = String(model || 'claude').trim().toLowerCase();
-  const claudeAliases = new Set(['claude', 'sonnet', 'opus', 'haiku']);
-  const isClaudeFamily = claudeAliases.has(rawModel) || rawModel.startsWith('claude-');
-
-  let resolvedModel = 'claude';
-  if (rawModel === 'codex' || rawModel === 'gemini') {
-    resolvedModel = rawModel;
-  } else if (isClaudeFamily) {
-    resolvedModel = 'claude';
+  if (taskIndex >= 0) {
+    state.tasks[taskIndex] = { ...state.tasks[taskIndex], ...taskState };
   } else {
-    writeStderr(`[Warning] Unknown model '${rawModel}'. Falling back to 'claude'.`);
-    resolvedModel = 'claude';
+    state.tasks.push(taskState);
   }
 
-  let command = defaultClaudePath;
-  let args = [];
-
-  // 2. 모델명에 따른 CLI 커맨드 및 인자 매핑
-  if (resolvedModel === 'codex') {
-    command = 'codex';
-    args = ['exec'];
-  } else if (resolvedModel === 'gemini') {
-    command = 'gemini';
-    args = [];
-  }
-
-  // 3. Fallback: CLI가 시스템에 없으면 defaultClaudePath 사용
-  if (command !== defaultClaudePath) {
-    try {
-      const checkCmd = process.platform === 'win32' ? 'where' : 'which';
-      execSync(`${checkCmd} ${command}`, { stdio: 'ignore' });
-    } catch (e) {
-      writeStderr(`[Warning] CLI '${command}' not found. Falling back to '${defaultClaudePath}'.`);
-      command = defaultClaudePath;
-      args = [];
-      resolvedModel = 'claude';
-    }
-  }
-
-  return { command, args, model: resolvedModel };
-}
-
-// ---------------------------------------------------------------------------
-// Task Execution
-// ---------------------------------------------------------------------------
-
-/**
- * Execute a single task
- */
-async function executeTask(task, options = {}) {
-  const {
-    claudePath = 'claude',
-    projectDir = process.cwd(),
-    timeout = 300000 // 5 minutes default
-  } = options;
-
-  const statePath = path.join(projectDir, STATE_FILE);
-
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-
-    // Update state to "in_progress"
-    updateTaskState(statePath, task.id, 'in_progress', { worker: 'worker-' + process.pid % 4 });
-
-    // Prepare prompt
-    const prompt = `
-Execute the following task:
-
-**Task ID**: ${task.id}
-**Description**: ${task.description}
-**Domain**: ${task.domain || 'general'}
-**Risk Level**: ${task.risk}
-**Owner**: ${task.owner || 'default'}
-
-Please complete this task and report back when done.
-`;
-
-    // Resolve which CLI to use based on routing rules
-    const { command, args, model } = resolveCliCommand(task, projectDir, claudePath);
-    process.stderr.write(`[worker] Task ${task.id} → ${command} (model: ${model})\n`);
-
-    // Spawn the selected CLI
-    const cli = spawn(command, args, {
-      cwd: projectDir,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, CLAUDE_AGENT_ROLE: task.owner || 'default' }
-    });
-
-    let output = '';
-    let errorOutput = '';
-
-    cli.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    cli.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    cli.on('error', (err) => {
-      updateTaskState(statePath, task.id, 'failed', {
-        duration: Date.now() - startTime,
-        error: err.message,
-      });
-      reject(new Error(`Task ${task.id} failed to start: ${err.message}`));
-    });
-
-    cli.on('close', (code) => {
-      const duration = Date.now() - startTime;
-
-      if (code === 0) {
-        updateTaskState(statePath, task.id, 'completed', {
-          duration,
-          output: output.slice(-500), // Last 500 chars
-          worker: 'worker-' + process.pid % 4
-        });
-        const decision = buildTaskSyncDecision(task, output);
-        if (decision) {
-          upsertDecision(statePath, decision);
-        } else {
-          clearTaskDecisions(statePath, task.id);
-        }
-        resolve({ id: task.id, status: 'completed', duration, output });
-      } else {
-        updateTaskState(statePath, task.id, 'failed', {
-          duration,
-          error: errorOutput.slice(-500) || `Process exited with code ${code}`,
-          code
-        });
-        clearTaskDecisions(statePath, task.id);
-        reject(new Error(`Task ${task.id} failed with code ${code}`));
-      }
-    });
-
-    // Timeout handling
-    const timeoutHandle = setTimeout(() => {
-      cli.kill('SIGTERM');
-      updateTaskState(statePath, task.id, 'timeout', { duration: timeout });
-      clearTaskDecisions(statePath, task.id);
-      reject(new Error(`Task ${task.id} timed out after ${timeout}ms`));
-    }, timeout);
-
-    cli.on('close', () => {
-      clearTimeout(timeoutHandle);
-    });
-
-    // Send prompt
-    cli.stdin.write(prompt);
-    cli.stdin.end();
-  });
-}
-
-// ---------------------------------------------------------------------------
-// State Management
-// ---------------------------------------------------------------------------
-
-/**
- * Update task state in orchestrate-state.json
- */
-function updateTaskState(statePath, taskId, status, data = {}) {
-  try {
-    let state = { tasks: [], decisions: [], started_at: new Date().toISOString() };
-
-    if (fs.existsSync(statePath)) {
-      state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-    }
-
-    if (!Array.isArray(state.tasks)) state.tasks = [];
-    if (!Array.isArray(state.decisions)) state.decisions = [];
-
-    const taskIndex = state.tasks.findIndex(t => t.id === taskId);
-    const taskState = {
-      id: taskId,
-      status,
-      updated_at: new Date().toISOString(),
-      ...data
-    };
-
-    if (taskIndex >= 0) {
-      state.tasks[taskIndex] = { ...state.tasks[taskIndex], ...taskState };
-    } else {
-      state.tasks.push(taskState);
-    }
-
-    fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
-  } catch (error) {
-    writeStderr(`Failed to update state: ${error.message}`);
-  }
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+  return { previousStatus: previous && previous.status ? previous.status : null };
 }
 
 function upsertDecision(statePath, decision) {
@@ -339,6 +146,356 @@ function clearTaskDecisions(statePath, taskId) {
   } catch (error) {
     writeStderr(`Failed to clear task decisions: ${error.message}`);
   }
+}
+
+async function updateTaskState(statePath, taskId, status, data = {}, options = {}) {
+  const { emitEvent = true, emitMode = 'best_effort' } = options;
+
+  try {
+    const { previousStatus } = persistTaskState(statePath, taskId, status, data);
+    if (!emitEvent) return { ok: true, previousStatus };
+
+    const projectDir = path.dirname(path.dirname(statePath));
+    const eventResult = await emitCanonicalEvent('orchestrate.task.status_changed', {
+      task_id: taskId,
+      from: previousStatus,
+      to: status,
+      changed: previousStatus !== status,
+      has_duration: Number.isFinite(data.duration),
+      has_exit_code: Number.isInteger(data.code),
+      worker: typeof data.worker === 'string' ? data.worker : null,
+    }, projectDir, taskId, 'task_status_changed');
+
+    if (!eventResult.ok) {
+      if (emitMode === 'strict') {
+      const error = new Error(`Failed to write orchestrate.task.status_changed for ${taskId}: ${eventResult.failure.message}`);
+      error.code = 'WHITEBOX_EVENT_WRITE_FAILED';
+      error.failure = eventResult.failure;
+      throw error;
+      }
+
+      writeStderr(`Failed to write orchestrate.task.status_changed for ${taskId}: ${eventResult.failure.message}`);
+    }
+
+    return { ok: true, previousStatus, eventWarning: eventResult.ok ? null : eventResult.failure };
+  } catch (error) {
+    writeStderr(`Failed to update state: ${error.message}`);
+    throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Routing Management
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses .claude/model-routing.yaml without external dependencies
+ */
+function loadModelRouting(projectDir) {
+  const routingPath = path.join(projectDir, '.claude', 'model-routing.yaml');
+  const routing = { default: 'claude', routing: {} };
+
+  if (fs.existsSync(routingPath)) {
+    try {
+      const content = fs.readFileSync(routingPath, 'utf8');
+
+      const defaultMatch = content.match(/^default:\s*([^\s]+)/m);
+      if (defaultMatch) routing.default = defaultMatch[1];
+
+      const parts = content.split(/^routing:/m);
+      const routingSection = parts.length > 1 ? parts[1] : null;
+
+      if (routingSection) {
+        const regex = /^\s+([a-zA-Z0-9_-]+):\s*([^\s]+)/gm;
+        let match;
+        while ((match = regex.exec(routingSection)) !== null) {
+          routing.routing[match[1]] = match[2].replace(/['"]/g, '');
+        }
+      }
+    } catch (e) {
+      writeStderr(`Failed to parse model-routing.yaml: ${e.message}`);
+    }
+  }
+
+  return routing;
+}
+
+/**
+ * Determines the appropriate CLI command based on task routing
+ * Priority: task.model > model-routing.yaml[task.owner] > default (claude)
+ */
+function resolveCliCommand(task, projectDir, defaultClaudePath = 'claude') {
+  let model = task.model;
+  let routeSource = 'task.model';
+  let fallbackReason = null;
+
+  // 1. task.model이 없으면 model-routing.yaml에서 task.owner 기반으로 탐색
+  if (!model) {
+    const routingConfig = loadModelRouting(projectDir);
+    if (task.owner && routingConfig.routing[task.owner]) {
+      model = routingConfig.routing[task.owner];
+      routeSource = 'routing.owner';
+    } else {
+      model = routingConfig.default || 'claude';
+      routeSource = 'routing.default';
+    }
+  }
+
+  const rawModel = String(model || 'claude').trim().toLowerCase();
+  const claudeAliases = new Set(['claude', 'sonnet', 'opus', 'haiku']);
+  const isClaudeFamily = claudeAliases.has(rawModel) || rawModel.startsWith('claude-');
+
+  let resolvedModel = 'claude';
+  if (rawModel === 'codex' || rawModel === 'gemini') {
+    resolvedModel = rawModel;
+  } else if (isClaudeFamily) {
+    resolvedModel = 'claude';
+  } else {
+    writeStderr(`[Warning] Unknown model '${rawModel}'. Falling back to 'claude'.`);
+    resolvedModel = 'claude';
+    fallbackReason = 'unknown_model';
+  }
+
+  let command = defaultClaudePath;
+  let args = [];
+  const requestedExecutor = rawModel;
+
+  // 2. 모델명에 따른 CLI 커맨드 및 인자 매핑
+  if (resolvedModel === 'codex') {
+    command = 'codex';
+    args = ['exec'];
+  } else if (resolvedModel === 'gemini') {
+    command = 'gemini';
+    args = [];
+  }
+
+  // 3. Fallback: CLI가 시스템에 없으면 defaultClaudePath 사용
+  if (command !== defaultClaudePath) {
+    try {
+      const checkCmd = process.platform === 'win32' ? 'where' : 'which';
+      execSync(`${checkCmd} ${command}`, { stdio: 'ignore' });
+    } catch (e) {
+      writeStderr(`[Warning] CLI '${command}' not found. Falling back to '${defaultClaudePath}'.`);
+      fallbackReason = `missing_cli:${command}`;
+      command = defaultClaudePath;
+      args = [];
+      resolvedModel = 'claude';
+    }
+  }
+
+  return { command, args, model: resolvedModel, requestedExecutor, routeSource, fallbackReason };
+}
+
+// ---------------------------------------------------------------------------
+// Task Execution
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute a single task
+ */
+async function executeTask(task, options = {}) {
+  const {
+    claudePath = 'claude',
+    projectDir = process.cwd(),
+    timeout = 300000 // 5 minutes default
+  } = options;
+
+  const statePath = path.join(projectDir, STATE_FILE);
+
+  return new Promise((resolve, reject) => {
+    void (async () => {
+    const startTime = Date.now();
+    let timeoutHandle = null;
+    let finalized = false;
+
+    // Prepare prompt
+    const prompt = `
+Execute the following task:
+
+**Task ID**: ${task.id}
+**Description**: ${task.description}
+**Domain**: ${task.domain || 'general'}
+**Risk Level**: ${task.risk}
+**Owner**: ${task.owner || 'default'}
+
+Please complete this task and report back when done.
+`;
+
+    // Resolve which CLI to use based on routing rules
+    const runId = task.run_id || createRunId('multi-ai-run', task.id);
+    const { command, args, model, requestedExecutor, routeSource, fallbackReason } = resolveCliCommand(task, projectDir, claudePath);
+    process.stderr.write(`[worker] Task ${task.id} → ${command} (model: ${model})\n`);
+
+    await emitCanonicalEvent('multi_ai_run.route.selected', {
+      run_id: runId,
+      task_id: task.id,
+      owner: task.owner || 'default',
+      route_source: routeSource,
+      requested_executor: requestedExecutor,
+      command,
+      ...withExecutorMetadata(model),
+    }, projectDir, task.id, 'route_selected');
+
+    if (fallbackReason) {
+      await emitCanonicalEvent('multi_ai_run.route.fallback', {
+        run_id: runId,
+        task_id: task.id,
+        owner: task.owner || 'default',
+        route_source: routeSource,
+        requested_executor: requestedExecutor,
+        fallback_reason: fallbackReason,
+        fallback_executor: model,
+        command,
+        ...withExecutorMetadata(model),
+      }, projectDir, task.id, 'route_fallback');
+
+    }
+
+    await emitCanonicalEvent('orchestrate.execution.start', {
+      run_id: runId,
+      task_id: task.id,
+      domain: task.domain || 'general',
+      risk: task.risk || 'low',
+      owner: task.owner || 'default',
+      model,
+      command,
+      ...withExecutorMetadata(model),
+    }, projectDir, task.id, 'execution_start');
+
+    // Update state to "in_progress"
+    try {
+      await updateTaskState(statePath, task.id, 'in_progress', { worker: 'worker-' + process.pid % 4 });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    // Spawn the selected CLI
+    const cli = spawn(command, args, {
+      cwd: projectDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        CLAUDE_AGENT_ROLE: task.owner || 'default',
+        CLAUDE_TASK_ID: task.id,
+        WHITEBOX_RUN_ID: runId,
+      }
+    });
+
+    let output = '';
+    let errorOutput = '';
+
+    async function finalizeExecution(result) {
+      if (finalized) return;
+      finalized = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+
+      const duration = Number.isFinite(result.durationMs) ? result.durationMs : (Date.now() - startTime);
+      const stateData = {
+        duration,
+        ...result.stateData,
+      };
+
+      await emitCanonicalEvent('orchestrate.execution.finish', {
+        run_id: runId,
+        task_id: task.id,
+        outcome: result.outcome,
+        duration_ms: duration,
+        exit_code: result.exitCode,
+        ...(result.timeout ? { timeout: true } : {}),
+        ...withExecutorMetadata(model),
+      }, projectDir, task.id, 'execution_finish');
+
+      try {
+        await updateTaskState(statePath, task.id, result.status, stateData);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      if (result.status === 'completed') {
+        resolve({ id: task.id, status: 'completed', duration, output });
+        return;
+      }
+
+      reject(result.error instanceof Error ? result.error : new Error(String(result.error || `Task ${task.id} failed`)));
+    }
+
+    cli.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    cli.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    cli.on('error', async (err) => {
+      await finalizeExecution({
+        status: 'failed',
+        outcome: 'error',
+        exitCode: null,
+        stateData: {
+          error: err.message,
+        },
+        error: new Error(`Task ${task.id} failed to start: ${err.message}`),
+      });
+    });
+
+    cli.on('close', async (code) => {
+      if (code === 0) {
+        const decision = buildTaskSyncDecision(task, output);
+        if (decision) {
+          upsertDecision(statePath, decision);
+        } else {
+          clearTaskDecisions(statePath, task.id);
+        }
+        await finalizeExecution({
+          status: 'completed',
+          outcome: 'pass',
+          exitCode: 0,
+          stateData: {
+            output: output.slice(-500),
+            worker: 'worker-' + process.pid % 4,
+          },
+        });
+      } else {
+        clearTaskDecisions(statePath, task.id);
+        await finalizeExecution({
+          status: 'failed',
+          outcome: 'deny',
+          exitCode: Number.isInteger(code) ? code : null,
+          stateData: {
+            error: errorOutput.slice(-500) || `Process exited with code ${code}`,
+            code,
+          },
+          error: new Error(`Task ${task.id} failed with code ${code}`),
+        });
+      }
+    });
+
+    // Timeout handling
+    timeoutHandle = setTimeout(() => {
+      cli.kill('SIGTERM');
+      clearTaskDecisions(statePath, task.id);
+      void finalizeExecution({
+        status: 'timeout',
+        outcome: 'error',
+        exitCode: null,
+        durationMs: timeout,
+        stateData: {},
+        timeout: true,
+        error: new Error(`Task ${task.id} timed out after ${timeout}ms`),
+      });
+    }, timeout);
+
+    // Send prompt
+    cli.stdin.write(prompt);
+    cli.stdin.end();
+    })().catch(reject);
+  });
 }
 
 // ---------------------------------------------------------------------------

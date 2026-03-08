@@ -92,7 +92,7 @@ select_skill_categories() {
 
     CATEGORIES=$(gum choose --no-limit --cursor.foreground 212 --selected.foreground 212 \
         --header "설치할 카테고리를 선택하세요 (Space로 선택, Enter로 확인):" \
-        "Core - multi-ai-run, multi-ai-review, orchestrate-standalone, task-board (필수 추천)" \
+        "Core - multi-ai-run, multi-ai-review, orchestrate-standalone, task-board, whitebox, statusline runtime (필수 추천)" \
         "Orchestration - agile, governance-setup, workflow-guide" \
         "Quality - checkpoint, quality-auditor, security-review" \
         "Analysis - architecture, deps, impact, changelog, coverage" \
@@ -223,7 +223,7 @@ install_skills() {
 
     # Core skills
     if [[ "$INSTALL_ALL" == true ]] || [[ "$CATEGORIES" == *"Core"* ]]; then
-        for skill in multi-ai-run multi-ai-review orchestrate-standalone task-board; do
+        for skill in multi-ai-run multi-ai-review orchestrate-standalone task-board whitebox statusline; do
             if [[ -d "$SCRIPT_DIR/skills/$skill" ]]; then
                 mkdir -p "$TARGET_DIR/skills/$skill"
                 gum spin --spinner dot --title "$skill 설치 중..." -- \
@@ -317,6 +317,30 @@ install_project_team() {
         gum spin --spinner dot --title "템플릿 설치 중..." -- \
             bash -c "rsync -a \"$SCRIPT_DIR/project-team/templates/\" \"$TARGET_DIR/templates/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/project-team/templates/.\" \"$TARGET_DIR/templates/\""
         echo -e "${GREEN}✓ 템플릿 설치됨${NC}"
+    fi
+
+    mkdir -p "$TARGET_DIR/project-team/scripts"
+    if [[ -d "$SCRIPT_DIR/project-team/scripts" ]]; then
+        gum spin --spinner dot --title "협업 런타임 스크립트 설치 중..." -- \
+            bash -c "rsync -a \"$SCRIPT_DIR/project-team/scripts/\" \"$TARGET_DIR/project-team/scripts/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/project-team/scripts/.\" \"$TARGET_DIR/project-team/scripts/\""
+        find "$TARGET_DIR/project-team/scripts" \( -name '*.js' -o -name '*.sh' \) -exec chmod +x {} + 2>/dev/null || true
+        echo -e "${GREEN}✓ project-team runtime scripts 설치됨${NC}"
+    fi
+
+    mkdir -p "$TARGET_DIR/scripts"
+    if [[ -d "$SCRIPT_DIR/project-team/scripts" ]]; then
+        gum spin --spinner dot --title "훅 런타임 스크립트 alias 설치 중..." -- \
+            bash -c "rsync -a \"$SCRIPT_DIR/project-team/scripts/\" \"$TARGET_DIR/scripts/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/project-team/scripts/.\" \"$TARGET_DIR/scripts/\""
+        find "$TARGET_DIR/scripts" \( -name '*.js' -o -name '*.sh' \) -exec chmod +x {} + 2>/dev/null || true
+        echo -e "${GREEN}✓ hook runtime script aliases 설치됨${NC}"
+    fi
+
+    mkdir -p "$TARGET_DIR/services"
+    if [[ -d "$SCRIPT_DIR/project-team/services" ]]; then
+        gum spin --spinner dot --title "훅 서비스 런타임 설치 중..." -- \
+            bash -c "rsync -a \"$SCRIPT_DIR/project-team/services/\" \"$TARGET_DIR/services/\" 2>/dev/null || cp -r \"$SCRIPT_DIR/project-team/services/.\" \"$TARGET_DIR/services/\""
+        find "$TARGET_DIR/services" -name '*.js' -exec chmod +x {} + 2>/dev/null || true
+        echo -e "${GREEN}✓ hook service runtime 설치됨${NC}"
     fi
 
     # Install hooks (based on mode)

@@ -20,6 +20,20 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+const { readEvents } = require('../../../project-team/scripts/lib/whitebox-events');
+const { refreshWhiteboxSummary } = require('../../whitebox/scripts/whitebox-summary');
+const {
+  setStaleMarker,
+  clearStaleMarker,
+  readMarkers,
+} = require('../../../project-team/scripts/collab-derived-meta');
+
+const BOARD_SCHEMA_VERSION = '1.1';
+const BOARD_STATE_REL_PATH = '.claude/collab/board-state.json';
+const BOARD_SNAPSHOT_REL_PATH = '.claude/collab/board-state.snapshot.json';
+const EVENTS_REL_PATH = '.claude/collab/events.ndjson';
 
 // ---------------------------------------------------------------------------
 // Args
@@ -83,7 +97,7 @@ function parseTasks(tasksPath) {
     const id = idMatch ? idMatch[1] : title.slice(0, 40);
     tasks.push({ id, title, status: done ? 'completed' : 'pending', source: 'tasks-md' });
   }
-  return tasks;
+  return tasks.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +162,9 @@ function parseFrontmatter(content) {
 
 function parseReqFiles(requestsDir) {
   if (!fs.existsSync(requestsDir)) return [];
-  const files = fs.readdirSync(requestsDir).filter((f) => f.match(/^REQ-.*\.md$/));
+  const files = fs.readdirSync(requestsDir)
+    .filter((f) => f.match(/^REQ-.*\.md$/))
+    .sort((a, b) => a.localeCompare(b));
   return files.map((f) => {
     try {
       const content = fs.readFileSync(path.join(requestsDir, f), 'utf8');
@@ -162,6 +178,132 @@ function parseReqFiles(requestsDir) {
       };
     } catch { return null; }
   }).filter(Boolean);
+}
+
+function readTextIfExists(filePath) {
+  try {
+    return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+  } catch {
+    return '';
+  }
+}
+
+function sha256(parts) {
+  const hash = crypto.createHash('sha256');
+  for (const part of parts) hash.update(String(part || ''), 'utf8');
+  return hash.digest('hex');
+}
+
+function latestIso(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+function deriveBlockerDetails(event) {
+  const data = event && event.data && typeof event.data === 'object' ? event.data : {};
+
+  if (event.type === 'hook.decision' && data.decision && data.decision !== 'allow') {
+    return {
+      reason: data.summary || `${data.hook || event.producer} ${data.decision}`,
+      source: data.hook || event.producer,
+      remediation: data.remediation || null,
+    };
+  }
+
+  if (event.type === 'orchestrate.gate.outcome' && data.outcome && data.outcome !== 'pass') {
+    return {
+      reason: data.reason || `${data.gate || 'gate'} ${data.outcome}`,
+      source: data.gate || event.producer,
+      remediation: null,
+    };
+  }
+
+  if (event.type === 'req_escalated') {
+    return {
+      reason: 'Request escalated',
+      source: event.producer,
+      remediation: null,
+    };
+  }
+
+  if (event.type === 'task_blocked') {
+    return {
+      reason: 'Task reported blocked',
+      source: event.producer,
+      remediation: null,
+    };
+  }
+
+  if (event.type === 'multi_ai_review.run.finish' && data.verdict === 'warning') {
+    return {
+      reason: 'Multi-AI review reported warnings',
+      source: event.producer,
+      remediation: null,
+    };
+  }
+
+  if (event.type === 'multi_ai_review.capability' && data.state === 'missing_cli') {
+    return {
+      reason: data.message || `Missing CLI for ${data.member_name || data.executor || 'review member'}`,
+      source: event.producer,
+      remediation: 'Install or authenticate the missing CLI, then rerun the review.',
+    };
+  }
+
+  if (event.type === 'multi_ai_run.route.fallback') {
+    return {
+      reason: data.fallback_reason || 'Executor fallback applied',
+      source: event.producer,
+      remediation: 'Install or restore the requested executor to avoid fallback.',
+    };
+  }
+
+  return null;
+}
+
+function parseEventContext(projectDir) {
+  const parsed = readEvents({ projectDir, file: EVENTS_REL_PATH, tolerateTrailingPartialLine: true });
+  const byId = new Map();
+
+  for (const event of parsed.events) {
+    const data = event && event.data && typeof event.data === 'object' ? event.data : {};
+    const cardId = data.task_id || data.req_id || event.correlation_id || null;
+    if (!cardId) continue;
+
+    const current = byId.get(cardId) || {
+      last_event_ts: null,
+      last_event_type: null,
+      run_id: null,
+      blocker_reason: null,
+      blocker_source: null,
+      remediation: null,
+    };
+
+    current.last_event_ts = latestIso(current.last_event_ts, event.ts || null);
+    if (!current.last_event_type || current.last_event_ts === (event.ts || null)) {
+      current.last_event_type = event.type;
+    }
+    if (data.run_id) current.run_id = data.run_id;
+
+    const blocker = deriveBlockerDetails(event);
+    if (blocker) {
+      current.blocker_reason = blocker.reason;
+      current.blocker_source = blocker.source;
+      current.remediation = blocker.remediation;
+    }
+
+    byId.set(cardId, current);
+  }
+
+  return {
+    byId,
+    stats: {
+      events: parsed.events.length,
+      invalid: parsed.errors.length,
+      truncated: parsed.truncated.length,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -193,34 +335,123 @@ function mergeSources(tasksMd, orchestrateState, reqs, decisions) {
 // Build board state
 // ---------------------------------------------------------------------------
 
-function buildBoard(cards) {
+function buildBoard(cards, options = {}) {
+  const eventContext = options.eventContext || { byId: new Map(), stats: { events: 0, invalid: 0, truncated: 0 } };
+  const fingerprint = options.fingerprint || '';
+  const staleMarkers = Array.isArray(options.staleMarkers) ? options.staleMarkers : [];
   const state = {
     version: '1.0',
+    schema_version: BOARD_SCHEMA_VERSION,
     generated_at: new Date().toISOString(),
     columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
     decisions: [],
+    derived_from: {
+      fingerprint,
+      event_log: EVENTS_REL_PATH,
+      authoritative_writer: 'skills/task-board/scripts/board-builder.js',
+      event_stats: eventContext.stats,
+    },
+    stale_markers: staleMarkers,
   };
 
   for (const card of cards) {
     const col = COLUMN_MAP[card.status] || 'Backlog';
-    const nextCard = {
+    const eventMeta = eventContext.byId.get(card.id) || null;
+    state.columns[col].push({
       id: card.id,
       title: card.title,
       status: card.status,
       agent: card.agent || null,
       source: card.source,
-    };
-    if (card.task_id) nextCard.task_id = card.task_id;
-    if (card.decision_type) nextCard.decision_type = card.decision_type;
-    if (card.reason) nextCard.reason = card.reason;
+      ...(card.task_id ? { task_id: card.task_id } : {}),
+      ...(card.decision_type ? { decision_type: card.decision_type } : {}),
+      ...(card.reason ? { reason: card.reason } : {}),
+      ...(Array.isArray(card.allowed_actions) && card.allowed_actions.length > 0 ? { allowed_actions: card.allowed_actions } : {}),
+      run_id: eventMeta && eventMeta.run_id ? eventMeta.run_id : null,
+      last_event_type: eventMeta && eventMeta.last_event_type ? eventMeta.last_event_type : null,
+      last_event_ts: eventMeta && eventMeta.last_event_ts ? eventMeta.last_event_ts : null,
+      blocker_reason: eventMeta && eventMeta.blocker_reason ? eventMeta.blocker_reason : null,
+      blocker_source: eventMeta && eventMeta.blocker_source ? eventMeta.blocker_source : null,
+      remediation: eventMeta && eventMeta.remediation ? eventMeta.remediation : null,
+    });
+
     if (Array.isArray(card.allowed_actions) && card.allowed_actions.length > 0) {
-      nextCard.allowed_actions = card.allowed_actions;
-      state.decisions.push(nextCard);
+      state.decisions.push({
+        id: card.id,
+        title: card.title,
+        status: card.status,
+        task_id: card.task_id || null,
+        decision_type: card.decision_type || null,
+        allowed_actions: card.allowed_actions,
+        reason: card.reason || null,
+      });
     }
-    state.columns[col].push(nextCard);
+  }
+
+  for (const cardsInColumn of Object.values(state.columns)) {
+    cardsInColumn.sort((a, b) => a.id.localeCompare(b.id));
   }
 
   return state;
+}
+
+function computeCanonicalFingerprint(projectDir, statePath) {
+  const requestsDir = path.join(projectDir, '.claude', 'collab', 'requests');
+  const requestFiles = fs.existsSync(requestsDir)
+    ? fs.readdirSync(requestsDir).filter((name) => name.endsWith('.md')).sort((a, b) => a.localeCompare(b))
+    : [];
+
+  const parts = [
+    readTextIfExists(path.join(projectDir, 'TASKS.md')),
+    readTextIfExists(statePath),
+    readTextIfExists(path.join(projectDir, EVENTS_REL_PATH)),
+  ];
+
+  for (const requestFile of requestFiles) {
+    parts.push(readTextIfExists(path.join(requestsDir, requestFile)));
+  }
+
+  return sha256(parts);
+}
+
+function writeJsonAtomic(filePath, payload) {
+  const tmpPath = `${filePath}.${process.pid}.tmp`;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), 'utf8');
+  fs.renameSync(tmpPath, filePath);
+}
+
+function shouldForceDerivedWriteFailure() {
+  const raw = String(process.env.WHITEBOX_FORCE_DERIVED_WRITE_FAILURE || '').trim();
+  return raw === '1' || raw === 'true' || raw === 'board-state';
+}
+
+function writeBoardArtifacts(projectDir, board) {
+  if (shouldForceDerivedWriteFailure()) {
+    throw new Error('forced derived write failure');
+  }
+
+  const boardPath = path.join(projectDir, BOARD_STATE_REL_PATH);
+  const snapshotPath = path.join(projectDir, BOARD_SNAPSHOT_REL_PATH);
+  const cardCounts = Object.fromEntries(Object.entries(board.columns).map(([column, cards]) => [column, cards.length]));
+
+  writeJsonAtomic(boardPath, board);
+  writeJsonAtomic(snapshotPath, {
+    schema_version: BOARD_SCHEMA_VERSION,
+    artifact: BOARD_STATE_REL_PATH,
+    generated_at: board.generated_at,
+    derived_from: board.derived_from,
+    card_counts: cardCounts,
+  });
+}
+
+function activeStaleMarkers(projectDir, options = {}) {
+  const artifactToClear = options.artifactToClear || null;
+  return readMarkers(projectDir).filter((entry) => {
+    if (!entry || entry.cleared_by) return false;
+    if (artifactToClear && entry.artifact === artifactToClear) return false;
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -239,15 +470,44 @@ function main() {
   const orchestrateState = parseOrchestrateState(statePath);
   const reqs = parseReqFiles(path.join(p, '.claude', 'collab', 'requests'));
   const decisions = parseDecisions(statePath);
+  const eventContext = parseEventContext(p);
+  const fingerprint = computeCanonicalFingerprint(p, statePath);
+  const staleMarkers = opts.dryRun
+    ? activeStaleMarkers(p)
+    : activeStaleMarkers(p, { artifactToClear: BOARD_STATE_REL_PATH });
 
   const cards = mergeSources(tasksMd, orchestrateState, reqs, decisions);
-  const board = buildBoard(cards);
+  const board = buildBoard(cards, {
+    eventContext,
+    fingerprint,
+    staleMarkers,
+  });
 
   if (!opts.dryRun) {
-    const outPath = path.join(p, '.claude', 'collab', 'board-state.json');
-    fs.mkdirSync(path.dirname(outPath), { recursive: true });
-    fs.writeFileSync(outPath, JSON.stringify(board, null, 2));
-    process.stderr.write(`board-state.json written (${cards.length} cards)\n`);
+    try {
+      writeBoardArtifacts(p, board);
+      clearStaleMarker({
+        projectDir: p,
+        artifact: BOARD_STATE_REL_PATH,
+        clearedBy: 'board-builder',
+      });
+      try {
+        refreshWhiteboxSummary({ projectDir: p });
+      } catch (summaryError) {
+        process.stderr.write(`whitebox-summary refresh failed: ${summaryError.message}\n`);
+      }
+      process.stderr.write(`board-state.json written (${cards.length} cards)\n`);
+    } catch (error) {
+      setStaleMarker({
+        projectDir: p,
+        artifact: BOARD_STATE_REL_PATH,
+        schemaVersion: BOARD_SCHEMA_VERSION,
+        reason: `derived write failure: ${error.message}`,
+      });
+      process.stderr.write(`board-state.json write failed: ${error.message}\n`);
+      process.exitCode = 1;
+      if (!opts.json) return;
+    }
   }
 
   if (opts.json || opts.dryRun) {
@@ -259,4 +519,16 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { parseTasks, parseOrchestrateState, parseReqFiles, parseDecisions, mergeSources, buildBoard, COLUMN_MAP };
+module.exports = {
+  parseTasks,
+  parseOrchestrateState,
+  parseReqFiles,
+  parseDecisions,
+  mergeSources,
+  buildBoard,
+  computeCanonicalFingerprint,
+  parseEventContext,
+  writeBoardArtifacts,
+  activeStaleMarkers,
+  COLUMN_MAP,
+};

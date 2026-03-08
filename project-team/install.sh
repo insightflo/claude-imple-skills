@@ -1,29 +1,14 @@
 #!/usr/bin/env bash
-# @TASK P6-T1 - Claude Project Team Install Script
-# @SPEC docs/design/PROJECT-TEAM-AGENTS.md#13-배포-구조
-#
-# Installs Claude Project Team hooks, agents, and templates
-# into a user's Claude Code environment.
-#
-# Usage:
-#   ./install.sh                  # Interactive install
-#   ./install.sh --global         # Global install (~/.claude/)
-#   ./install.sh --local          # Local install (.claude/)
-#   ./install.sh --hooks-only     # Install hooks only
-#   ./install.sh --dry-run        # Preview without changes
-#   ./install.sh --uninstall      # Remove installed files
 
 set -euo pipefail
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REGISTRY_SCRIPT="${SCRIPT_DIR}/scripts/install-registry.js"
 BACKUP_SUFFIX=".backup-$(date +%Y%m%d%H%M%S)"
+MANIFEST_NAME="project-team-install-state.json"
+HOOK_CONFIG_NAME="project-team-hooks.json"
 
-# Colors (disabled if not a terminal)
 if [ -t 1 ]; then
     RED='\033[0;31m'
     GREEN='\033[0;32m'
@@ -36,28 +21,36 @@ else
     RED='' GREEN='' YELLOW='' BLUE='' CYAN='' BOLD='' NC=''
 fi
 
-# ---------------------------------------------------------------------------
-# Default options
-# ---------------------------------------------------------------------------
-
-INSTALL_MODE=""        # "global" | "local"
-MODE=""                # "lite" | "standard" | "full"
+INSTALL_MODE=""
+MODE="lite"
+MODE_EXPLICIT=false
 HOOKS_ONLY=false
 DRY_RUN=false
 UNINSTALL=false
 FORCE=false
 QUIET=false
 
-# Counters
 INSTALLED_HOOKS=0
 INSTALLED_AGENTS=0
 INSTALLED_TEMPLATES=0
 BACKED_UP=0
+REMOVED=0
 ERRORS=0
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+TARGET_BASE=""
+TARGET_HOOKS=""
+TARGET_AGENTS=""
+TARGET_TEMPLATES=""
+TARGET_SETTINGS=""
+TARGET_HOOK_CONFIG=""
+TARGET_MANIFEST=""
+
+REGISTRY_MODE_JSON=""
+PREVIOUS_STATE_JSON=""
+PREVIOUS_HOOK_CONFIG_JSON=""
+CURRENT_HOOK_CONFIG_JSON=""
+CURRENT_MANAGED_COMMANDS_JSON="[]"
+PREVIOUS_MANAGED_COMMANDS_JSON="[]"
 
 log_info()    { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
 log_success() { printf "${GREEN}[OK]${NC}   %s\n" "$1"; }
@@ -83,65 +76,66 @@ confirm() {
     esac
 }
 
-# ---------------------------------------------------------------------------
-# Usage
-# ---------------------------------------------------------------------------
-
 usage() {
     cat <<EOF
 ${BOLD}Claude Project Team Installer v${VERSION}${NC}
 
 Usage: $(basename "$0") [OPTIONS]
 
-${BOLD}Install Modes:${NC}
-  --global          Install to ~/.claude/ (shared across projects)
-  --local           Install to .claude/ (current project only)
-  (no flag)         Interactive mode (prompts for choice)
+${BOLD}Install Scope:${NC}
+  --global               Install to ~/.claude/
+  --local                Install to .claude/
+  (no flag)              Interactive scope selection
 
 ${BOLD}Configuration Mode:${NC}
-  --mode=lite       MVP용 (policy-gate, security-scan)
-  --mode=standard   General project (lite + quality-gate, contract-gate)
-  --mode=full       Enterprise (standard + risk-gate, docs-gate)
+  --mode lite            Canonical MVP topology
+  --mode=lite            Same as above
+  --mode standard        Lite + specialists + added gates
+  --mode full            Standard + compatibility profile surfaces
+  (no flag)              Interactive install defaults to lite
 
 ${BOLD}Selective Install:${NC}
-  --hooks-only      Install hooks only
+  --hooks-only           Install hooks + managed settings only
 
 ${BOLD}Other Options:${NC}
-  --dry-run         Preview what would be installed without making changes
-  --uninstall       Remove Claude Project Team files
-  --force           Skip confirmation prompts
-  --quiet           Minimal output
-  --help            Show this help message
+  --dry-run              Preview changes without writing files
+  --uninstall            Remove only manifest-owned Project Team artifacts
+  --force                Skip confirmation prompts
+  --quiet                Minimal output
+  --help, -h             Show this help message
 
 ${BOLD}Examples:${NC}
-  $(basename "$0")                    # Interactive install
-  $(basename "$0") --global           # Global install
-  $(basename "$0") --local --mode=standard  # Standard mode install
-  $(basename "$0") --dry-run          # Preview changes
-  $(basename "$0") --uninstall        # Remove installation
-
+  $(basename "$0") --local --mode lite
+  $(basename "$0") --global --mode=standard
+  $(basename "$0") --local --mode full --dry-run
+  $(basename "$0") --global --uninstall
 EOF
 }
-
-# ---------------------------------------------------------------------------
-# Parse arguments
-# ---------------------------------------------------------------------------
 
 parse_args() {
     while [ $# -gt 0 ]; do
         case "$1" in
-            --global)     INSTALL_MODE="global" ;;
-            --local)      INSTALL_MODE="local" ;;
+            --global) INSTALL_MODE="global" ;;
+            --local) INSTALL_MODE="local" ;;
             --mode)
+                if [ $# -lt 2 ]; then
+                    log_error "--mode requires a value"
+                    exit 1
+                fi
                 MODE="$2"
+                MODE_EXPLICIT=true
                 shift
                 ;;
+            --mode=*)
+                MODE="${1#--mode=}"
+                MODE_EXPLICIT=true
+                ;;
             --hooks-only) HOOKS_ONLY=true ;;
-            --dry-run)    DRY_RUN=true ;;
-            --uninstall)  UNINSTALL=true ;;
-            --force)      FORCE=true ;;
-            --quiet)      QUIET=true ;;
-            --help|-h)    usage; exit 0 ;;
+            --dry-run) DRY_RUN=true ;;
+            --uninstall) UNINSTALL=true ;;
+            --force) FORCE=true ;;
+            --quiet) QUIET=true ;;
+            --help|-h) usage; exit 0 ;;
             *)
                 log_error "Unknown option: $1"
                 usage
@@ -150,79 +144,58 @@ parse_args() {
         esac
         shift
     done
-
-    # Validate mode
-    if [ -n "$MODE" ]; then
-        case "$MODE" in
-            lite|standard|full)
-                ;;
-            *)
-                log_error "Invalid mode: $MODE (must be: lite, standard, or full)"
-                exit 1
-                ;;
-        esac
-    fi
 }
-
-# ---------------------------------------------------------------------------
-# Prerequisite checks
-# ---------------------------------------------------------------------------
 
 check_prerequisites() {
     header "Checking prerequisites"
 
-    # Verify source directory has expected structure
     local missing=0
-    for dir in hooks hook-shims agents templates; do
-        if [ ! -d "${SCRIPT_DIR}/${dir}" ]; then
-            log_error "Missing source directory: ${SCRIPT_DIR}/${dir}"
+    for dir in hooks agents templates scripts config; do
+        if [ ! -e "${SCRIPT_DIR}/${dir}" ]; then
+            log_error "Missing source path: ${SCRIPT_DIR}/${dir}"
             missing=$((missing + 1))
         fi
     done
+    if [ ! -f "$REGISTRY_SCRIPT" ]; then
+        log_error "Missing install registry reader: ${REGISTRY_SCRIPT}"
+        missing=$((missing + 1))
+    fi
     if [ "$missing" -gt 0 ]; then
         log_error "Source directory appears incomplete. Run from the project-team root."
         exit 1
     fi
     log_success "Source directory verified: ${SCRIPT_DIR}"
 
-    # Check for jq (needed for settings.json merge)
-    if command -v jq >/dev/null 2>&1; then
-        log_success "jq found (for settings.json merge)"
-    else
-        log_warn "jq not found. settings.json hook configuration will be generated but not auto-merged."
-        log_warn "Install jq: brew install jq (macOS) or apt-get install jq (Linux)"
-    fi
-
-    # Check for Node.js (hooks are JS)
     if command -v node >/dev/null 2>&1; then
         local node_version
         node_version="$(node --version 2>/dev/null || echo 'unknown')"
-        log_success "Node.js found: ${node_version} (required for hooks)"
+        log_success "Node.js found: ${node_version}"
     else
-        log_warn "Node.js not found. Hooks require Node.js to execute."
+        log_error "Node.js is required for registry-driven installation."
+        exit 1
+    fi
+
+    if node "$REGISTRY_SCRIPT" mode "$MODE" >/dev/null 2>&1; then
+        log_success "Registry mode verified: ${MODE}"
+    else
+        log_error "Invalid mode from registry: ${MODE}"
+        exit 1
     fi
 }
-
-# ---------------------------------------------------------------------------
-# Interactive mode selection
-# ---------------------------------------------------------------------------
 
 prompt_install_mode() {
     if [ -n "$INSTALL_MODE" ]; then
         return
     fi
 
-    header "Installation Mode"
+    header "Installation Scope"
     printf "\n"
     printf "  ${BOLD}1)${NC} Global install  ${CYAN}(~/.claude/)${NC}\n"
-    printf "     Hooks, agents, and templates available in all projects.\n"
-    printf "\n"
     printf "  ${BOLD}2)${NC} Local install   ${CYAN}(.claude/)${NC}\n"
-    printf "     Installed only in the current project directory.\n"
     printf "\n"
 
     while true; do
-        printf "${YELLOW}Select mode [1/2]:${NC} "
+        printf "${YELLOW}Select scope [1/2]:${NC} "
         read -r choice
         case "$choice" in
             1) INSTALL_MODE="global"; break ;;
@@ -232,36 +205,47 @@ prompt_install_mode() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# Resolve target directories
-# ---------------------------------------------------------------------------
+prompt_configuration_mode() {
+    if [ "$MODE_EXPLICIT" = true ]; then
+        return
+    fi
+
+    header "Configuration Mode"
+    printf "\n"
+    printf "  ${BOLD}1)${NC} lite     ${CYAN}(default)${NC}\n"
+    printf "  ${BOLD}2)${NC} standard\n"
+    printf "  ${BOLD}3)${NC} full\n"
+    printf "\n"
+    printf "${YELLOW}Select mode [1/2/3] (Enter for lite):${NC} "
+    read -r choice
+    case "$choice" in
+        ""|1) MODE="lite" ;;
+        2) MODE="standard" ;;
+        3) MODE="full" ;;
+        *)
+            log_warn "Unknown selection '${choice}'. Defaulting to lite."
+            MODE="lite"
+            ;;
+    esac
+}
 
 resolve_targets() {
     case "$INSTALL_MODE" in
-        global)
-            TARGET_BASE="$HOME/.claude"
-            TARGET_HOOKS="${TARGET_BASE}/hooks"
-            TARGET_AGENTS="${TARGET_BASE}/agents"
-            TARGET_TEMPLATES="${TARGET_BASE}/templates"
-            TARGET_SETTINGS="${TARGET_BASE}/settings.json"
-            ;;
-        local)
-            TARGET_BASE=".claude"
-            TARGET_HOOKS="${TARGET_BASE}/hooks"
-            TARGET_AGENTS="${TARGET_BASE}/agents"
-            TARGET_TEMPLATES="${TARGET_BASE}/templates"
-            TARGET_SETTINGS="${TARGET_BASE}/settings.json"
-            ;;
+        global) TARGET_BASE="$HOME/.claude" ;;
+        local) TARGET_BASE=".claude" ;;
         *)
             log_error "Invalid install mode: ${INSTALL_MODE}"
             exit 1
             ;;
     esac
-}
 
-# ---------------------------------------------------------------------------
-# Backup a file if it exists
-# ---------------------------------------------------------------------------
+    TARGET_HOOKS="${TARGET_BASE}/hooks"
+    TARGET_AGENTS="${TARGET_BASE}/agents"
+    TARGET_TEMPLATES="${TARGET_BASE}/templates"
+    TARGET_SETTINGS="${TARGET_BASE}/settings.json"
+    TARGET_HOOK_CONFIG="${TARGET_HOOKS}/${HOOK_CONFIG_NAME}"
+    TARGET_MANIFEST="${TARGET_BASE}/${MANIFEST_NAME}"
+}
 
 backup_file() {
     local target="$1"
@@ -272,16 +256,9 @@ backup_file() {
         else
             cp -a "$target" "$backup"
             BACKED_UP=$((BACKED_UP + 1))
-            if [ "$QUIET" = false ]; then
-                log_info "Backed up: $(basename "$target")"
-            fi
         fi
     fi
 }
-
-# ---------------------------------------------------------------------------
-# Copy a single file with backup
-# ---------------------------------------------------------------------------
 
 install_file() {
     local src="$1"
@@ -297,458 +274,636 @@ install_file() {
     mkdir -p "$dest_dir"
     backup_file "$dest"
     cp -a "$src" "$dest"
-
-    # Preserve executable bit for hook scripts
     if [[ "$src" == *.js ]] || [[ "$src" == *.sh ]]; then
         chmod +x "$dest"
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Install hooks
-# ---------------------------------------------------------------------------
+load_registry_payload() {
+    REGISTRY_MODE_JSON="$(node "$REGISTRY_SCRIPT" mode "$MODE")"
+}
 
-install_hooks() {
-    header "Installing Hooks"
+json_eval() {
+    local json="$1"
+    local script="$2"
+    JSON_INPUT="$json" node -e "$script"
+}
 
-    local hooks_src="${SCRIPT_DIR}/hooks"
-    local count=0
+registry_description() {
+    json_eval "$REGISTRY_MODE_JSON" 'const d = JSON.parse(process.env.JSON_INPUT); console.log(d.description);'
+}
 
-    # Mode-based hook filtering
-    local allowed_hooks=""
-    if [ -n "$MODE" ]; then
-        case "$MODE" in
-            lite)
-                allowed_hooks="policy-gate|security-scan"
-                ;;
-            standard)
-                allowed_hooks="policy-gate|security-scan|quality-gate|contract-gate"
-                ;;
-            full)
-                allowed_hooks="policy-gate|security-scan|quality-gate|contract-gate|risk-gate|docs-gate"
-                ;;
-        esac
-        log_info "Mode: ${MODE} (installing: ${allowed_hooks})"
-    fi
+registry_role_count() {
+    json_eval "$REGISTRY_MODE_JSON" 'const d = JSON.parse(process.env.JSON_INPUT); console.log(d.canonicalRoleCount);'
+}
 
-    # Install hook JS files (skip __tests__ and docs)
-    while IFS= read -r -d '' hookfile; do
-        local basename_file
-        basename_file="$(basename "$hookfile")"
-        local dest="${TARGET_HOOKS}/${basename_file}"
+registry_registry_version() {
+    json_eval "$REGISTRY_MODE_JSON" 'const d = JSON.parse(process.env.JSON_INPUT); console.log(d.registryVersion || "unknown");'
+}
 
-        # Skip test files
-        if [[ "$basename_file" == *".test."* ]]; then
-            continue
-        fi
+registry_artifact_lines() {
+    local category="$1"
+    JSON_INPUT="$REGISTRY_MODE_JSON" CATEGORY="$category" node - <<'NODE'
+const data = JSON.parse(process.env.JSON_INPUT);
+for (const item of data.artifacts[process.env.CATEGORY] || []) {
+  process.stdout.write(`${item}\n`);
+}
+NODE
+}
 
-        # Mode-based filtering
-        if [ -n "$allowed_hooks" ]; then
-            local hook_name="${basename_file%.js}"
-            if [[ ! "$hook_name" =~ ^($allowed_hooks)$ ]]; then
-                log_dry "  [skip] ${basename_file} (not in ${MODE} mode)"
-                continue
-            fi
-        fi
-
-        install_file "$hookfile" "$dest"
-        count=$((count + 1))
-
-        if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
-            log_success "  ${basename_file}"
-        fi
-    done < <(find "$hooks_src" -maxdepth 1 -name '*.js' -print0 | sort -z)
-
-    local shims_src="${SCRIPT_DIR}/hook-shims"
-    if [ -d "$shims_src" ]; then
-        while IFS= read -r -d '' shimfile; do
-            local basename_file
-            basename_file="$(basename "$shimfile")"
-            local dest="${TARGET_HOOKS}/${basename_file}"
-
-            install_file "$shimfile" "$dest"
-            count=$((count + 1))
-
-            if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
-                log_success "  ${basename_file}"
-            fi
-        done < <(find "$shims_src" -maxdepth 1 -name '*.js' -print0 | sort -z)
-    fi
-
-    INSTALLED_HOOKS=$count
-
-    if [ "$DRY_RUN" = true ]; then
-        log_dry "${count} hook(s) would be installed to ${TARGET_HOOKS}"
+managed_category_lines() {
+    if [ "$HOOKS_ONLY" = true ]; then
+        printf '%s\n' hooks settings
     else
-        log_success "${count} hook(s) installed to ${TARGET_HOOKS}"
+        printf '%s\n' hooks agents templates settings
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Install agents
-# ---------------------------------------------------------------------------
-
-install_agents() {
-    header "Installing Agents"
-
-    local agents_src="${SCRIPT_DIR}/agents"
-    local count=0
-
-    # Install project-level agents
-    while IFS= read -r -d '' agentfile; do
-        local relpath="${agentfile#${agents_src}/}"
-        local dest="${TARGET_AGENTS}/${relpath}"
-
-        install_file "$agentfile" "$dest"
-        count=$((count + 1))
-
-        if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
-            log_success "  ${relpath}"
-        fi
-    done < <(find "$agents_src" -name '*.md' -print0 | sort -z)
-
-    INSTALLED_AGENTS=$count
-
-    if [ "$DRY_RUN" = true ]; then
-        log_dry "${count} agent(s) would be installed to ${TARGET_AGENTS}"
-    else
-        log_success "${count} agent(s) installed to ${TARGET_AGENTS}"
-    fi
+desired_artifact_lines() {
+    while IFS= read -r category; do
+        [ -n "$category" ] || continue
+        registry_artifact_lines "$category"
+    done < <(managed_category_lines)
 }
 
-# ---------------------------------------------------------------------------
-# Install templates
-# ---------------------------------------------------------------------------
-
-install_templates() {
-    header "Installing Templates"
-
-    local templates_src="${SCRIPT_DIR}/templates"
-    local count=0
-
-    while IFS= read -r -d '' tplfile; do
-        local relpath="${tplfile#${templates_src}/}"
-        local dest="${TARGET_TEMPLATES}/${relpath}"
-
-        install_file "$tplfile" "$dest"
-        count=$((count + 1))
-
-        if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
-            log_success "  ${relpath}"
-        fi
-    done < <(find "$templates_src" -type f -print0 | sort -z)
-
-    INSTALLED_TEMPLATES=$count
-
-    if [ "$DRY_RUN" = true ]; then
-        log_dry "${count} template(s) would be installed to ${TARGET_TEMPLATES}"
+load_previous_install_state() {
+    if [ -f "$TARGET_MANIFEST" ]; then
+        PREVIOUS_STATE_JSON="$(<"$TARGET_MANIFEST")"
     else
-        log_success "${count} template(s) installed to ${TARGET_TEMPLATES}"
+        PREVIOUS_STATE_JSON=""
     fi
+
+    if [ -f "$TARGET_HOOK_CONFIG" ]; then
+        PREVIOUS_HOOK_CONFIG_JSON="$(<"$TARGET_HOOK_CONFIG")"
+    else
+        PREVIOUS_HOOK_CONFIG_JSON=""
+    fi
+
+    PREVIOUS_MANAGED_COMMANDS_JSON="$(PREVIOUS_STATE_JSON="$PREVIOUS_STATE_JSON" PREVIOUS_HOOK_CONFIG_JSON="$PREVIOUS_HOOK_CONFIG_JSON" node - <<'NODE'
+const unique = (values) => [...new Set(values.filter(Boolean))].sort();
+const commands = [];
+if (process.env.PREVIOUS_STATE_JSON) {
+  const state = JSON.parse(process.env.PREVIOUS_STATE_JSON);
+  commands.push(...(state.managedCommands || []));
+}
+if (process.env.PREVIOUS_HOOK_CONFIG_JSON) {
+  const config = JSON.parse(process.env.PREVIOUS_HOOK_CONFIG_JSON);
+  commands.push(...(((config.managed || {}).commands) || []));
+}
+process.stdout.write(JSON.stringify(unique(commands)));
+NODE
+)"
 }
 
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Generate hook settings JSON
-# ---------------------------------------------------------------------------
-
-generate_hook_settings() {
-    # Build the project-team hook entries as JSON.
-    # These map each hook to the correct Claude Code event and matcher.
-    local hooks_path
-    if [ "$INSTALL_MODE" = "global" ]; then
-        hooks_path="\${HOME}/.claude/hooks"
-    else
-        hooks_path="\${CLAUDE_PROJECT_DIR:-.}/.claude/hooks"
-    fi
-
-    cat <<ENDJSON
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/permission-checker.js\"",
-            "timeout": 5,
-            "statusMessage": "Checking permissions..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/pre-edit-impact-check.js\"",
-            "timeout": 5,
-            "statusMessage": "Analyzing impact..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/risk-area-warning.js\"",
-            "timeout": 5,
-            "statusMessage": "Checking risk areas..."
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/standards-validator.js\"",
-            "timeout": 5,
-            "statusMessage": "Validating standards..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/design-validator.js\"",
-            "timeout": 5,
-            "statusMessage": "Checking design system..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/interface-validator.js\"",
-            "timeout": 5,
-            "statusMessage": "Validating interfaces..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/cross-domain-notifier.js\"",
-            "timeout": 5,
-            "statusMessage": "Checking cross-domain changes..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/architecture-updater.js\"",
-            "timeout": 10,
-            "statusMessage": "Updating architecture docs..."
-          },
-          {
-            "type": "command",
-            "command": "node \"${hooks_path}/changelog-recorder.js\"",
-            "timeout": 5,
-            "statusMessage": "Recording changelog..."
-          }
-        ]
-      }
-    ]
+previous_artifact_lines_for_managed_categories() {
+    PREVIOUS_STATE_JSON="$PREVIOUS_STATE_JSON" HOOKS_ONLY="$HOOKS_ONLY" node - <<'NODE'
+if (!process.env.PREVIOUS_STATE_JSON) {
+  process.exit(0);
+}
+const state = JSON.parse(process.env.PREVIOUS_STATE_JSON);
+const categories = process.env.HOOKS_ONLY === 'true'
+  ? ['hooks', 'settings']
+  : ['hooks', 'agents', 'templates', 'settings'];
+for (const category of categories) {
+  for (const item of (((state.categories || {})[category]) || [])) {
+    process.stdout.write(`${item}\n`);
   }
 }
-ENDJSON
+NODE
 }
 
-# ---------------------------------------------------------------------------
-# Configure settings.json
-# ---------------------------------------------------------------------------
+install_project_scripts() {
+    header "Installing Project Scripts"
+
+    local scripts_src="${SCRIPT_DIR}/scripts"
+    local services_src="${SCRIPT_DIR}/services"
+    local target_scripts="${TARGET_BASE}/project-team/scripts"
+    local target_script_aliases="${TARGET_BASE}/scripts"
+    local target_services="${TARGET_BASE}/services"
+    local count=0
+    local service_count=0
+
+    if [ ! -d "$scripts_src" ]; then
+        log_warn "Project scripts directory not found: ${scripts_src}"
+        return
+    fi
+
+    while IFS= read -r -d '' scriptfile; do
+        local relpath="${scriptfile#${scripts_src}/}"
+        local dest="${target_scripts}/${relpath}"
+
+        install_file "$scriptfile" "$dest"
+        install_file "$scriptfile" "${target_script_aliases}/${relpath}"
+        count=$((count + 1))
+
+        if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
+            log_success "  ${relpath}"
+        fi
+    done < <(find "$scripts_src" -type f \( -name '*.js' -o -name '*.sh' \) -print0 | sort -z)
+
+    if [ -d "$services_src" ]; then
+        while IFS= read -r -d '' servicefile; do
+            local relpath="${servicefile#${services_src}/}"
+            local dest="${target_services}/${relpath}"
+
+            install_file "$servicefile" "$dest"
+            service_count=$((service_count + 1))
+
+            if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
+                log_success "  services/${relpath}"
+            fi
+        done < <(find "$services_src" -type f -name '*.js' -print0 | sort -z)
+    fi
+
+    if [ "$count" -eq 0 ] && [ "$service_count" -eq 0 ]; then
+        log_warn "No project runtime files selected for install"
+        return
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "${count} project script(s) and ${service_count} service file(s) would be installed"
+    else
+        log_success "${count} project script(s) installed to ${target_scripts}"
+        log_success "${count} script alias file(s) installed to ${target_script_aliases}"
+        if [ "$service_count" -gt 0 ]; then
+            log_success "${service_count} service file(s) installed to ${target_services}"
+        fi
+    fi
+}
+
+cleanup_stale_owned_artifacts() {
+    local desired_file previous_file stale_lines relpath
+    desired_file="$(mktemp)"
+    previous_file="$(mktemp)"
+
+    desired_artifact_lines | sort -u > "$desired_file"
+    previous_artifact_lines_for_managed_categories | sort -u > "$previous_file"
+
+    stale_lines=""
+    while IFS= read -r relpath; do
+        [ -n "$relpath" ] || continue
+        if ! grep -Fqx "$relpath" "$desired_file"; then
+            stale_lines="${stale_lines}${relpath}"$'\n'
+        fi
+    done < "$previous_file"
+
+    if [ -z "$stale_lines" ]; then
+        rm -f "$desired_file" "$previous_file"
+        return
+    fi
+
+    header "Cleaning Stale Owned Artifacts"
+    while IFS= read -r relpath; do
+        [ -n "$relpath" ] || continue
+        local target="${TARGET_BASE}/${relpath}"
+        if [ ! -e "$target" ]; then
+            continue
+        fi
+        if [ "$DRY_RUN" = true ]; then
+            log_dry "Would remove stale owned artifact: ${target}"
+        else
+            rm -f "$target"
+            REMOVED=$((REMOVED + 1))
+            log_success "Removed stale owned artifact: ${target}"
+            prune_empty_parent_dirs "$target"
+        fi
+    done <<< "$stale_lines"
+
+    rm -f "$desired_file" "$previous_file"
+}
+
+prune_empty_parent_dirs() {
+    local target="$1"
+    local current
+    current="$(dirname "$target")"
+    while [ "$current" != "$TARGET_BASE" ] && [ "$current" != "." ] && [ -n "$current" ]; do
+        rmdir "$current" 2>/dev/null || break
+        current="$(dirname "$current")"
+    done
+}
+
+install_registry_category() {
+    local category="$1"
+    local count=0
+    local label
+
+    case "$category" in
+        hooks) label="Hooks" ;;
+        agents) label="Agents" ;;
+        templates) label="Templates" ;;
+        *)
+            log_error "Unsupported install category: ${category}"
+            exit 1
+            ;;
+    esac
+
+    header "Installing ${label}"
+    while IFS= read -r relpath; do
+        [ -n "$relpath" ] || continue
+        local src="${SCRIPT_DIR}/${relpath}"
+        local dest="${TARGET_BASE}/${relpath}"
+
+        if [ ! -e "$src" ]; then
+            log_error "Registry artifact missing from repository: ${src}"
+            exit 1
+        fi
+
+        install_file "$src" "$dest"
+        count=$((count + 1))
+        if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
+            log_success "  ${relpath}"
+        fi
+    done < <(registry_artifact_lines "$category")
+
+    case "$category" in
+        hooks) INSTALLED_HOOKS=$count ;;
+        agents) INSTALLED_AGENTS=$count ;;
+        templates) INSTALLED_TEMPLATES=$count ;;
+    esac
+
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "${count} ${category} artifact(s) would be installed"
+    else
+        log_success "${count} ${category} artifact(s) installed"
+    fi
+}
+
+build_hook_config_json() {
+    local hooks_path
+    if [ "$INSTALL_MODE" = "global" ]; then
+        hooks_path='${HOME}/.claude/hooks'
+    else
+        hooks_path='${CLAUDE_PROJECT_DIR:-.}/.claude/hooks'
+    fi
+
+    REGISTRY_MODE_JSON="$REGISTRY_MODE_JSON" INSTALL_MODE="$INSTALL_MODE" HOOKS_PATH="$hooks_path" node - <<'NODE'
+const path = require('path');
+const payload = JSON.parse(process.env.REGISTRY_MODE_JSON);
+const defs = [...payload.hooks.active, ...payload.hooks.helpers];
+const grouped = {};
+const commands = [];
+
+for (const def of defs) {
+  const event = def.event;
+  const matcher = def.matcher || null;
+  const key = `${event}::${matcher || ''}`;
+  if (!grouped[key]) {
+    grouped[key] = { event, matcher, hooks: [] };
+  }
+  const command = `node "${process.env.HOOKS_PATH}/${path.basename(def.artifact)}"`;
+  commands.push(command);
+  grouped[key].hooks.push({
+    type: 'command',
+    command,
+    timeout: event === 'Stop' ? 10 : 5,
+    statusMessage: `Running ${def.name}...`
+  });
+}
+
+const hooks = {};
+for (const entry of Object.values(grouped)) {
+  if (!hooks[entry.event]) {
+    hooks[entry.event] = [];
+  }
+  const group = { hooks: entry.hooks };
+  if (entry.matcher) {
+    group.matcher = entry.matcher;
+  }
+  hooks[entry.event].push(group);
+}
+
+process.stdout.write(`${JSON.stringify({
+  managed: {
+    installer: 'project-team',
+    registryVersion: payload.registryVersion || 'unknown',
+    mode: payload.mode,
+    installMode: process.env.INSTALL_MODE,
+    commands: [...new Set(commands)].sort()
+  },
+  hooks
+}, null, 2)}\n`);
+NODE
+}
+
+write_hook_config_file() {
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "Would write hook configuration to ${TARGET_HOOK_CONFIG}"
+        return
+    fi
+
+    mkdir -p "$(dirname "$TARGET_HOOK_CONFIG")"
+    printf '%s\n' "$CURRENT_HOOK_CONFIG_JSON" > "$TARGET_HOOK_CONFIG"
+    log_success "Hook configuration saved: ${TARGET_HOOK_CONFIG}"
+}
+
+merge_settings_json() {
+    local new_commands_json
+    new_commands_json="$(json_eval "$CURRENT_HOOK_CONFIG_JSON" 'const d = JSON.parse(process.env.JSON_INPUT); process.stdout.write(JSON.stringify(((d.managed || {}).commands) || []));')"
+    CURRENT_MANAGED_COMMANDS_JSON="$new_commands_json"
+
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "Would reconcile managed Project Team hook groups in ${TARGET_SETTINGS}"
+        return
+    fi
+
+    local original existing_output updated changed
+    original='{}'
+    if [ -f "$TARGET_SETTINGS" ]; then
+        if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));' "$TARGET_SETTINGS" >/dev/null 2>&1; then
+            log_error "Existing settings file is not valid JSON: ${TARGET_SETTINGS}"
+            exit 1
+        fi
+        original="$(<"$TARGET_SETTINGS")"
+    fi
+
+    existing_output="$(TARGET_SETTINGS="$TARGET_SETTINGS" ORIGINAL_JSON="$original" PREVIOUS_MANAGED_COMMANDS_JSON="$PREVIOUS_MANAGED_COMMANDS_JSON" CURRENT_HOOK_CONFIG_JSON="$CURRENT_HOOK_CONFIG_JSON" node - <<'NODE'
+function parseJson(text, fallback) {
+  if (!text) return fallback;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+}
+
+const currentConfig = parseJson(process.env.CURRENT_HOOK_CONFIG_JSON, { hooks: {}, managed: { commands: [] } });
+const managedCommands = new Set(parseJson(process.env.PREVIOUS_MANAGED_COMMANDS_JSON, []).filter(Boolean));
+const existing = parseJson(process.env.ORIGINAL_JSON, {});
+const inputHooks = existing && typeof existing === 'object' && !Array.isArray(existing) ? (existing.hooks || {}) : {};
+const outputHooks = {};
+
+for (const [event, groups] of Object.entries(inputHooks || {})) {
+  if (!Array.isArray(groups)) {
+    outputHooks[event] = groups;
+    continue;
+  }
+  const keptGroups = [];
+  for (const group of groups) {
+    if (!group || typeof group !== 'object' || !Array.isArray(group.hooks)) {
+      keptGroups.push(group);
+      continue;
+    }
+    const keptHooks = group.hooks.filter((hook) => !managedCommands.has(hook && hook.command));
+    if (keptHooks.length > 0) {
+      keptGroups.push({ ...group, hooks: keptHooks });
+    }
+  }
+  if (keptGroups.length > 0) {
+    outputHooks[event] = keptGroups;
+  }
+}
+
+for (const [event, groups] of Object.entries(currentConfig.hooks || {})) {
+  if (!outputHooks[event]) {
+    outputHooks[event] = [];
+  }
+  outputHooks[event] = outputHooks[event].concat(groups);
+}
+
+const result = existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...existing } : {};
+if (Object.keys(outputHooks).length > 0) {
+  result.hooks = outputHooks;
+} else {
+  delete result.hooks;
+}
+
+const originalSerialized = `${JSON.stringify(parseJson(process.env.ORIGINAL_JSON, {}), null, 2)}\n`;
+const resultSerialized = `${JSON.stringify(result, null, 2)}\n`;
+process.stdout.write(JSON.stringify({ changed: originalSerialized !== resultSerialized, content: resultSerialized }));
+NODE
+)"
+    changed="$(JSON_INPUT="$existing_output" node -e 'const d = JSON.parse(process.env.JSON_INPUT); process.stdout.write(String(d.changed));')"
+    updated="$(JSON_INPUT="$existing_output" node -e 'const d = JSON.parse(process.env.JSON_INPUT); process.stdout.write(d.content);')"
+
+    if [ "$changed" = "true" ] && [ -f "$TARGET_SETTINGS" ]; then
+        backup_file "$TARGET_SETTINGS"
+    fi
+    printf '%s' "$updated" > "$TARGET_SETTINGS"
+    log_success "Updated ${TARGET_SETTINGS} with Project Team managed hook groups"
+}
+
+write_install_manifest() {
+    local desired_json previous_state_for_merge manifest_json category_lines
+    category_lines="$(managed_category_lines)"
+    desired_json="$(CATEGORY_LINES="$category_lines" REGISTRY_MODE_JSON="$REGISTRY_MODE_JSON" node - <<'NODE'
+const payload = JSON.parse(process.env.REGISTRY_MODE_JSON);
+const categories = (process.env.CATEGORY_LINES || '').split(/\n+/).filter(Boolean);
+const out = {};
+for (const category of categories) {
+  out[category] = [...new Set((payload.artifacts[category] || []))].sort();
+}
+process.stdout.write(JSON.stringify(out));
+NODE
+)"
+
+    previous_state_for_merge="$PREVIOUS_STATE_JSON"
+    manifest_json="$(DESIRED_CATEGORIES_JSON="$desired_json" PREVIOUS_STATE_JSON="$previous_state_for_merge" HOOKS_ONLY="$HOOKS_ONLY" REGISTRY_MODE_JSON="$REGISTRY_MODE_JSON" CURRENT_MANAGED_COMMANDS_JSON="$CURRENT_MANAGED_COMMANDS_JSON" INSTALL_MODE="$INSTALL_MODE" node - <<'NODE'
+const payload = JSON.parse(process.env.REGISTRY_MODE_JSON);
+const desired = JSON.parse(process.env.DESIRED_CATEGORIES_JSON || '{}');
+const previous = process.env.PREVIOUS_STATE_JSON ? JSON.parse(process.env.PREVIOUS_STATE_JSON) : {};
+const categories = process.env.HOOKS_ONLY === 'true'
+  ? ['hooks', 'settings']
+  : ['hooks', 'agents', 'templates', 'settings'];
+const nextCategories = { ...(previous.categories || {}) };
+for (const category of categories) {
+  nextCategories[category] = desired[category] || [];
+}
+for (const category of ['hooks', 'agents', 'templates', 'settings']) {
+  if (!Array.isArray(nextCategories[category])) {
+    nextCategories[category] = [];
+  }
+  nextCategories[category] = [...new Set(nextCategories[category])].sort();
+}
+const ownedArtifacts = [...new Set(Object.values(nextCategories).flat())].sort();
+process.stdout.write(`${JSON.stringify({
+  schemaVersion: 1,
+  installer: 'project-team',
+  registryVersion: payload.registryVersion || 'unknown',
+  installMode: process.env.INSTALL_MODE,
+  mode: payload.mode,
+  hooksOnly: process.env.HOOKS_ONLY === 'true',
+  generatedAt: new Date().toISOString(),
+  categories: nextCategories,
+  managedCommands: JSON.parse(process.env.CURRENT_MANAGED_COMMANDS_JSON || '[]'),
+  ownedArtifacts
+}, null, 2)}\n`);
+NODE
+)"
+
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "Would write ownership manifest to ${TARGET_MANIFEST}"
+        return
+    fi
+
+    mkdir -p "$(dirname "$TARGET_MANIFEST")"
+    printf '%s' "$manifest_json" > "$TARGET_MANIFEST"
+    log_success "Ownership manifest saved: ${TARGET_MANIFEST}"
+}
 
 configure_settings() {
     header "Configuring Hook Settings"
-
-    local hook_json
-    hook_json="$(generate_hook_settings)"
-
-    local settings_file="$TARGET_SETTINGS"
-    local hook_settings_file="${TARGET_BASE}/hooks/project-team-hooks.json"
-
-    # Always write the standalone hook config for reference
-    if [ "$DRY_RUN" = true ]; then
-        log_dry "Would write hook configuration to ${hook_settings_file}"
-        log_dry "Would update ${settings_file}"
-    else
-        mkdir -p "$(dirname "$hook_settings_file")"
-        printf '%s\n' "$hook_json" > "$hook_settings_file"
-        log_success "Hook configuration saved: ${hook_settings_file}"
-    fi
-
-    # Merge into settings.json if jq is available
-    if command -v jq >/dev/null 2>&1; then
-        if [ "$DRY_RUN" = true ]; then
-            log_dry "Would merge hooks into ${settings_file} using jq"
-            return
-        fi
-
-        if [ -f "$settings_file" ]; then
-            backup_file "$settings_file"
-
-            # Deep-merge: append our hook entries to existing hook arrays
-            local merged
-            merged="$(jq -s '
-                def merge_hook_arrays:
-                    # For each event type in the new config,
-                    # append entries that are not already present
-                    . as [$base, $new] |
-                    ($new.hooks // {}) | to_entries | reduce .[] as $entry (
-                        $base;
-                        .hooks[$entry.key] as $existing |
-                        if $existing == null then
-                            .hooks[$entry.key] = $entry.value
-                        else
-                            # Append new hook groups that have different commands
-                            ($entry.value | map(
-                                . as $new_group |
-                                select(
-                                    [$existing[] | .hooks[]?.command] |
-                                    index($new_group.hooks[0]?.command) == null
-                                )
-                            )) as $additions |
-                            if ($additions | length) > 0 then
-                                .hooks[$entry.key] = $existing + $additions
-                            else
-                                .
-                            end
-                        end
-                    );
-                merge_hook_arrays
-            ' "$settings_file" <(printf '%s' "$hook_json"))" 2>/dev/null
-
-            if [ $? -eq 0 ] && [ -n "$merged" ]; then
-                printf '%s\n' "$merged" > "$settings_file"
-                log_success "Merged hooks into existing ${settings_file}"
-            else
-                log_warn "Could not auto-merge. Hook config saved to ${hook_settings_file}"
-                log_warn "Manually merge into ${settings_file}"
-            fi
-        else
-            # No existing settings, create new
-            printf '%s\n' "$hook_json" > "$settings_file"
-            log_success "Created ${settings_file} with hook configuration"
-        fi
-    else
-        log_warn "jq not available. Skipping auto-merge."
-        log_warn "Manually add hooks from: ${hook_settings_file}"
-        log_warn "Target settings file: ${settings_file}"
-    fi
+    CURRENT_HOOK_CONFIG_JSON="$(build_hook_config_json)"
+    write_hook_config_file
+    merge_settings_json
 }
 
-# ---------------------------------------------------------------------------
-# Verify installation
-# ---------------------------------------------------------------------------
+remove_managed_settings_entries() {
+    local commands_json="$1"
+
+    if [ ! -f "$TARGET_SETTINGS" ] || [ "$commands_json" = "[]" ]; then
+        return
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "Would remove Project Team managed hook entries from ${TARGET_SETTINGS}"
+        return
+    fi
+
+    if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));' "$TARGET_SETTINGS" >/dev/null 2>&1; then
+        log_warn "Skipping settings cleanup because JSON is invalid: ${TARGET_SETTINGS}"
+        return
+    fi
+
+    local original result_json changed updated
+    original="$(<"$TARGET_SETTINGS")"
+    result_json="$(ORIGINAL_JSON="$original" COMMANDS_JSON="$commands_json" node - <<'NODE'
+function parseJson(text, fallback) {
+  if (!text) return fallback;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+}
+
+const original = parseJson(process.env.ORIGINAL_JSON, {});
+const commands = new Set(parseJson(process.env.COMMANDS_JSON, []).filter(Boolean));
+const result = original && typeof original === 'object' && !Array.isArray(original) ? { ...original } : {};
+const nextHooks = {};
+
+for (const [event, groups] of Object.entries(result.hooks || {})) {
+  if (!Array.isArray(groups)) {
+    nextHooks[event] = groups;
+    continue;
+  }
+  const keptGroups = [];
+  for (const group of groups) {
+    if (!group || typeof group !== 'object' || !Array.isArray(group.hooks)) {
+      keptGroups.push(group);
+      continue;
+    }
+    const keptHooks = group.hooks.filter((hook) => !commands.has(hook && hook.command));
+    if (keptHooks.length > 0) {
+      keptGroups.push({ ...group, hooks: keptHooks });
+    }
+  }
+  if (keptGroups.length > 0) {
+    nextHooks[event] = keptGroups;
+  }
+}
+
+if (Object.keys(nextHooks).length > 0) {
+  result.hooks = nextHooks;
+} else {
+  delete result.hooks;
+}
+
+const originalSerialized = `${JSON.stringify(parseJson(process.env.ORIGINAL_JSON, {}), null, 2)}\n`;
+const resultSerialized = `${JSON.stringify(result, null, 2)}\n`;
+process.stdout.write(JSON.stringify({ changed: originalSerialized !== resultSerialized, content: resultSerialized }));
+NODE
+)"
+    changed="$(JSON_INPUT="$result_json" node -e 'const d = JSON.parse(process.env.JSON_INPUT); process.stdout.write(String(d.changed));')"
+    updated="$(JSON_INPUT="$result_json" node -e 'const d = JSON.parse(process.env.JSON_INPUT); process.stdout.write(d.content);')"
+
+    if [ "$changed" = "true" ]; then
+        backup_file "$TARGET_SETTINGS"
+        printf '%s' "$updated" > "$TARGET_SETTINGS"
+        log_success "Removed Project Team managed hook entries from ${TARGET_SETTINGS}"
+    fi
+}
 
 verify_installation() {
     header "Verifying Installation"
 
     local ok=true
+    local category relpath target
 
-    # Check hooks
-    if [ "$HOOKS_ONLY" = false ]; then
-        local hook_count
-        hook_count="$(find "$TARGET_HOOKS" -maxdepth 1 -name '*.js' 2>/dev/null | wc -l | tr -d ' ')"
-        if [ "$hook_count" -gt 0 ]; then
-            log_success "Hooks: ${hook_count} file(s) in ${TARGET_HOOKS}"
-        else
-            log_error "Hooks: no files found in ${TARGET_HOOKS}"
-            ok=false
-        fi
-
-        # Check executable permissions
-        local non_exec=0
-        while IFS= read -r -d '' f; do
-            if [ ! -x "$f" ]; then
-                non_exec=$((non_exec + 1))
-            fi
-        done < <(find "$TARGET_HOOKS" -maxdepth 1 -name '*.js' -print0 2>/dev/null)
-        if [ "$non_exec" -gt 0 ]; then
-            log_warn "${non_exec} hook file(s) missing executable permission"
-        fi
-    fi
-
-    # Check agents
-    if [ "$HOOKS_ONLY" = false ]; then
-        local agent_count
-        agent_count="$(find "$TARGET_AGENTS" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
-        if [ "$agent_count" -gt 0 ]; then
-            log_success "Agents: ${agent_count} file(s) in ${TARGET_AGENTS}"
-        else
-            log_warn "Agents: no files found in ${TARGET_AGENTS}"
-        fi
-    fi
-
-    # Check settings
-    if [ -f "$TARGET_SETTINGS" ]; then
-        if command -v jq >/dev/null 2>&1; then
-            if jq empty "$TARGET_SETTINGS" 2>/dev/null; then
-                log_success "Settings: ${TARGET_SETTINGS} (valid JSON)"
+    for category in hooks settings; do
+        while IFS= read -r relpath; do
+            [ -n "$relpath" ] || continue
+            target="${TARGET_BASE}/${relpath}"
+            if [ -e "$target" ]; then
+                log_success "Present: ${target}"
             else
-                log_error "Settings: ${TARGET_SETTINGS} contains invalid JSON"
+                log_error "Missing: ${target}"
                 ok=false
             fi
-        else
-            log_success "Settings: ${TARGET_SETTINGS} (exists, JSON not validated)"
-        fi
+        done < <(registry_artifact_lines "$category")
+    done
+
+    if [ "$HOOKS_ONLY" = false ]; then
+        for category in agents templates; do
+            while IFS= read -r relpath; do
+                [ -n "$relpath" ] || continue
+                target="${TARGET_BASE}/${relpath}"
+                if [ -e "$target" ]; then
+                    log_success "Present: ${target}"
+                else
+                    log_error "Missing: ${target}"
+                    ok=false
+                fi
+            done < <(registry_artifact_lines "$category")
+        done
+    fi
+
+    if node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));' "$TARGET_SETTINGS" >/dev/null 2>&1; then
+        log_success "Settings JSON is valid"
+    else
+        log_error "Settings JSON is invalid: ${TARGET_SETTINGS}"
+        ok=false
     fi
 
     if [ "$ok" = false ]; then
         ERRORS=$((ERRORS + 1))
+        return 1
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Print install summary
-# ---------------------------------------------------------------------------
-
 print_summary() {
     header "Installation Summary"
-
-    local mode_label
-    if [ "$INSTALL_MODE" = "global" ]; then
-        mode_label="Global (~/.claude/)"
-    else
-        mode_label="Local (.claude/)"
-    fi
-
     printf "\n"
-    printf "  ${BOLD}Mode:${NC}       %s\n" "$mode_label"
-    printf "  ${BOLD}Version:${NC}    %s\n" "$VERSION"
+    printf "  ${BOLD}Scope:${NC}        %s\n" "$INSTALL_MODE"
+    printf "  ${BOLD}Mode:${NC}         %s\n" "$MODE"
+    printf "  ${BOLD}Topology:${NC}     %s roles\n" "$(registry_role_count)"
+    printf "  ${BOLD}Registry:${NC}     %s\n" "$(registry_registry_version)"
+    printf "  ${BOLD}Description:${NC}  %s\n" "$(registry_description)"
     printf "\n"
-
+    printf "  ${BOLD}Hooks:${NC}        %d installed\n" "$INSTALLED_HOOKS"
     if [ "$HOOKS_ONLY" = false ]; then
-        printf "  ${BOLD}Hooks:${NC}      %d installed\n" "$INSTALLED_HOOKS"
-        printf "  ${BOLD}Agents:${NC}     %d installed\n" "$INSTALLED_AGENTS"
-        printf "  ${BOLD}Templates:${NC}  %d installed\n" "$INSTALLED_TEMPLATES"
+        printf "  ${BOLD}Agents:${NC}       %d installed\n" "$INSTALLED_AGENTS"
+        printf "  ${BOLD}Templates:${NC}    %d installed\n" "$INSTALLED_TEMPLATES"
     fi
+    printf "  ${BOLD}Removed:${NC}      %d stale artifact(s)\n" "$REMOVED"
     if [ "$BACKED_UP" -gt 0 ]; then
-        printf "  ${BOLD}Backups:${NC}    %d file(s) backed up (suffix: %s)\n" "$BACKED_UP" "$BACKUP_SUFFIX"
+        printf "  ${BOLD}Backups:${NC}      %d\n" "$BACKED_UP"
     fi
     printf "\n"
-
     if [ "$ERRORS" -gt 0 ]; then
-        printf "  ${RED}%d error(s) detected. Check messages above.${NC}\n\n" "$ERRORS"
+        printf "  ${RED}%d error(s) detected.${NC}\n\n" "$ERRORS"
     else
         printf "  ${GREEN}Installation completed successfully.${NC}\n\n"
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Print next steps
-# ---------------------------------------------------------------------------
-
 print_next_steps() {
     header "Next Steps"
-
     printf "\n"
-    printf "  1. ${BOLD}Set agent role${NC} (for permission-checker):\n"
-    printf "     export CLAUDE_AGENT_ROLE=\"project-manager\"\n"
-    printf "\n"
-    printf "  2. ${BOLD}Initialize project${NC} (in your project directory):\n"
-    printf "     cd your-project\n"
-    printf "     claude\n"
-    printf "     > /project-team init\n"
-    printf "\n"
-    printf "  3. ${BOLD}Customize${NC}:\n"
-    printf "     Edit .claude/project-team.yaml to enable/disable hooks and agents.\n"
-    printf "\n"
-
-    if [ "$INSTALL_MODE" = "global" ]; then
-        printf "  ${CYAN}Hooks installed globally will apply to all Claude Code sessions.${NC}\n"
-        printf "  ${CYAN}Override per-project with .claude/settings.json if needed.${NC}\n"
-    fi
+    printf "  1. Review ${TARGET_MANIFEST} for manifest-owned artifacts.\n"
+    printf "  2. Review ${TARGET_SETTINGS} if you want to customize non-project-team hooks.\n"
+    printf "  3. Re-run with a different --mode to upgrade or downgrade managed groups safely.\n"
     printf "\n"
 }
-
-# ---------------------------------------------------------------------------
-# Uninstall
-# ---------------------------------------------------------------------------
 
 do_uninstall() {
     header "Uninstalling Claude Project Team"
@@ -756,10 +911,10 @@ do_uninstall() {
     if [ -z "$INSTALL_MODE" ]; then
         printf "\n"
         printf "  ${BOLD}1)${NC} Global uninstall  ${CYAN}(~/.claude/)${NC}\n"
-        printf "  ${BOLD}2)${NC} Local uninstall    ${CYAN}(.claude/)${NC}\n"
+        printf "  ${BOLD}2)${NC} Local uninstall   ${CYAN}(.claude/)${NC}\n"
         printf "\n"
         while true; do
-            printf "${YELLOW}Select mode [1/2]:${NC} "
+            printf "${YELLOW}Select scope [1/2]:${NC} "
             read -r choice
             case "$choice" in
                 1) INSTALL_MODE="global"; break ;;
@@ -770,160 +925,94 @@ do_uninstall() {
     fi
 
     resolve_targets
+    load_previous_install_state
 
-    # List of project-team specific files to remove
-    local project_team_hooks=(
-        "_project-hook-shim.js"
-        "agent-context-injector.js"
-        "permission-checker.js"
-        "context-guide-loader.js"
-        "standards-validator.js"
-        "design-validator.js"
-        "error-recovery-advisor.js"
-        "git-commit-checker.js"
-        "interface-validator.js"
-        "post-edit-analyzer.js"
-        "cross-domain-notifier.js"
-        "quality-gate.js"
-        "pre-edit-impact-check.js"
-        "risk-area-warning.js"
-        "architecture-updater.js"
-        "changelog-recorder.js"
-        "domain-boundary-enforcer.js"
-        "session-memory-loader.js"
-        "session-summary-saver.js"
-        "skill-router.js"
-        "task-board-sync.js"
-        "project-team-hooks.json"
-    )
-
-    local project_team_agents=(
-        "ChiefArchitect.md"
-        "ChiefDesigner.md"
-        "DBA.md"
-        "MaintenanceAnalyst.md"
-        "ProjectManager.md"
-        "QAManager.md"
-        "templates/PartLeader.md"
-        "templates/DomainDesigner.md"
-        "templates/DomainDeveloper.md"
-    )
-
-    printf "\n${BOLD}The following will be removed:${NC}\n\n"
-
-    local total=0
-
-    # List hooks
-    for f in "${project_team_hooks[@]}"; do
-        local target="${TARGET_HOOKS}/${f}"
-        if [ -e "$target" ]; then
-            printf "  ${RED}x${NC} %s\n" "$target"
-            total=$((total + 1))
-        fi
-    done
-
-    # List agents
-    for f in "${project_team_agents[@]}"; do
-        local target="${TARGET_AGENTS}/${f}"
-        if [ -e "$target" ]; then
-            printf "  ${RED}x${NC} %s\n" "$target"
-            total=$((total + 1))
-        fi
-    done
-
-    # List templates
-    if [ -d "$TARGET_TEMPLATES" ]; then
-        local tpl_count
-        tpl_count="$(find "$TARGET_TEMPLATES" -type f 2>/dev/null | wc -l | tr -d ' ')"
-        if [ "$tpl_count" -gt 0 ]; then
-            printf "  ${RED}x${NC} %s/ (%d files)\n" "$TARGET_TEMPLATES" "$tpl_count"
-            total=$((total + "$tpl_count"))
-        fi
+    local listed=0
+    if [ -n "$PREVIOUS_STATE_JSON" ]; then
+        printf "\n${BOLD}Manifest-owned artifacts to remove:${NC}\n\n"
+        while IFS= read -r relpath; do
+            [ -n "$relpath" ] || continue
+            local target="${TARGET_BASE}/${relpath}"
+            if [ -e "$target" ]; then
+                printf "  ${RED}x${NC} %s\n" "$target"
+                listed=$((listed + 1))
+            fi
+        done < <(PREVIOUS_STATE_JSON="$PREVIOUS_STATE_JSON" node - <<'NODE'
+const state = JSON.parse(process.env.PREVIOUS_STATE_JSON);
+for (const item of state.ownedArtifacts || []) {
+  process.stdout.write(`${item}\n`);
+}
+NODE
+)
     fi
 
-    if [ "$total" -eq 0 ]; then
-        log_info "No Claude Project Team files found. Nothing to remove."
+    if [ "$PREVIOUS_MANAGED_COMMANDS_JSON" != "[]" ]; then
+        printf "  ${RED}x${NC} %s (managed hook entries only)\n" "$TARGET_SETTINGS"
+        listed=$((listed + 1))
+    fi
+
+    if [ "$listed" -eq 0 ]; then
+        log_info "No manifest-owned Project Team artifacts found. Nothing to remove."
         return 0
     fi
 
     printf "\n"
-
     if [ "$DRY_RUN" = true ]; then
-        log_dry "${total} file(s) would be removed."
+        log_dry "${listed} uninstall action(s) would be performed."
         return 0
     fi
 
-    if ! confirm "Remove ${total} file(s)?"; then
+    if ! confirm "Remove manifest-owned Project Team artifacts?"; then
         log_info "Uninstall cancelled."
         return 0
     fi
 
-    local removed=0
+    remove_managed_settings_entries "$PREVIOUS_MANAGED_COMMANDS_JSON"
 
-    # Remove hooks
-    for f in "${project_team_hooks[@]}"; do
-        local target="${TARGET_HOOKS}/${f}"
-        if [ -e "$target" ]; then
-            rm -f "$target"
-            removed=$((removed + 1))
-        fi
-    done
-
-    # Remove agents
-    for f in "${project_team_agents[@]}"; do
-        local target="${TARGET_AGENTS}/${f}"
-        if [ -e "$target" ]; then
-            rm -f "$target"
-            removed=$((removed + 1))
-        fi
-    done
-    # Clean empty agent template dir
-    rmdir "${TARGET_AGENTS}/templates" 2>/dev/null || true
-
-    # Remove templates directory
-    if [ -d "$TARGET_TEMPLATES" ]; then
-        rm -rf "$TARGET_TEMPLATES"
-        log_success "Removed templates directory"
+    if [ -n "$PREVIOUS_STATE_JSON" ]; then
+        while IFS= read -r relpath; do
+            [ -n "$relpath" ] || continue
+            local target="${TARGET_BASE}/${relpath}"
+            if [ -e "$target" ]; then
+                rm -f "$target"
+                REMOVED=$((REMOVED + 1))
+                log_success "Removed ${target}"
+                prune_empty_parent_dirs "$target"
+            fi
+        done < <(PREVIOUS_STATE_JSON="$PREVIOUS_STATE_JSON" node - <<'NODE'
+const state = JSON.parse(process.env.PREVIOUS_STATE_JSON);
+for (const item of state.ownedArtifacts || []) {
+  process.stdout.write(`${item}\n`);
+}
+NODE
+)
+    elif [ -f "$TARGET_HOOK_CONFIG" ]; then
+        rm -f "$TARGET_HOOK_CONFIG"
+        REMOVED=$((REMOVED + 1))
+        log_success "Removed ${TARGET_HOOK_CONFIG}"
+        prune_empty_parent_dirs "$TARGET_HOOK_CONFIG"
     fi
 
-    # Note: We do NOT remove settings.json hook entries automatically
-    # to avoid accidentally breaking the user's configuration.
-    log_warn "Hook entries in ${TARGET_SETTINGS} were NOT removed."
-    log_warn "Manually edit ${TARGET_SETTINGS} to remove project-team hooks if desired."
-
     printf "\n"
-    log_success "Removed ${removed} file(s)."
+    log_success "Uninstall completed. Removed ${REMOVED} manifest-owned artifact(s)."
     printf "\n"
 }
 
-# ---------------------------------------------------------------------------
-# Main install flow
-# ---------------------------------------------------------------------------
-
 do_install() {
+    prompt_install_mode
+    prompt_configuration_mode
     check_prerequisites
-
-    if [ -z "$INSTALL_MODE" ]; then
-        prompt_install_mode
-    fi
-
     resolve_targets
+    load_registry_payload
+    load_previous_install_state
 
-    # Show plan
     header "Installation Plan"
     printf "\n"
-    printf "  ${BOLD}Mode:${NC}    %s\n" "$INSTALL_MODE"
-    printf "  ${BOLD}Target:${NC}  %s\n" "$TARGET_BASE"
-    printf "\n"
-    printf "  ${BOLD}Components:${NC}\n"
-    if [ "$HOOKS_ONLY" = false ]; then
-        printf "    - Hooks      -> %s\n" "$TARGET_HOOKS"
-    fi
-    if [ "$HOOKS_ONLY" = false ]; then
-        printf "    - Agents     -> %s\n" "$TARGET_AGENTS"
-        printf "    - Templates  -> %s\n" "$TARGET_TEMPLATES"
-    fi
-    printf "    - Settings   -> %s\n" "$TARGET_SETTINGS"
+    printf "  ${BOLD}Scope:${NC}        %s\n" "$INSTALL_MODE"
+    printf "  ${BOLD}Mode:${NC}         %s\n" "$MODE"
+    printf "  ${BOLD}Topology:${NC}     %s roles\n" "$(registry_role_count)"
+    printf "  ${BOLD}Description:${NC}  %s\n" "$(registry_description)"
+    printf "  ${BOLD}Target:${NC}       %s\n" "$TARGET_BASE"
     printf "\n"
 
     if [ "$DRY_RUN" = false ] && [ "$FORCE" = false ]; then
@@ -933,32 +1022,25 @@ do_install() {
         fi
     fi
 
-    # Execute installation
+    cleanup_stale_owned_artifacts
+    install_registry_category hooks
     if [ "$HOOKS_ONLY" = false ]; then
-        install_hooks
+        install_registry_category agents
+        install_registry_category templates
     fi
-
     if [ "$HOOKS_ONLY" = false ]; then
-        install_agents
-        install_templates
+        install_project_scripts
     fi
-
-    # Always configure settings (for hooks that need it)
     configure_settings
+    write_install_manifest
 
-    # Verify
     if [ "$DRY_RUN" = false ]; then
         verify_installation
     fi
 
-    # Summary
     print_summary
     print_next_steps
 }
-
-# ---------------------------------------------------------------------------
-# Banner
-# ---------------------------------------------------------------------------
 
 print_banner() {
     if [ "$QUIET" = true ]; then
@@ -966,18 +1048,13 @@ print_banner() {
     fi
     printf "\n"
     printf "${BOLD}  Claude Project Team Installer v${VERSION}${NC}\n"
-    printf "  Team-based hooks, agents, and templates for Claude Code\n"
+    printf "  Registry-driven hooks, agents, templates, and cleanup\n"
     printf "\n"
 }
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 main() {
     parse_args "$@"
     print_banner
-
     if [ "$UNINSTALL" = true ]; then
         do_uninstall
     else

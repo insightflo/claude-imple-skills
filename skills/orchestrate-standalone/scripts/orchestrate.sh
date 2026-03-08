@@ -17,6 +17,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 NODE_CMD="${NODE_CMD:-node}"
+COLLAB_INIT_SCRIPT="$SCRIPT_DIR/../../../project-team/scripts/collab-init.js"
+BOARD_BUILDER_SCRIPT="$SCRIPT_DIR/../../task-board/scripts/board-builder.js"
+BOARD_SHOW_SCRIPT="$SCRIPT_DIR/../../task-board/scripts/board-show.sh"
 
 MODE="${MODE:-standard}"
 RESUME="${RESUME:-false}"
@@ -72,6 +75,91 @@ log_error()   { printf "${RED}[ERR]${NC}  %s\n" "$1" >&2; }
 header() {
     printf "\n${BOLD}%s${NC}\n" "$1"
     printf "%s\n" "$(printf '%.0s-' $(seq 1 ${#1}))"
+}
+
+ensure_git_repo() {
+    if [ -d "$PROJECT_DIR/.git" ]; then
+        return 0
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        log_warn "Git not found. Continuing without auto git init."
+        return 0
+    fi
+
+    git init -q "$PROJECT_DIR"
+    log_info "Whitebox auto-init created a git repository in $PROJECT_DIR"
+}
+
+ensure_claude_dirs() {
+    mkdir -p "$PROJECT_DIR/.claude"
+}
+
+ensure_node_runtime() {
+    if ! command -v "$NODE_CMD" >/dev/null 2>&1; then
+        log_error "Node.js not found. Please install Node.js to run orchestrate-standalone."
+        exit 1
+    fi
+
+    log_success "Node.js: $($NODE_CMD --version)"
+}
+
+ensure_collab_bus() {
+    local collab_dir="$PROJECT_DIR/.claude/collab"
+
+    if [ ! -f "$COLLAB_INIT_SCRIPT" ]; then
+        mkdir -p "$collab_dir/contracts" "$collab_dir/requests" "$collab_dir/decisions" "$collab_dir/locks" "$collab_dir/archive"
+        : > "$collab_dir/events.ndjson"
+        if [ ! -f "$collab_dir/board-state.json" ]; then
+            printf '{\n  "version": "1.0",\n  "generated_at": "%s",\n  "columns": {"Backlog": [], "In Progress": [], "Blocked": [], "Done": []}\n}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$collab_dir/board-state.json"
+        fi
+        log_warn "collab-init script not found; created minimal whitebox collab directories instead"
+        return 0
+    fi
+
+    "$NODE_CMD" "$COLLAB_INIT_SCRIPT" --project-dir="$PROJECT_DIR" >/dev/null 2>&1 || true
+}
+
+rebuild_board_state() {
+    if [ ! -f "$TASKS_FILE" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$BOARD_BUILDER_SCRIPT" ]; then
+        return 0
+    fi
+
+    "$NODE_CMD" "$BOARD_BUILDER_SCRIPT" --project-dir="$PROJECT_DIR" >/dev/null 2>&1 || true
+}
+
+show_whitebox_board() {
+    local phase="${1:-status}"
+
+    if [ ! -f "$BOARD_SHOW_SCRIPT" ]; then
+        return 0
+    fi
+
+    rebuild_board_state
+
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        bash "$BOARD_SHOW_SCRIPT" --rebuild --project-dir="$PROJECT_DIR" || true
+        return 0
+    fi
+
+    log_info "Whitebox UI available for ${phase}."
+    if IFS= read -r -t 3 -p "Press Enter to open the task board now (auto-continue in 3s): " _; then
+        printf "\n"
+        bash "$BOARD_SHOW_SCRIPT" --rebuild --project-dir="$PROJECT_DIR" || true
+    else
+        printf "\n"
+    fi
+}
+
+exit_with_board() {
+    local code="$1"
+    local phase="${2:-status}"
+    show_whitebox_board "$phase"
+    exit "$code"
 }
 
 # ---------------------------------------------------------------------------
@@ -158,22 +246,24 @@ esac
 
 header "Checking Prerequisites"
 
+ensure_git_repo
+ensure_claude_dirs
+
 TASKS_FILE="$PROJECT_DIR/TASKS.md"
+
+ensure_node_runtime
+ensure_collab_bus
+rebuild_board_state
+show_whitebox_board "startup"
+
 if [ ! -f "$TASKS_FILE" ]; then
     log_error "TASKS.md not found at: $TASKS_FILE"
-    log_info "Run /tasks-init first to create TASKS.md"
-    exit 1
+    log_info "Whitebox auto-init prepared .git and .claude where possible, but orchestration needs TASKS.md to continue."
+    log_info "Run: bash .claude/skills/tasks-init/scripts/tasks-init.sh  or use /tasks-init first."
+    exit_with_board 1 "missing TASKS.md"
 fi
 
 log_success "TASKS.md found"
-
-# Check Node.js
-if ! command -v node &> /dev/null; then
-    log_error "Node.js not found. Please install Node.js to run orchestrate-standalone."
-    exit 1
-fi
-
-log_success "Node.js: $(node --version)"
 
 # ---------------------------------------------------------------------------
 # Parse Tasks and Build DAG
@@ -244,7 +334,7 @@ if [ "$MODE" = "auto" ]; then
             log_error "Auto mode exited with code: $AUTO_EXIT"
             ;;
     esac
-    exit $AUTO_EXIT
+    exit_with_board "$AUTO_EXIT" "auto mode"
 fi
 
 # Sprint mode: special handling with planner/runner
@@ -294,23 +384,23 @@ if [ "$MODE" = "sprint" ]; then
             2)
                 log_warn "Modification requested. Instructions saved to .claude/sprint-state.json"
                 log_info "Re-run: $0 --mode=sprint --resume"
-                exit 2
+                exit_with_board 2 "sprint review"
                 ;;
             3)
                 log_info "Sprint stopped by user. State saved."
                 log_info "Resume with: $0 --mode=sprint --resume"
-                exit 0  # Intentional: stop is a clean exit, not an error
+                exit_with_board 0 "sprint stop"  # Intentional: stop is a clean exit, not an error
                 ;;
             *)
                 log_error "Sprint runner failed (exit code: $SPRINT_EXIT)"
-                exit 1
+                exit_with_board 1 "sprint failure"
                 ;;
         esac
     done
 
     header "Orchestration Complete"
     log_success "Sprint mode execution finished!"
-    exit 0
+    exit_with_board 0 "sprint complete"
 fi
 
 header "Executing Tasks (Mode: $MODE, Workers: $WORKER_COUNT)"
@@ -350,7 +440,7 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
         if [ "$GATE_PASSED" != "true" ]; then
             log_error "Pre-dispatch gate failed for task: $taskId"
             echo "$GATE_RESULT"
-            exit 1
+            exit_with_board 1 "pre-dispatch gate"
         fi
     done < <(echo "$LAYER_TASKS" | "$NODE_CMD" -e "JSON.parse(require('fs').readFileSync(0,'utf8')).forEach(t=>console.log(JSON.stringify(t)))")
 
@@ -387,7 +477,7 @@ while [ $CURRENT_LAYER -lt $TOTAL_LAYERS ]; do
     if [ "$BARRIER_PASSED" != "true" ]; then
         log_error "Barrier gate failed at layer $LAYER_NUM"
         echo "$BARRIER_RESULT"
-        exit 1
+        exit_with_board 1 "barrier gate"
     fi
 
     # Update current layer
@@ -415,3 +505,4 @@ fi
 log_info "Progress: ${PERCENT}%"
 
 log_success "Orchestration finished!"
+show_whitebox_board "completion"

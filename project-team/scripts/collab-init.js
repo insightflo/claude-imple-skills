@@ -16,12 +16,15 @@
  *   ├── decisions/        DEC-*.md files (ChiefArchitect rulings)
  *   ├── locks/            JSON lock files (TTL: 10 min)
  *   ├── archive/          Wave-end archival of completed REQ/DEC files
+ *   ├── control.ndjson    Canonical operator-intent log (append-only)
+ *   ├── control-state.json Derived control state (rebuildable, never edit directly)
  *   ├── board-state.json  Current kanban board snapshot (derived, never edit directly)
  *   └── events.ndjson     Append-only board event log
  */
 
 const fs = require('fs');
 const path = require('path');
+const childProcess = require('child_process');
 
 // Status messages go to stderr; stdout is reserved for JSON output
 function log(msg) {
@@ -54,6 +57,14 @@ File-based communication bus for the hierarchical agent collaboration system.
 - **archive/**: Wave-end archival of completed REQ/DEC files.
   Moved here after wave completion to reduce context overhead.
 
+- **control.ndjson**: Canonical operator-intent log for whitebox approval commands.
+  Append-only. Written only by the Node whitebox CLI mutation surface.
+  Phase 1 action types are limited to \`approve\` and \`reject\`.
+
+- **control-state.json**: Derived whitebox control query state.
+  Disposable/read-only projection for CLI read verbs and TUI rendering.
+  Never edit directly; rebuild from canonical command/event logs.
+
 - **board-state.json**: Current kanban board snapshot (Backlog / In Progress / Blocked / Done).
   Derived from TASKS.md + orchestrate-state.json + requests/. Never edit directly.
   Rebuild: \`node skills/task-board/scripts/board-builder.js\`
@@ -61,6 +72,13 @@ File-based communication bus for the hierarchical agent collaboration system.
 - **events.ndjson**: Append-only board event log.
   One JSON event per line: task_claimed, task_started, task_done, task_blocked,
   req_escalated, req_resolved.
+
+## Whitebox Surface Contract
+
+- \`/whitebox\` is the only product boundary.
+- The TUI is the interactive renderer/operator shell for \`/whitebox\`.
+- The CLI mutation surface is the shared mutation path and headless/scriptable surface.
+- \`task-board\` is a renderer inside the whitebox product surface, not a separate product.
 
 ## REQ File Format
 
@@ -87,6 +105,7 @@ See: project-team/references/communication-protocol.md
 `;
 
 const SUBDIRS = ['contracts', 'requests', 'decisions', 'locks', 'archive'];
+const REQUIRED_FILES = ['board-state.json', 'events.ndjson', 'control.ndjson', 'control-state.json'];
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -105,7 +124,9 @@ function parseArgs() {
 
 function isInitialized(collabDir) {
   if (!fs.existsSync(collabDir)) return false;
-  return SUBDIRS.every((d) => fs.existsSync(path.join(collabDir, d)));
+  const hasDirs = SUBDIRS.every((d) => fs.existsSync(path.join(collabDir, d)));
+  const hasFiles = REQUIRED_FILES.every((f) => fs.existsSync(path.join(collabDir, f)));
+  return hasDirs && hasFiles;
 }
 
 function init(projectDir) {
@@ -131,22 +152,43 @@ function init(projectDir) {
   const readmePath = path.join(collabDir, 'README.md');
   fs.writeFileSync(readmePath, COLLAB_README);
 
-  // Initialize board-state.json
-  const boardStatePath = path.join(collabDir, 'board-state.json');
-  if (!fs.existsSync(boardStatePath)) {
-    const initialBoard = {
-      version: '1.0',
-      generated_at: new Date().toISOString(),
-      columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
-    };
-    fs.writeFileSync(boardStatePath, JSON.stringify(initialBoard, null, 2));
-  }
-
   // Initialize events.ndjson (empty)
   const eventsPath = path.join(collabDir, 'events.ndjson');
   if (!fs.existsSync(eventsPath)) {
     fs.writeFileSync(eventsPath, '');
   }
+
+  const controlLogPath = path.join(collabDir, 'control.ndjson');
+  if (!fs.existsSync(controlLogPath)) {
+    fs.writeFileSync(controlLogPath, '');
+  }
+
+  const controlStatePath = path.join(collabDir, 'control-state.json');
+  if (!fs.existsSync(controlStatePath)) {
+    fs.writeFileSync(
+      controlStatePath,
+      JSON.stringify(
+        {
+          schema_version: 1,
+          derived: true,
+          artifact: 'control-state',
+          source: ['.claude/collab/events.ndjson', '.claude/collab/control.ndjson'],
+          pending_approvals: [],
+          updated_at: null,
+        },
+        null,
+        2
+      ) + '\n'
+    );
+  }
+
+  const boardBuilderPath = path.resolve(__dirname, '..', '..', 'skills', 'task-board', 'scripts', 'board-builder.js');
+  if (!fs.existsSync(boardBuilderPath)) {
+    throw new Error(`board builder missing: ${boardBuilderPath}`);
+  }
+  childProcess.execFileSync(process.execPath, [boardBuilderPath, `--project-dir=${projectDir}`], {
+    stdio: 'ignore',
+  });
 
   log(`collab initialized: ${collabDir}`);
   for (const sub of SUBDIRS) {

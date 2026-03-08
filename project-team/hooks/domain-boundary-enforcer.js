@@ -15,64 +15,17 @@
  */
 
 const path = require('path');
-
-// ---------------------------------------------------------------------------
-// Domain Map: which paths each agent role is allowed to write
-// ---------------------------------------------------------------------------
-
-const DOMAIN_MAP = {
-  'backend-specialist': {
-    allowed: [
-      'src/domains/',
-      'src/api/',
-      'src/services/',
-      'src/repositories/',
-    ],
-  },
-  'frontend-specialist': {
-    allowed: [
-      'src/components/',
-      'src/pages/',
-      'src/hooks/',
-      'src/styles/',
-    ],
-  },
-  'db-specialist': {
-    allowed: [
-      'src/db/',
-      'migrations/',
-      'prisma/',
-      'database/',
-    ],
-  },
-  'qa-specialist': {
-    allowed: [
-      'tests/',
-      'qa/',
-    ],
-    allowedPatterns: [
-      /\.test\.[jt]sx?$/,
-      /\.spec\.[jt]sx?$/,
-    ],
-  },
-  // ChiefArchitect: contracts + collab infra only
-  'chief-architect': {
-    allowed: [
-      'contracts/',
-      '.claude/collab/contracts/',
-      '.claude/collab/decisions/',
-      'project-team/references/',
-    ],
-  },
-};
-
-// Roles with no domain restriction (allow all)
-const UNRESTRICTED_ROLES = new Set([
-  'project-manager',
-  'chief-designer',
-  'maintenance-analyst',
-  'security-specialist',
-]);
+const AgentAuthService = require('../services/auth');
+const {
+  resolveTokenSecret
+} = AgentAuthService;
+const {
+  matchesAnyPattern,
+  normalizeRole,
+  resolveRoleIdentity,
+  resolveDeterministicWriteScope,
+  checkDomainBoundary
+} = require('./lib/deterministic-policy');
 
 // Paths any agent can write (cross-agent collaboration paths)
 const ALWAYS_ALLOWED_WRITE = [
@@ -99,11 +52,6 @@ function toRelativePath(filePath) {
   return path.relative(projectDir, absPath).replace(/\\/g, '/');
 }
 
-function normalizeRole(raw) {
-  if (!raw) return '';
-  return raw.toLowerCase().trim().replace(/\s+/g, '-');
-}
-
 function matchesPrefix(rel, prefixes) {
   for (const prefix of prefixes) {
     if (rel.startsWith(prefix)) return true;
@@ -111,41 +59,40 @@ function matchesPrefix(rel, prefixes) {
   return false;
 }
 
-function matchesPatterns(rel, patterns) {
-  if (!patterns) return false;
-  for (const pat of patterns) {
-    if (pat.test(rel)) return true;
-  }
-  return false;
-}
-
 function isAllowed(role, rel) {
-  // Unrestricted roles can write anywhere
-  if (UNRESTRICTED_ROLES.has(role)) return { allowed: true };
+  const identity = resolveRoleIdentity(role);
 
   // Any agent can write to requests/ and locks/
   if (matchesPrefix(rel, ALWAYS_ALLOWED_WRITE)) return { allowed: true };
 
-  // contracts/ is read-only for non-ChiefArchitect
-  if (matchesPrefix(rel, CONTRACTS_READ_ONLY_PREFIXES) && role !== 'chief-architect') {
+  if (!identity.recognized) {
     return {
       allowed: false,
-      reason: `"${rel}" is a contracts/ file. Only chief-architect can write here.`,
-      suggestion: 'If you need a contract change, create a REQ file in .claude/collab/requests/ to request ChiefArchitect review.',
+      reason: `Unknown authenticated role "${role}" has no deterministic write scope.`,
+      suggestion: 'Issue a token with canonical role metadata and allowed_paths before attempting this write.'
     };
   }
 
-  const domain = DOMAIN_MAP[role];
-  if (!domain) {
-    // Unknown role — allow (fallback safety)
-    return { allowed: true };
+  if (matchesPrefix(rel, CONTRACTS_READ_ONLY_PREFIXES) && identity.canonicalRole !== 'lead') {
+    return {
+      allowed: false,
+      reason: `"${rel}" is a contracts/ file. Only lead-scoped roles can write here.`,
+      suggestion: 'If you need a contract change, create a REQ file in .claude/collab/requests/ to request lead review.',
+    };
   }
 
-  // Check allowed path prefixes
-  if (matchesPrefix(rel, domain.allowed)) return { allowed: true };
+  const boundary = checkDomainBoundary(rel, identity.domain);
+  if (boundary.violation) {
+    return {
+      allowed: false,
+      reason: `Role "${role}" cannot write to "${rel}" across domain boundary (${identity.domain} -> ${boundary.targetDomain}).`,
+      suggestion: `Create a REQ file in .claude/collab/requests/ for ${boundary.targetDomain}-part-leader review.`
+    };
+  }
 
-  // Check allowed patterns (e.g. *.test.ts for qa-specialist)
-  if (matchesPatterns(rel, domain.allowedPatterns)) return { allowed: true };
+  const scope = resolveDeterministicWriteScope({ identity, relativePath: rel });
+
+  if (scope.writePaths.length > 0 && matchesAnyPattern(rel, scope.writePaths)) return { allowed: true };
 
   return {
     allowed: false,
@@ -191,6 +138,61 @@ async function main() {
   // Skip files outside project (relative paths starting with ..)
   if (rel.startsWith('..')) return;
 
+  const agentToken = toolInput.agent_token || process.env.CLAUDE_AGENT_TOKEN || '';
+  if (agentToken) {
+    const auth = new AgentAuthService({ secretKey: resolveTokenSecret() });
+    const verified = auth.verifyToken(agentToken);
+
+    if (!verified.valid) {
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: 'Invalid agent authentication token for domain boundary enforcement.',
+        suggestion: 'Refresh the scoped token before attempting this write.'
+      }));
+      return;
+    }
+
+    const identity = resolveRoleIdentity(verified.role);
+    if (!identity.recognized) {
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: `Unknown authenticated role "${verified.role}" has no deterministic domain policy.`,
+        suggestion: 'Use a canonical role or registered compatibility alias in the token.'
+      }));
+      return;
+    }
+
+    const boundary = checkDomainBoundary(rel, identity.domain || verified.domain);
+    if (boundary.violation) {
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: `Role "${verified.role}" cannot write across domain boundary to "${rel}".`,
+        suggestion: `Create a REQ file in .claude/collab/requests/ for ${boundary.targetDomain}-part-leader review.`
+      }));
+      return;
+    }
+
+    const scope = resolveDeterministicWriteScope({
+      identity,
+      allowedPaths: verified.allowedPaths,
+      reviewOnly: verified.reviewOnly,
+      selfCheck: toolInput.self_check === true,
+      changedFiles: toolInput.changed_files || toolInput.changedFiles,
+      relativePath: rel
+    });
+
+    if (!scope.writePaths.length || !matchesAnyPattern(rel, scope.writePaths)) {
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: `Write to "${rel}" is outside the deterministic write scope for role "${verified.role}" (${scope.source}).`,
+        suggestion: 'Issue a scoped token with allowed_paths for this target path.'
+      }));
+      return;
+    }
+
+    return;
+  }
+
   const rawRole = process.env.CLAUDE_AGENT_ROLE || '';
   const role = normalizeRole(rawRole);
 
@@ -217,8 +219,6 @@ main().catch(() => {});
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    DOMAIN_MAP,
-    UNRESTRICTED_ROLES,
     ALWAYS_ALLOWED_WRITE,
     isAllowed,
     normalizeRole,

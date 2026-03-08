@@ -31,6 +31,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { emitHookDecision } = require('./lib/hook-decision-event');
 
 // ---------------------------------------------------------------------------
 // 0. Safe command execution (no shell)
@@ -650,9 +651,21 @@ function isQualityGatePassed(results) {
 
 async function main() {
   try {
+    const input = {
+      hook_event_name: 'ManualHook',
+      tool_name: 'quality-gate',
+      tool_input: {},
+    };
     const projectType = detectProjectType();
 
     if (projectType === 'unknown') {
+      await emitHookDecision(input, {
+        hook: 'quality-gate',
+        decision: 'deny',
+        severity: 'error',
+        summary: 'Quality gate could not detect project type.',
+        remediation: 'Add package.json scripts or Python project metadata.',
+      });
       process.stdout.write(JSON.stringify({
         decision: 'deny',
         reason: 'Could not detect project type (no package.json or pyproject.toml found)'
@@ -691,6 +704,14 @@ async function main() {
     // Generate report
     const report = generateReport(results);
 
+    await emitHookDecision(input, {
+      hook: 'quality-gate',
+      decision: results.passed ? 'allow' : 'deny',
+      severity: results.passed ? 'info' : 'error',
+      summary: `Quality gate ${results.passed ? 'passed' : 'failed'} (${results.tests.failed} test failures, ${results.linting.errors} lint errors, ${results.typeChecking.errors} type errors).`,
+      remediation: results.passed ? '' : 'Fix failing quality metrics and rerun the gate.',
+    });
+
     // Output decision
     process.stdout.write(JSON.stringify({
       decision: results.passed ? 'allow' : 'deny',
@@ -703,6 +724,13 @@ async function main() {
       }
     }));
   } catch (error) {
+    await emitHookDecision({ hook_event_name: 'ManualHook', tool_name: 'quality-gate', tool_input: {} }, {
+      hook: 'quality-gate',
+      decision: 'deny',
+      severity: 'critical',
+      summary: 'Quality gate execution error.',
+      remediation: 'Review hook runtime errors and rerun.',
+    });
     process.stdout.write(JSON.stringify({
       decision: 'deny',
       reason: `Quality gate error: ${error.message}`

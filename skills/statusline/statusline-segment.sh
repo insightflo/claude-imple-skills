@@ -25,6 +25,7 @@ C_DIM="\033[38;2;88;91;112m"
 CURRENT_DIR="${1:-$(pwd)}"
 PROJECT_ROOT=$(cd "$CURRENT_DIR" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$CURRENT_DIR")
 TASKS_FILE="$PROJECT_ROOT/TASKS.md"
+SUMMARY_FILE="$PROJECT_ROOT/.claude/collab/whitebox-summary.json"
 
 [[ ! -f "$TASKS_FILE" ]] && exit 0
 
@@ -44,8 +45,10 @@ if [[ -f "$CACHE_FILE" ]]; then
 fi
 
 if [[ "$use_cache" == false ]]; then
-    DONE=$(grep -c '^### \[x\]' "$TASKS_FILE" 2>/dev/null || echo 0)
-    TOTAL=$(grep -c '^### \[' "$TASKS_FILE" 2>/dev/null || echo 0)
+    DONE=$(grep -Ec '^(###|-)[[:space:]]+\[x\]' "$TASKS_FILE" 2>/dev/null || true)
+    TOTAL=$(grep -Ec '^(###|-)[[:space:]]+\[' "$TASKS_FILE" 2>/dev/null || true)
+    DONE="${DONE:-0}"
+    TOTAL="${TOTAL:-0}"
 
     # Current phase: first ## Phase line that still has incomplete tasks below it
     CURRENT_PHASE=""
@@ -53,14 +56,16 @@ if [[ "$use_cache" == false ]]; then
     while IFS= read -r line; do
         if [[ "$line" =~ ^##\ Phase\ ([0-9]+) ]]; then
             current_phase_candidate="Phase ${BASH_REMATCH[1]}"
-        elif [[ "$line" =~ ^###\ \[\ \] ]] && [[ -n "$current_phase_candidate" ]]; then
+        elif [[ "$line" =~ ^##[[:space:]]+T([0-9]+)\b ]]; then
+            current_phase_candidate="T${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^(###|-)[[:space:]]+\[\ \] ]] && [[ -n "$current_phase_candidate" ]]; then
             CURRENT_PHASE="$current_phase_candidate"
             break
         fi
     done < "$TASKS_FILE"
 
     # Next incomplete task
-    NEXT_TASK=$(grep -m1 '^### \[ \]' "$TASKS_FILE" 2>/dev/null | sed 's/^### \[ \] *//' | tr '\t' ' ' | awk '{if(length($0)>28) print substr($0,1,28)"…"; else print}')
+    NEXT_TASK=$(grep -Em1 '^(###|-)[[:space:]]+\[ \]' "$TASKS_FILE" 2>/dev/null | sed -E 's/^(###|-)[[:space:]]+\[ \][[:space:]]*//' | tr '\t' ' ' | awk '{if(length($0)>28) print substr($0,1,28)"…"; else print}')
 
     printf "%s\t%s\t%s\t%s\n" "$DONE" "$TOTAL" "$CURRENT_PHASE" "$NEXT_TASK" > "$CACHE_FILE"
 fi
@@ -88,12 +93,33 @@ BAR+="${RESET}"
 # ============================================================================
 # Assemble Line 3
 # ============================================================================
+WB_BLOCKED="0"
+WB_STALE="0"
+WB_GATE=""
+WB_RUN=""
+
+if [[ -f "$SUMMARY_FILE" ]]; then
+    WB_BLOCKED=$(grep -m1 '"blocked_count"' "$SUMMARY_FILE" 2>/dev/null | sed -E 's/.*: ([0-9]+).*/\1/' | tr -d ',')
+    WB_STALE=$(grep -m1 '"stale_artifact_count"' "$SUMMARY_FILE" 2>/dev/null | sed -E 's/.*: ([0-9]+).*/\1/' | tr -d ',')
+    WB_GATE=$(grep -m1 '"gate_status"' "$SUMMARY_FILE" 2>/dev/null | sed -E 's/.*: "([^"]+)".*/\1/')
+    WB_RUN=$(grep -m1 '"run_id_short"' "$SUMMARY_FILE" 2>/dev/null | sed -E 's/.*: "([^"]+)".*/\1/')
+fi
+
 SEG_RATIO="${C_TEAL}${BOLD}📋 ${DONE}/${TOTAL}${RESET}"
 SEG_BAR=" ${BAR} "
 SEG_PHASE=""
 [[ -n "$CURRENT_PHASE" ]] && SEG_PHASE="${C_PEACH}${CURRENT_PHASE}${RESET}  "
 SEG_NEXT=""
 [[ -n "$NEXT_TASK" ]] && SEG_NEXT="${C_YELLOW}→${RESET} ${C_PINK}${NEXT_TASK}${RESET}"
+SEG_WB=""
+
+if [[ "$WB_STALE" =~ ^[0-9]+$ ]] && [[ "$WB_STALE" -gt 0 ]]; then
+    SEG_WB="  ${C_YELLOW}WB stale:${WB_STALE}${RESET}"
+elif [[ "$WB_BLOCKED" =~ ^[0-9]+$ ]] && [[ "$WB_BLOCKED" -gt 0 ]]; then
+    SEG_WB="  ${C_YELLOW}WB blocked:${WB_BLOCKED}${RESET}"
+elif [[ "$WB_GATE" == "running" ]] && [[ -n "$WB_RUN" ]] && [[ "$WB_RUN" != "null" ]]; then
+    SEG_WB="  ${C_TEAL}WB ${WB_RUN}${RESET}"
+fi
 
 # All done state
 if [[ "$DONE" -eq "$TOTAL" ]]; then
@@ -101,5 +127,5 @@ if [[ "$DONE" -eq "$TOTAL" ]]; then
     exit 0
 fi
 
-LINE3="${SEG_RATIO}${SEG_BAR}${SEG_PHASE}${SEG_NEXT}"
+LINE3="${SEG_RATIO}${SEG_BAR}${SEG_PHASE}${SEG_NEXT}${SEG_WB}"
 printf "%b%b\n" "$LINE3" "$CLR"

@@ -1,0 +1,348 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "2026-03-07",
+  "canonicalRoleOrder": [
+    "lead",
+    "builder",
+    "reviewer",
+    "designer",
+    "dba",
+    "security-specialist"
+  ],
+  "compatibility": {
+    "window": "one-release",
+    "policy": "alias-stubs",
+    "installAliasesInEveryMode": true,
+    "countAliasesInCanonicalTotals": false,
+    "fullModeAddsCompatibilityProfiles": true,
+    "fullModeRestoresLegacyRuntime": false
+  },
+  "roles": {
+    "lead": {
+      "displayName": "Lead",
+      "kind": "core",
+      "artifacts": [
+        "agents/Lead.md"
+      ]
+    },
+    "builder": {
+      "displayName": "Builder",
+      "kind": "core",
+      "artifacts": [
+        "agents/Builder.md"
+      ]
+    },
+    "reviewer": {
+      "displayName": "Reviewer",
+      "kind": "core",
+      "artifacts": [
+        "agents/Reviewer.md"
+      ]
+    },
+    "designer": {
+      "displayName": "Designer",
+      "kind": "specialist",
+      "artifacts": [
+        "agents/Designer.md"
+      ]
+    },
+    "dba": {
+      "displayName": "DBA",
+      "kind": "specialist",
+      "artifacts": [
+        "agents/DBA.md"
+      ]
+    },
+    "security-specialist": {
+      "displayName": "Security Specialist",
+      "kind": "specialist",
+      "artifacts": [
+        "agents/SecuritySpecialist.md"
+      ]
+    }
+  },
+  "legacyAliases": {
+    "agents": [
+      {
+        "alias": "project-manager",
+        "canonicalRole": "lead",
+        "artifact": "agents/ProjectManager.md"
+      },
+      {
+        "alias": "chief-architect",
+        "canonicalRole": "lead",
+        "artifact": "agents/ChiefArchitect.md"
+      },
+      {
+        "alias": "qa-manager",
+        "canonicalRole": "reviewer",
+        "artifact": "agents/QAManager.md"
+      },
+      {
+        "alias": "maintenance-analyst",
+        "canonicalRole": "reviewer",
+        "artifact": "agents/MaintenanceAnalyst.md"
+      },
+      {
+        "alias": "backend-specialist",
+        "canonicalRole": "builder",
+        "artifact": "agents/BackendSpecialist.md"
+      },
+      {
+        "alias": "frontend-specialist",
+        "canonicalRole": "builder",
+        "artifact": "agents/FrontendSpecialist.md"
+      },
+      {
+        "alias": "chief-designer",
+        "canonicalRole": "designer",
+        "artifact": "agents/ChiefDesigner.md"
+      }
+    ],
+    "profiles": [
+      {
+        "alias": "part-leader",
+        "canonicalRole": "lead",
+        "artifact": "agents/templates/PartLeader.md"
+      },
+      {
+        "alias": "domain-designer",
+        "canonicalRole": "designer",
+        "artifact": "agents/templates/DomainDesigner.md"
+      },
+      {
+        "alias": "domain-developer",
+        "canonicalRole": "builder",
+        "artifact": "agents/templates/DomainDeveloper.md"
+      }
+    ]
+  },
+  "hooks": {
+    "definitions": {
+      "permission-checker": {
+        "artifact": "hooks/permission-checker.js",
+        "event": "PreToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "policy-gate": {
+        "artifact": "hooks/policy-gate.js",
+        "event": "SessionStart",
+        "installType": "active"
+      },
+      "security-scan": {
+        "artifact": "hooks/security-scan.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "task-board-sync": {
+        "artifact": "hooks/task-board-sync.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write|TaskUpdate",
+        "installType": "active"
+      },
+      "quality-gate": {
+        "artifact": "hooks/quality-gate.js",
+        "event": "Stop",
+        "installType": "active"
+      },
+      "contract-gate": {
+        "artifact": "hooks/contract-gate.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "pre-edit-impact-check": {
+        "artifact": "hooks/pre-edit-impact-check.js",
+        "event": "PreToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "docs-gate": {
+        "artifact": "hooks/docs-gate.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "risk-gate": {
+        "artifact": "hooks/risk-gate.js",
+        "event": "PreToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "domain-boundary-enforcer": {
+        "artifact": "hooks/domain-boundary-enforcer.js",
+        "event": "PreToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "architecture-updater": {
+        "artifact": "hooks/architecture-updater.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "changelog-recorder": {
+        "artifact": "hooks/changelog-recorder.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "cross-domain-notifier": {
+        "artifact": "hooks/cross-domain-notifier.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "interface-validator": {
+        "artifact": "hooks/interface-validator.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "standards-validator": {
+        "artifact": "hooks/standards-validator.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "design-validator": {
+        "artifact": "hooks/design-validator.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write",
+        "installType": "active"
+      },
+      "task-sync": {
+        "artifact": "hooks/task-sync.js",
+        "event": "PostToolUse",
+        "matcher": "Edit|Write|TaskUpdate",
+        "installType": "active"
+      },
+      "risk-area-warning": {
+        "artifact": "hooks/risk-area-warning.js",
+        "event": "PreToolUse",
+        "matcher": "Edit|Write",
+        "installType": "helper",
+        "matcherListKey": "risk-area-warning"
+      }
+    },
+    "matcherLists": {
+      "risk-area-warning": [
+        "**/payment/**",
+        "**/auth/**",
+        "migrations/**",
+        "contracts/interfaces/**"
+      ]
+    }
+  },
+  "modes": {
+    "lite": {
+      "description": "Canonical MVP topology",
+      "canonicalRoles": [
+        "lead",
+        "builder",
+        "reviewer"
+      ],
+      "hookNames": [
+        "permission-checker",
+        "policy-gate",
+        "security-scan",
+        "task-board-sync"
+      ],
+      "compatibilityProfiles": []
+    },
+    "standard": {
+      "description": "Lite plus on-demand specialists",
+      "canonicalRoles": [
+        "lead",
+        "builder",
+        "reviewer",
+        "designer",
+        "dba",
+        "security-specialist"
+      ],
+      "hookNames": [
+        "permission-checker",
+        "policy-gate",
+        "security-scan",
+        "task-board-sync",
+        "quality-gate",
+        "contract-gate",
+        "pre-edit-impact-check"
+      ],
+      "compatibilityProfiles": []
+    },
+    "full": {
+      "description": "Standard plus compatibility profile surfaces",
+      "canonicalRoles": [
+        "lead",
+        "builder",
+        "reviewer",
+        "designer",
+        "dba",
+        "security-specialist"
+      ],
+      "hookNames": [
+        "permission-checker",
+        "policy-gate",
+        "security-scan",
+        "task-board-sync",
+        "quality-gate",
+        "contract-gate",
+        "pre-edit-impact-check",
+        "docs-gate",
+        "risk-gate",
+        "domain-boundary-enforcer",
+        "architecture-updater",
+        "changelog-recorder",
+        "cross-domain-notifier",
+        "interface-validator",
+        "standards-validator",
+        "design-validator",
+        "task-sync"
+      ],
+      "compatibilityProfiles": [
+        "part-leader",
+        "domain-designer",
+        "domain-developer"
+      ]
+    }
+  },
+  "installerOwnership": {
+    "commonArtifacts": [
+      "templates/adr/example.md",
+      "templates/adr/template.md",
+      "templates/contracts/example-user-api.yaml",
+      "templates/contracts/interface.yaml",
+      "templates/model-routing.yaml",
+      "templates/project-team.yaml",
+      "templates/protocol/handoff.md",
+      "templates/protocol/request.md",
+      "templates/protocol/response.md",
+      "templates/standards/backend-standards.md",
+      "templates/standards/frontend-standards.md"
+    ],
+    "managedSettingsArtifacts": [
+      "hooks/project-team-hooks.json",
+      "project-team-install-state.json"
+    ]
+  },
+  "migrationInventory": {
+    "legacyRuntimeRestoration": false,
+    "currentLegacyAgentFiles": [
+      "agents/ProjectManager.md",
+      "agents/ChiefArchitect.md",
+      "agents/QAManager.md",
+      "agents/MaintenanceAnalyst.md",
+      "agents/BackendSpecialist.md",
+      "agents/FrontendSpecialist.md",
+      "agents/ChiefDesigner.md"
+    ],
+    "currentCompatibilityProfileFiles": [
+      "agents/templates/PartLeader.md",
+      "agents/templates/DomainDesigner.md",
+      "agents/templates/DomainDeveloper.md"
+    ]
+  }
+}

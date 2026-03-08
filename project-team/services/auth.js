@@ -17,6 +17,106 @@
  */
 
 const crypto = require('crypto');
+const { resolveRoleIdentity } = require('../hooks/lib/deterministic-policy');
+
+const DEFAULT_SECRET_KEY = 'default-secret-key-change-in-production';
+
+function resolveTokenSecret(explicitSecret) {
+  return explicitSecret
+    || process.env.CLAUDE_HOOK_SECRET
+    || process.env.AGENT_JWT_SECRET
+    || process.env.PERMISSION_CHECKER_SECRET
+    || DEFAULT_SECRET_KEY;
+}
+
+function nowInSeconds(nowMs = Date.now()) {
+  return Math.floor(nowMs / 1000);
+}
+
+function normalizeTokenExpiration(exp) {
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) {
+    return null;
+  }
+
+  return exp > 1e12 ? Math.floor(exp / 1000) : Math.floor(exp);
+}
+
+function isTokenExpired(exp, nowMs = Date.now()) {
+  const normalizedExp = normalizeTokenExpiration(exp);
+  if (normalizedExp === null) {
+    return true;
+  }
+
+  return normalizedExp <= nowInSeconds(nowMs);
+}
+
+function resolveExpiresInSeconds(expiresInMs, explicitExpiresInSeconds, fallbackMs) {
+  if (typeof explicitExpiresInSeconds === 'number' && Number.isFinite(explicitExpiresInSeconds)) {
+    return Math.max(0, Math.floor(explicitExpiresInSeconds));
+  }
+
+  const ms = typeof expiresInMs === 'number' && Number.isFinite(expiresInMs)
+    ? expiresInMs
+    : fallbackMs;
+
+  return Math.max(0, Math.floor(ms / 1000));
+}
+
+function buildAgentTokenPayload({
+  agentId,
+  role,
+  domain,
+  expiresIn,
+  expiresInSeconds,
+  scopeId,
+  allowedPaths,
+  reviewOnly,
+  type,
+  allowedTools,
+  deniedTools,
+  advisoryOnly,
+  extraClaims
+}) {
+  const iat = nowInSeconds();
+  const payload = {
+    role,
+    scope_id: scopeId || agentId || role,
+    allowed_paths: Array.isArray(allowedPaths) ? allowedPaths : [],
+    review_only: reviewOnly === true,
+    iat,
+    exp: iat + resolveExpiresInSeconds(expiresIn, expiresInSeconds, 3600000)
+  };
+
+  if (domain) {
+    payload.domain = domain;
+  }
+
+  if (type) {
+    payload.type = type;
+  }
+
+  if (agentId) {
+    payload.agentId = agentId;
+  }
+
+  if (Array.isArray(allowedTools)) {
+    payload.allowed_tools = allowedTools;
+  }
+
+  if (Array.isArray(deniedTools)) {
+    payload.denied_tools = deniedTools;
+  }
+
+  if (typeof advisoryOnly === 'boolean') {
+    payload.advisory_only = advisoryOnly;
+  }
+
+  if (extraClaims && typeof extraClaims === 'object') {
+    Object.assign(payload, extraClaims);
+  }
+
+  return payload;
+}
 
 /**
  * HMAC-SHA256 기반 간단 JWT 구현
@@ -78,7 +178,7 @@ class SimpleJWT {
       const payload = JSON.parse(Buffer.from(payloadEncoded, 'base64url').toString());
 
       // 만료 시간 검증
-      if (payload.exp && Date.now() > payload.exp) {
+      if (payload.exp !== undefined && isTokenExpired(payload.exp)) {
         return null;
       }
 
@@ -99,9 +199,7 @@ class AgentAuthService {
    * @param {string} options.secretKey - JWT 서명 키 (기본값: 환경변수 또는 기본 키)
    */
   constructor(options = {}) {
-    this.secretKey = options.secretKey ||
-      process.env.AGENT_JWT_SECRET ||
-      'default-secret-key-change-in-production'; // 프로덕션에서는 반드시 변경
+    this.secretKey = resolveTokenSecret(options.secretKey); // 프로덕션에서는 반드시 변경
 
     this.jwt = new SimpleJWT(this.secretKey);
 
@@ -115,39 +213,16 @@ class AgentAuthService {
    */
   loadPermissionMatrix() {
     return {
-      // 프로젝트 관리자
-      'project-manager': {
+      lead: {
         canCreateTasks: true,
         canAssignTasks: true,
-        canApproveDeployment: true,
-        canModifyArchitecture: false,
-        canModifyDesign: false,
-        canChangeQualityStandards: false,
-        canAccessAllDomains: true
-      },
-      // 최고 아키텍트
-      'chief-architect': {
-        canCreateTasks: false,
-        canAssignTasks: false,
         canApproveDeployment: true,
         canModifyArchitecture: true,
         canModifyDesign: false,
         canChangeQualityStandards: true,
-        canAccessAllDomains: true,
-        vetoAuthority: true
-      },
-      // 최고 디자이너
-      'chief-designer': {
-        canCreateTasks: false,
-        canAssignTasks: false,
-        canApproveDeployment: false,
-        canModifyArchitecture: false,
-        canModifyDesign: true,
-        canChangeQualityStandards: false,
         canAccessAllDomains: false
       },
-      // QA 관리자
-      'qa-manager': {
+      reviewer: {
         canCreateTasks: false,
         canAssignTasks: false,
         canApproveDeployment: true,
@@ -157,7 +232,6 @@ class AgentAuthService {
         canAccessAllDomains: true,
         vetoAuthority: true
       },
-      // 보안 전문가
       'security-specialist': {
         canCreateTasks: false,
         canAssignTasks: false,
@@ -168,8 +242,7 @@ class AgentAuthService {
         canAccessAllDomains: true,
         vetoAuthority: true
       },
-      // 백엔드 전문가
-      'backend-specialist': {
+      builder: {
         canCreateTasks: false,
         canAssignTasks: false,
         canApproveDeployment: false,
@@ -177,10 +250,9 @@ class AgentAuthService {
         canModifyDesign: false,
         canChangeQualityStandards: false,
         canAccessAllDomains: false,
-        allowedDomains: ['backend', 'api', 'database']
+        allowedDomains: ['backend', 'api', 'frontend', 'ui', 'ux', 'database']
       },
-      // 프론트엔드 전문가
-      'frontend-specialist': {
+      designer: {
         canCreateTasks: false,
         canAssignTasks: false,
         canApproveDeployment: false,
@@ -190,7 +262,6 @@ class AgentAuthService {
         canAccessAllDomains: false,
         allowedDomains: ['frontend', 'ui', 'ux']
       },
-      // DBA
       'dba': {
         canCreateTasks: false,
         canAssignTasks: false,
@@ -201,18 +272,17 @@ class AgentAuthService {
         canAccessAllDomains: false,
         allowedDomains: ['database', 'migration'],
         vetoAuthority: true
-      },
-      // 도메인 파트 리더
-      'part-leader': {
-        canCreateTasks: true,
-        canAssignTasks: true,
-        canApproveDeployment: false,
-        canModifyArchitecture: false,
-        canModifyDesign: false,
-        canChangeQualityStandards: false,
-        canAccessAllDomains: false
       }
     };
+  }
+
+  resolvePermissionRole(role) {
+    const identity = resolveRoleIdentity(role);
+    if (identity && identity.recognized && identity.canonicalRole) {
+      return identity.canonicalRole;
+    }
+
+    return typeof role === 'string' ? role.toLowerCase().trim() : role;
   }
 
   /**
@@ -223,14 +293,22 @@ class AgentAuthService {
    * @param {number} expiresIn - 만료 시간 (밀리초, 기본값: 1시간)
    * @returns {string} JWT 토큰
    */
-  issueToken(agentId, role, domain, expiresIn = 3600000) {
-    const payload = {
+  issueToken(agentId, role, domain, expiresIn = 3600000, options = {}) {
+    const payload = buildAgentTokenPayload({
       agentId,
       role,
       domain,
-      iat: Date.now(),
-      exp: Date.now() + expiresIn
-    };
+      expiresIn,
+      expiresInSeconds: options.expiresInSeconds,
+      scopeId: options.scopeId,
+      allowedPaths: options.allowedPaths,
+      reviewOnly: options.reviewOnly,
+      type: options.type,
+      allowedTools: options.allowedTools,
+      deniedTools: options.deniedTools,
+      advisoryOnly: options.advisoryOnly,
+      extraClaims: options.extraClaims
+    });
 
     return this.jwt.encode(payload);
   }
@@ -254,7 +332,16 @@ class AgentAuthService {
       valid: true,
       agentId: payload.agentId,
       role: payload.role,
-      domain: payload.domain
+      domain: payload.domain,
+      scopeId: payload.scope_id,
+      allowedPaths: payload.allowed_paths,
+      reviewOnly: payload.review_only,
+      allowedTools: payload.allowed_tools,
+      deniedTools: payload.denied_tools,
+      advisoryOnly: payload.advisory_only,
+      type: payload.type,
+      iat: payload.iat,
+      exp: normalizeTokenExpiration(payload.exp)
     };
   }
 
@@ -265,7 +352,8 @@ class AgentAuthService {
    * @returns {boolean} 권한 여부
    */
   hasPermission(role, permission) {
-    const rolePermissions = this.permissionMatrix[role];
+    const canonicalRole = this.resolvePermissionRole(role);
+    const rolePermissions = this.permissionMatrix[canonicalRole];
     if (!rolePermissions) return false;
 
     return rolePermissions[permission] === true;
@@ -278,7 +366,8 @@ class AgentAuthService {
    * @returns {boolean} 접근 권한 여부
    */
   canAccessDomain(role, targetDomain) {
-    const rolePermissions = this.permissionMatrix[role];
+    const canonicalRole = this.resolvePermissionRole(role);
+    const rolePermissions = this.permissionMatrix[canonicalRole];
     if (!rolePermissions) return false;
 
     // 전체 접근 권한
@@ -295,7 +384,8 @@ class AgentAuthService {
    * @returns {boolean} VETO 권한 여부
    */
   hasVetoAuthority(role) {
-    const rolePermissions = this.permissionMatrix[role];
+    const canonicalRole = this.resolvePermissionRole(role);
+    const rolePermissions = this.permissionMatrix[canonicalRole];
     return rolePermissions && rolePermissions.vetoAuthority === true;
   }
 
@@ -307,15 +397,27 @@ class AgentAuthService {
    * @param {number} expiresIn - 만료 시간 (밀리초, 기본값: 5분)
    * @returns {string} 권한 상승 토큰
    */
-  createEscalationToken(requestor, target, reason, expiresIn = 300000) {
-    const payload = {
+  createEscalationToken(requestor, target, reason, expiresIn = 300000, options = {}) {
+    const payload = buildAgentTokenPayload({
+      agentId: options.agentId || target,
+      role: options.role || requestor,
+      domain: options.domain,
+      expiresIn,
+      expiresInSeconds: options.expiresInSeconds,
+      scopeId: options.scopeId || target,
+      allowedPaths: options.allowedPaths,
+      reviewOnly: options.reviewOnly,
       type: 'escalation',
-      requestor,
-      target,
-      reason,
-      iat: Date.now(),
-      exp: Date.now() + expiresIn
-    };
+      allowedTools: options.allowedTools,
+      deniedTools: options.deniedTools,
+      advisoryOnly: options.advisoryOnly,
+      extraClaims: {
+        requestor,
+        target,
+        reason,
+        ...(options.extraClaims || {})
+      }
+    });
 
     return this.jwt.encode(payload);
   }
@@ -445,7 +547,8 @@ class AgentAuthService {
    * @returns {boolean}
    */
   canAccessAllDomains(role) {
-    const rolePermissions = this.permissionMatrix[role];
+    const canonicalRole = this.resolvePermissionRole(role);
+    const rolePermissions = this.permissionMatrix[canonicalRole];
     return rolePermissions && rolePermissions.canAccessAllDomains === true;
   }
 }
@@ -479,7 +582,7 @@ if (require.main === module) {
     case 'permissions':
       // node auth.js permissions <role>
       const role = args[1];
-      const permissions = auth.permissionMatrix[role];
+      const permissions = auth.permissionMatrix[auth.resolvePermissionRole(role)];
       console.log(JSON.stringify(permissions, null, 2));
       break;
 
@@ -494,12 +597,18 @@ Usage:
   node auth.js permissions <role>
 
 Examples:
-  node auth.js issue agent-123 backend-specialist backend
+  node auth.js issue agent-123 builder backend
   node auth.js verify eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   node auth.js escalate agent-123 agent-456 "Deployment approval needed"
-  node auth.js permissions qa-manager
-      `);
+  node auth.js permissions reviewer
+       `);
   }
 }
 
 module.exports = AgentAuthService;
+module.exports.DEFAULT_SECRET_KEY = DEFAULT_SECRET_KEY;
+module.exports.resolveTokenSecret = resolveTokenSecret;
+module.exports.nowInSeconds = nowInSeconds;
+module.exports.normalizeTokenExpiration = normalizeTokenExpiration;
+module.exports.isTokenExpired = isTokenExpired;
+module.exports.buildAgentTokenPayload = buildAgentTokenPayload;

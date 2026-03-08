@@ -197,6 +197,7 @@ runTest('T0-10i: saveState + loadState roundtrip preserves data', async () => {
         { id: 'T1', status: 'completed' },
         { id: 'T2', status: 'failed', error: 'boom' }
       ],
+      decisions: [],
       current_layer: 2,
       total_layers: 4,
       mode: 'auto'
@@ -312,11 +313,12 @@ runTest('T0-10p: resolveCliCommand defaults to claude for unknown model', async 
   await withTempDir('orch-edge-', async projectDir => {
     const resolved = worker.resolveCliCommand({ model: 'unknown-model' }, projectDir);
 
-    assert.deepStrictEqual(resolved, {
-      command: 'claude',
-      args: [],
-      model: 'claude'
-    });
+    assert.strictEqual(resolved.command, 'claude');
+    assert.deepStrictEqual(resolved.args, []);
+    assert.strictEqual(resolved.model, 'claude');
+    assert.strictEqual(resolved.requestedExecutor, 'unknown-model');
+    assert.strictEqual(resolved.routeSource, 'task.model');
+    assert.strictEqual(resolved.fallbackReason, 'unknown_model');
   });
 });
 
@@ -339,11 +341,12 @@ runTest('T0-10q: resolveCliCommand maps \'codex\' to codex command', async () =>
 
     const resolved = mockedWorker.resolveCliCommand({ model: 'codex' }, projectDir);
 
-    assert.deepStrictEqual(resolved, {
-      command: 'codex',
-      args: ['exec'],
-      model: 'codex'
-    });
+    assert.strictEqual(resolved.command, 'codex');
+    assert.deepStrictEqual(resolved.args, ['exec']);
+    assert.strictEqual(resolved.model, 'codex');
+    assert.strictEqual(resolved.requestedExecutor, 'codex');
+    assert.strictEqual(resolved.routeSource, 'task.model');
+    assert.strictEqual(resolved.fallbackReason, null);
   });
 });
 
@@ -352,11 +355,12 @@ runTest('T0-10r: resolveCliCommand maps \'sonnet\'/\'opus\'/\'haiku\' to claude'
     for (const model of ['sonnet', 'opus', 'haiku']) {
       const resolved = worker.resolveCliCommand({ model }, projectDir);
 
-      assert.deepStrictEqual(resolved, {
-        command: 'claude',
-        args: [],
-        model: 'claude'
-      });
+      assert.strictEqual(resolved.command, 'claude');
+      assert.deepStrictEqual(resolved.args, []);
+      assert.strictEqual(resolved.model, 'claude');
+      assert.strictEqual(resolved.requestedExecutor, model);
+      assert.strictEqual(resolved.routeSource, 'task.model');
+      assert.strictEqual(resolved.fallbackReason, null);
     }
   });
 });

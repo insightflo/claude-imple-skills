@@ -10,7 +10,11 @@
 
 set -euo pipefail
 
-BUILDER="$(dirname "$0")/board-builder.js"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILDER="$SCRIPT_DIR/board-builder.js"
+TUI_MANIFEST="$SCRIPT_DIR/../tui/Cargo.toml"
+TUI_BIN="$SCRIPT_DIR/../tui/target/debug/task-board-tui"
+FORCE_TUI_CAPTURE="${WHITEBOX_TUI_CAPTURE:-0}"
 
 # ---------------------------------------------------------------------------
 # Args (parse BEFORE computing BOARD_FILE so --project-dir takes effect)
@@ -30,6 +34,9 @@ for arg in "$@"; do
 done
 
 BOARD_FILE="$PROJECT_DIR/.claude/collab/board-state.json"
+DERIVED_META_FILE="$PROJECT_DIR/.claude/collab/derived-meta.json"
+CONTROL_STATE_SCRIPT="$SCRIPT_DIR/../../whitebox/scripts/whitebox-control-state.js"
+WHITEBOX_SUMMARY_SCRIPT="$SCRIPT_DIR/../../whitebox/scripts/whitebox-summary.js"
 
 if [[ -n "$DECISION_ID" ]]; then
   node "$(dirname "$0")/decision-gate.js" resolve --project-dir="$PROJECT_DIR" --id="$DECISION_ID" --action="$DECISION_ACTION"
@@ -40,15 +47,42 @@ fi
 # Rebuild if requested or missing
 # ---------------------------------------------------------------------------
 
+needs_rebuild=false
 if [[ "$REBUILD" == "true" ]] || [[ ! -f "$BOARD_FILE" ]]; then
+  needs_rebuild=true
+elif [[ -f "$DERIVED_META_FILE" ]] && command -v node &>/dev/null; then
+  if node -e "const fs=require('fs');const file=process.argv[1];const markers=JSON.parse(fs.readFileSync(file,'utf8'));const stale=(markers||[]).some((entry)=>entry&&!entry.cleared_by&&['.claude/collab/board-state.json','.claude/collab/control-state.json','.claude/collab/whitebox-summary.json'].includes(entry.artifact));process.exit(stale?0:1);" "$DERIVED_META_FILE"; then
+    needs_rebuild=true
+  fi
+fi
+
+if [[ "$needs_rebuild" == "true" ]]; then
   if command -v node &>/dev/null && [[ -f "$BUILDER" ]]; then
     node "$BUILDER" --project-dir="$PROJECT_DIR" 2>&1 || true
+    if [[ -f "$CONTROL_STATE_SCRIPT" ]]; then
+      node "$CONTROL_STATE_SCRIPT" --project-dir="$PROJECT_DIR" >/dev/null 2>&1 || echo "Warning: control-state rebuild failed" >&2
+    fi
+    if [[ -f "$WHITEBOX_SUMMARY_SCRIPT" ]]; then
+      node "$WHITEBOX_SUMMARY_SCRIPT" --project-dir="$PROJECT_DIR" >/dev/null 2>&1 || echo "Warning: whitebox-summary rebuild failed" >&2
+    fi
   fi
 fi
 
 if [[ ! -f "$BOARD_FILE" ]]; then
   echo "No board-state.json found. Run: node skills/task-board/scripts/board-builder.js"
   exit 1
+fi
+
+if [[ "$FORCE_TUI_CAPTURE" == "1" ]] && [[ -f "$TUI_MANIFEST" ]] && command -v cargo &>/dev/null; then
+  cargo run --quiet --manifest-path "$TUI_MANIFEST" -- --project-dir="$PROJECT_DIR" --snapshot && exit 0
+fi
+
+if [[ -t 0 && -t 1 ]] && [[ -f "$TUI_MANIFEST" ]] && command -v cargo &>/dev/null; then
+  if [[ -x "$TUI_BIN" ]]; then
+    "$TUI_BIN" --project-dir="$PROJECT_DIR" && exit 0
+  fi
+
+  cargo run --quiet --manifest-path "$TUI_MANIFEST" -- --project-dir="$PROJECT_DIR" && exit 0
 fi
 
 # ---------------------------------------------------------------------------

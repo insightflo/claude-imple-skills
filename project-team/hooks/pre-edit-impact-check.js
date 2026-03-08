@@ -22,6 +22,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { emitHookDecision } = require('./lib/hook-decision-event');
 
 // ---------------------------------------------------------------------------
 // 0. Safety Constants (Path Validation & Discovery Bounds)
@@ -899,6 +900,21 @@ function outputContext(context) {
   process.stdout.write(JSON.stringify({ hookSpecificOutput }));
 }
 
+function decisionFromRiskLevel(riskLevel) {
+  if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {
+    return {
+      decision: 'warn',
+      severity: riskLevel === 'CRITICAL' ? 'error' : 'warning',
+      remediation: 'Run the recommended tests and complete review before merge.',
+    };
+  }
+  return {
+    decision: 'allow',
+    severity: 'info',
+    remediation: '',
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 15. Main Hook Entry Point
 // ---------------------------------------------------------------------------
@@ -910,14 +926,35 @@ async function main() {
   const toolInput = input.tool_input || {};
   const filePath = toolInput.file_path || toolInput.path || '';
 
-  if (!filePath) return; // No file path = nothing to check
+  if (!filePath) {
+    await emitHookDecision(input, {
+      hook: 'pre-edit-impact-check',
+      decision: 'skip',
+      summary: 'No target file path provided.',
+    });
+    return;
+  }
 
   const projectDirReal = getProjectDirReal();
-  if (!projectDirReal) return;
+  if (!projectDirReal) {
+    await emitHookDecision(input, {
+      hook: 'pre-edit-impact-check',
+      decision: 'skip',
+      summary: 'Project directory is unavailable.',
+    });
+    return;
+  }
 
   // Convert to validated project-relative path
   const relativePath = validateAndGetRelativePath(filePath, projectDirReal);
-  if (!relativePath) return;
+  if (!relativePath) {
+    await emitHookDecision(input, {
+      hook: 'pre-edit-impact-check',
+      decision: 'skip',
+      summary: 'Target path is outside project scope.',
+    });
+    return;
+  }
 
   // Discover project files for dependency analysis
   const allFiles = discoverProjectFiles(projectDirReal);
@@ -948,6 +985,15 @@ async function main() {
 
   // Generate report
   const report = formatImpactReport(impact);
+  const mapped = decisionFromRiskLevel(impact.riskLevel);
+  await emitHookDecision(input, {
+    hook: 'pre-edit-impact-check',
+    decision: mapped.decision,
+    severity: mapped.severity,
+    risk_level: impact.riskLevel,
+    summary: `${impact.riskLevel} risk for ${impact.filePath}; ${impact.directDependents.length} direct dependents, ${impact.indirectDependents.length} indirect dependents.`,
+    remediation: mapped.remediation,
+  });
 
   // Output as additionalContext
   if (report) {

@@ -11,6 +11,78 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { writeEvent } = require('../../../../project-team/scripts/lib/whitebox-events');
+
+function toTaskMeta(task) {
+  if (!task || typeof task !== 'object') return null;
+  return {
+    id: task.id || null,
+    title: task.title || task.description || null,
+    domain: task.domain || null,
+    risk: task.risk || null,
+  };
+}
+
+function toTaskListMeta(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks
+    .map((task) => {
+      if (!task) return null;
+      if (typeof task === 'string') return { id: task, title: null, domain: null, risk: null };
+      return toTaskMeta(task);
+    })
+    .filter(Boolean);
+}
+
+function buildGateEventPayload(hookName, context, extras = {}) {
+  const payload = {
+    gate: hookName,
+    phase: context.phase || null,
+    layer: Number.isInteger(context.layer) ? context.layer : null,
+    task: toTaskMeta(context.task),
+    ...extras,
+  };
+
+  const taskList = toTaskListMeta(context.tasks);
+  if (taskList.length > 0) {
+    payload.scope = 'barrier';
+    payload.task_ids = taskList.map((task) => task.id).filter(Boolean);
+    payload.tasks = taskList;
+  }
+
+  return payload;
+}
+
+function getEventCorrelationId(context, payload) {
+  if (payload.task && payload.task.id) return payload.task.id;
+  if (payload.scope === 'barrier' && Number.isInteger(payload.layer)) {
+    return `layer:${payload.layer}`;
+  }
+  return null;
+}
+
+async function emitCanonicalEvent(type, data, correlationId = null, stage = type) {
+  try {
+    await writeEvent({
+      type,
+      producer: 'orchestrate-gate-chain',
+      correlation_id: correlationId || undefined,
+      data,
+    }, {
+      projectDir: process.cwd(),
+    });
+    return { ok: true, error: null, failure: null };
+  } catch (error) {
+    const failure = {
+      stage,
+      event_type: type,
+      message: error && error.message ? error.message : String(error),
+      code: error && error.code ? error.code : null,
+    };
+    process.stderr.write(`[gate-chain] canonical event write failed (${type}): ${failure.message}\n`);
+    return { ok: false, error, failure };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Hook Execution
@@ -22,13 +94,79 @@ const path = require('path');
 async function runHook(hookName, context = {}) {
   const hooksDir = path.join(process.cwd(), '.claude', 'hooks');
   const hookPath = path.join(hooksDir, `${hookName}.js`);
+  const startPayload = buildGateEventPayload(hookName, context);
+  const correlationId = getEventCorrelationId(context, startPayload);
+
+  const startEvent = await emitCanonicalEvent('orchestrate.gate.start', startPayload, correlationId, 'gate_start');
+  if (!startEvent.ok) {
+    return {
+      hook: hookName,
+      passed: false,
+      code: null,
+      output: '',
+      error: `canonical event write failed: ${startEvent.failure.message}`,
+      write_error: startEvent.failure,
+    };
+  }
 
   if (!fs.existsSync(hookPath)) {
     // Hook not installed, skip
+    const missingHookPayload = buildGateEventPayload(hookName, context, {
+      outcome: 'skip',
+      reason: 'missing_hook',
+    });
+    const missingHookEvent = await emitCanonicalEvent('orchestrate.gate.outcome', missingHookPayload, correlationId, 'gate_outcome');
+    if (!missingHookEvent.ok) {
+      return {
+        hook: hookName,
+        passed: false,
+        code: null,
+        output: '',
+        error: `canonical event write failed: ${missingHookEvent.failure.message}`,
+        write_error: missingHookEvent.failure,
+      };
+    }
     return { passed: true, skipped: true, hook: hookName };
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const settle = async (payload) => {
+      if (settled) return;
+      settled = true;
+
+      const outcome = payload.skipped
+        ? 'skip'
+        : payload.passed
+          ? 'pass'
+          : payload.code === null
+            ? 'error'
+            : 'deny';
+
+      const outcomePayload = buildGateEventPayload(hookName, context, {
+        outcome,
+        code: Number.isInteger(payload.code) ? payload.code : null,
+        skipped: Boolean(payload.skipped),
+        has_error_output: Boolean(payload.error),
+      });
+      const outcomeEvent = await emitCanonicalEvent('orchestrate.gate.outcome', outcomePayload, correlationId, 'gate_outcome');
+
+      if (!outcomeEvent.ok) {
+        resolve({
+          hook: hookName,
+          passed: false,
+          code: null,
+          output: payload.output,
+          error: `canonical event write failed: ${outcomeEvent.failure.message}`,
+          write_error: outcomeEvent.failure,
+        });
+        return;
+      }
+
+      resolve(payload);
+    };
+
     const hook = spawn('node', [hookPath], {
       cwd: process.cwd(),
       stdio: ['pipe', 'pipe', 'pipe']
@@ -45,8 +183,18 @@ async function runHook(hookName, context = {}) {
       errorOutput += data.toString();
     });
 
+    hook.on('error', (error) => {
+      void settle({
+        hook: hookName,
+        passed: false,
+        code: null,
+        output: output.slice(-1000),
+        error: String(error && error.message ? error.message : 'spawn_error').slice(-500)
+      });
+    });
+
     hook.on('close', (code) => {
-      resolve({
+      void settle({
         hook: hookName,
         passed: code === 0,
         code,
@@ -129,7 +277,7 @@ async function barrierGate(layerIndex, tasks) {
   // 1. quality-gate (품질 게이트)
   const qualityResult = await runHook('quality-gate', {
     layer: layerIndex,
-    tasks: tasks.map(t => t.id),
+    tasks,
     phase: 'barrier'
   });
   results.push(qualityResult);
@@ -137,7 +285,7 @@ async function barrierGate(layerIndex, tasks) {
   // 2. security-scan (보안 스캔)
   const securityResult = await runHook('security-scan', {
     layer: layerIndex,
-    tasks: tasks.map(t => t.id),
+    tasks,
     phase: 'barrier'
   });
   results.push(securityResult);

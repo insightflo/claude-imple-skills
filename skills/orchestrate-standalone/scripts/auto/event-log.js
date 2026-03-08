@@ -22,6 +22,7 @@ const path = require('path');
 
 const EVENT_LOG_FILE = '.claude/orchestrate/auto-events.jsonl';
 const BACKUP_DIR = '.claude/backups';
+const DEPRECATION_NOTE = 'Deprecated compatibility mirror: use .claude/collab/events.ndjson for canonical whitebox reads.';
 const EVENT_TYPES = new Set([
   'define',
   'decompose',
@@ -197,6 +198,8 @@ if (require.main === module) {
         console.log(`
 Usage: node event-log.js <command> [args]
 
+${DEPRECATION_NOTE}
+
 Commands:
   append <type> <dataJson>  Append an event to the log
   read                      Read all events
@@ -212,6 +215,7 @@ Commands:
 
 module.exports = {
   EVENT_LOG_FILE,
+  DEPRECATION_NOTE,
   EVENT_TYPES,
   appendEvent,
   readEvents,
