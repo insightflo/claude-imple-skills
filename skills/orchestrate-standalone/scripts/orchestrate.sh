@@ -29,27 +29,7 @@ AUTO_MAX_ITERATIONS=""
 AUTO_MAX_DYNAMIC_TASKS=""
 AUTO_WORKER_COUNT=""
 AUTO_MAX_CONSECUTIVE_FAILURES=""
-
-case "$MODE" in
-    lite)
-        WORKER_COUNT=2
-        ;;
-    standard)
-        WORKER_COUNT=4
-        ;;
-    full)
-        WORKER_COUNT=8
-        ;;
-    wave)
-        WORKER_COUNT=6
-        ;;
-    sprint)
-        WORKER_COUNT=4
-        ;;
-    *)
-        WORKER_COUNT=4
-        ;;
-esac
+WORKER_COUNT=4
 
 # Colors
 if [ -t 1 ]; then
@@ -71,6 +51,32 @@ log_info()    { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
 log_success() { printf "${GREEN}[OK]${NC}   %s\n" "$1"; }
 log_warn()    { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 log_error()   { printf "${RED}[ERR]${NC}  %s\n" "$1" >&2; }
+
+resolve_worker_count() {
+    case "$MODE" in
+        lite)
+            WORKER_COUNT=2
+            ;;
+        standard)
+            WORKER_COUNT=4
+            ;;
+        full)
+            WORKER_COUNT=8
+            ;;
+        wave)
+            WORKER_COUNT=6
+            ;;
+        sprint)
+            WORKER_COUNT=4
+            ;;
+        auto)
+            WORKER_COUNT=4
+            ;;
+        *)
+            WORKER_COUNT=4
+            ;;
+    esac
+}
 
 header() {
     printf "\n${BOLD}%s${NC}\n" "$1"
@@ -134,6 +140,7 @@ rebuild_board_state() {
 
 show_whitebox_board() {
     local phase="${1:-status}"
+    local auto_open_tui="${WHITEBOX_AUTO_OPEN_TUI:-1}"
 
     if [ ! -f "$BOARD_SHOW_SCRIPT" ]; then
         return 0
@@ -146,13 +153,13 @@ show_whitebox_board() {
         return 0
     fi
 
-    log_info "Whitebox UI available for ${phase}."
-    if IFS= read -r -t 3 -p "Press Enter to open the task board now (auto-continue in 3s): " _; then
-        printf "\n"
-        bash "$BOARD_SHOW_SCRIPT" --rebuild --project-dir="$PROJECT_DIR" || true
-    else
-        printf "\n"
+    if [ "$auto_open_tui" = "0" ]; then
+        log_info "Whitebox UI available for ${phase}. Set WHITEBOX_AUTO_OPEN_TUI=1 to open automatically."
+        return 0
     fi
+
+    log_info "Opening whitebox board for ${phase}."
+    bash "$BOARD_SHOW_SCRIPT" --rebuild --project-dir="$PROJECT_DIR" || true
 }
 
 exit_with_board() {
@@ -239,6 +246,8 @@ case "$MODE" in
         exit 1
         ;;
 esac
+
+resolve_worker_count
 
 # ---------------------------------------------------------------------------
 # Check Prerequisites
