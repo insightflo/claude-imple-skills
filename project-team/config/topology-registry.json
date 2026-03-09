@@ -311,6 +311,8 @@
   },
   "installerOwnership": {
     "commonArtifacts": [
+      "hooks/lib/deterministic-policy.js",
+      "hooks/lib/hook-decision-event.js",
       "templates/adr/example.md",
       "templates/adr/template.md",
       "templates/contracts/example-user-api.yaml",
