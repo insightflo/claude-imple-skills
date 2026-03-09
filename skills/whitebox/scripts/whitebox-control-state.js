@@ -106,6 +106,9 @@ function collectGateRegistry(projectDir, events) {
       timeout_policy: autoGate.timeout_policy || null,
       created_at: autoGate.created_at || null,
       preview: autoGate.preview || '',
+      trigger_type: autoGate.trigger_type || null,
+      trigger_reason: autoGate.trigger_reason || null,
+      recommendation: autoGate.recommendation || null,
       evidence_paths: commandEvidencePaths(projectDir, autoGate.gate_id),
     });
   }
@@ -126,6 +129,9 @@ function collectGateRegistry(projectDir, events) {
       timeout_policy: data.timeout_policy || null,
       created_at: event.ts || null,
       preview: data.preview || '',
+      trigger_type: data.trigger_type || null,
+      trigger_reason: data.trigger_reason || null,
+      recommendation: data.recommendation || null,
       evidence_paths: commandEvidencePaths(projectDir, gateId),
     };
 
@@ -141,6 +147,9 @@ function collectGateRegistry(projectDir, events) {
       timeout_policy: existing.timeout_policy || data.timeout_policy || null,
       created_at: existing.created_at || event.ts || null,
       preview: existing.preview || data.preview || '',
+      trigger_type: existing.trigger_type || data.trigger_type || null,
+      trigger_reason: existing.trigger_reason || data.trigger_reason || null,
+      recommendation: existing.recommendation || data.recommendation || null,
       evidence_paths: existing.evidence_paths,
     });
   }
@@ -191,6 +200,9 @@ function buildControlState(projectDir) {
       timeout_policy: gate.timeout_policy,
       created_at: gate.created_at,
       preview: gate.preview,
+      trigger_type: gate.trigger_type,
+      trigger_reason: gate.trigger_reason,
+      recommendation: gate.recommendation,
       evidence_paths: gate.evidence_paths,
       latest_command: latestCommand,
       actor,

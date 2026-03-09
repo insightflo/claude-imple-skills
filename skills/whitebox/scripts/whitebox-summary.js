@@ -102,6 +102,8 @@ function nextRemediation(staleMarkers, pendingApprovals, blockedCards, tasksStat
       id: gate.gate_id,
       reason: `Approval required for ${gate.task_id || gate.gate_name || gate.gate_id}`,
       remediation: 'Review the approval details and run approve or reject through /whitebox approvals.',
+      trigger_type: gate.trigger_type || 'user_confirmation',
+      recommendation: gate.recommendation || null,
     };
   }
 
@@ -171,6 +173,9 @@ function buildWhiteboxSummary(projectDir) {
       task_id: gate.task_id || null,
       correlation_id: gate.correlation_id || null,
       created_at: gate.created_at || gate.required_at || null,
+      trigger_type: gate.trigger_type || 'user_confirmation',
+      trigger_reason: gate.trigger_reason || null,
+      recommendation: gate.recommendation || null,
       evidence_paths: Array.isArray(gate.evidence_paths) ? gate.evidence_paths : [],
     })),
     stale_artifact_count: staleMarkers.length,

@@ -168,12 +168,14 @@ function approvalOptions(approval) {
       command: `node ${shellQuote(controlScript)} approve ${shellQuote(projectDirArg)} --gate-id=${approval.gate_id} --json`,
       effect: 'Records one approve command for the paused gate and allows the orchestrator to resume.',
       risk: 'Execution continues with the currently proposed plan and may expose downstream failures.',
+      recommendation: approval.recommendation || null,
       evidence_paths: evidencePaths,
     },
     {
       command: `node ${shellQuote(controlScript)} reject ${shellQuote(projectDirArg)} --gate-id=${approval.gate_id} --json`,
       effect: 'Records one reject command for the paused gate and keeps the run from resuming that gate.',
       risk: 'The run remains blocked until a new plan or retry path produces another approvable gate.',
+      recommendation: approval.recommendation || null,
       evidence_paths: evidencePaths,
     },
   ];
@@ -212,15 +214,19 @@ function buildExplain(options) {
     ok: hasEvidence,
     target,
     reason: approval
-      ? `Approval required for ${approval.task_id || approval.gate_name || approval.gate_id}`
+      ? (approval.trigger_reason || `Approval required for ${approval.task_id || approval.gate_name || approval.gate_id}`)
       : card && card.blocker_reason ? card.blocker_reason : described.reason,
     source: approval
       ? 'whitebox-control-state'
       : card && card.blocker_source ? card.blocker_source : described.source,
     remediation: approval
-      ? 'Choose approve or reject from the evidence-backed options.'
+      ? (approval.recommendation || 'Choose approve or reject from the evidence-backed options.')
       : card && card.remediation ? card.remediation : described.remediation,
     options: optionsList,
+    trigger: approval ? {
+      type: approval.trigger_type || 'user_confirmation',
+      recommendation: approval.recommendation || null,
+    } : null,
     evidence_paths: evidencePaths,
     correlation: {
       run_id: approval && approval.run_id
