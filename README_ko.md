@@ -1,4 +1,4 @@
-# claude-imple-skills
+# claude-impl-tools
 
 > **Claude Code용 구현 스킬 팩** — AI 에이전트 팀으로 소프트웨어 구축
 
@@ -14,17 +14,17 @@ Claude Code로 소프트웨어를 개발할 때 도와주는 **스킬**과 **에
 
 ```bash
 # 자동 다운로드 및 설치
-curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main/scripts/quick-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 ```
 
-`~/.claude/claude-imple-skills/`에 설치되고 스킬이 `~/.claude/skills/`로 연결됩니다.
+`~/.claude/claude-impl-tools/`에 설치되고 스킬이 `~/.claude/skills/`로 연결됩니다.
 
 ### 옵션 2: 수동 설치
 
 ```bash
 # 저장소 복제
-git clone https://github.com/insightflo/claude-imple-skills.git
-cd claude-imple-skills
+git clone https://github.com/insightflo/claude-impl-tools.git
+cd claude-impl-tools
 
 # 설치 (macOS/Linux)
 chmod +x ./scripts/install-unix.sh && ./scripts/install-unix.sh
@@ -38,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 대규모 프로젝트용 AI 에이전트 팀 배포:
 
 ```bash
-cd claude-imple-skills/project-team
+cd claude-impl-tools/project-team
 ./install.sh --global
 ```
 
@@ -227,7 +227,7 @@ project-team/
 ## 프로젝트 구조
 
 ```
-claude-imple-skills/
+claude-impl-tools/
 ├── skills/                    # 21개 스킬
 │   ├── workflow-guide/        # 메타 허브
 │   ├── governance-setup/      # Phase 0 설정

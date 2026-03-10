@@ -4,7 +4,7 @@
 # No git clone required! Downloads and installs skills automatically.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main/scripts/quick-install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 
 set -euo pipefail
 
@@ -12,8 +12,8 @@ set -euo pipefail
 # Configuration
 # ============================================
 
-REPO_URL="https://github.com/insightflo/claude-imple-skills.git"
-REPO_NAME="claude-imple-skills"
+REPO_URL="https://github.com/insightflo/claude-impl-tools.git"
+REPO_NAME="claude-impl-tools"
 INSTALL_DIR="$HOME/.claude/$REPO_NAME"
 SKILLS_TARGET="$HOME/.claude/skills"
 BRANCH="${BRANCH:-main}"
@@ -130,7 +130,7 @@ download_repo() {
         # Use tarball download (no git required)
         log_info "Downloading tarball..."
         TEMP_TAR=$(mktemp)
-        $DOWNLOADER "https://github.com/insightflo/claude-imple-skills/archive/refs/heads/$BRANCH.tar.gz" -o "$TEMP_TAR"
+        $DOWNLOADER "https://github.com/insightflo/claude-impl-tools/archive/refs/heads/$BRANCH.tar.gz" -o "$TEMP_TAR"
         mkdir -p "$INSTALL_DIR"
         tar -xzf "$TEMP_TAR" -C "$(dirname "$INSTALL_DIR")" --strip-components=1
         rm -f "$TEMP_TAR"

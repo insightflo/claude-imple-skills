@@ -78,7 +78,7 @@ install_segment() {
     cat >> "$STATUSLINE_FILE" << SEGMENT
 
 $MARKER_START
-# Line 3: TASKS.md progress (added by claude-imple-skills/statusline)
+# Line 3: TASKS.md progress (added by claude-impl-tools/statusline)
 TASKS_LINE3=\$("$SEGMENT_SCRIPT" "\$CURRENT_DIR" 2>/dev/null)
 [[ -n "\$TASKS_LINE3" ]] && printf "%b\n" "\$TASKS_LINE3"
 $MARKER_END

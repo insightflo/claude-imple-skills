@@ -253,7 +253,7 @@ ALGORITHM get_recommendation():
   #    ⚠️ all_tasks_completed이면 install.sh 불필요 → ⑥·⑧으로 이동
   IF GOVERNANCE_DONE == "yes" AND TASK_COUNT >= 30 AND AGENT_COUNT == 0 AND incomplete_tasks > 0:
     RETURN "project-team/install.sh --mode standard"
-    # 참고: claude-imple-skills 클론 디렉토리 내 project-team/ 에서 실행
+    # 참고: claude-impl-tools 클론 디렉토리 내 project-team/ 에서 실행
 
   # ⑥ 구현/배포 판단 (거버넌스 완료 + 인프라 준비)
   IF GOVERNANCE_DONE == "yes" AND AGENT_COUNT > 0:
@@ -568,7 +568,7 @@ ALGORITHM get_recommendation():
 ### Hook 설치
 
 ```bash
-# project-team 설치 스크립트 실행 (claude-imple-skills 클론 디렉토리 내 project-team/ 에서 실행)
+# project-team 설치 스크립트 실행 (claude-impl-tools 클론 디렉토리 내 project-team/ 에서 실행)
 cd project-team && ./install.sh --mode standard
 ```
 

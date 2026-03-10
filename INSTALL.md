@@ -4,8 +4,8 @@
 
 ```bash
 # Clone and install
-git clone https://github.com/insightflo/claude-imple-skills.git
-cd claude-imple-skills
+git clone https://github.com/insightflo/claude-impl-tools.git
+cd claude-impl-tools
 ./install.sh
 ```
 
@@ -39,7 +39,7 @@ TUI 모드로 다음을 선택할 수 있습니다:
 ### 3. Remote Install (No Git Clone)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main/scripts/quick-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 ```
 
 ---
@@ -136,7 +136,7 @@ codex auth
 ## Update
 
 ```bash
-cd claude-imple-skills
+cd claude-impl-tools
 git pull
 ./install.sh
 ```

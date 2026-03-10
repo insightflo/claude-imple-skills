@@ -2,7 +2,7 @@
 
 > An enterprise-grade agent coordination system for managing large-scale AI-driven projects with structured governance, role-based permissions, and automated quality gates.
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/anthropics/claude-imple-skills)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/anthropics/claude-impl-tools)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node.js-20%2B-brightgreen.svg)](https://nodejs.org/)
 [![Status](https://img.shields.io/badge/status-stable-success.svg)](#)
@@ -508,7 +508,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ## Authors
 
-Part of the claude-imple-skills project.
+Part of the claude-impl-tools project.
 
 **Version**: 1.0.0
 **Last Updated**: 2026-03-03

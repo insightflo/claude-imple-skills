@@ -1,4 +1,4 @@
-# claude-imple-skills
+# claude-impl-tools
 
 > **Implementation skill pack for Claude Code** — Build software with AI agent teams
 
@@ -13,8 +13,8 @@ A standalone-first collection of **skills** and **agent teams** that help you bu
 ### Option 1: Interactive Install (Recommended)
 
 ```bash
-git clone https://github.com/insightflo/claude-imple-skills.git
-cd claude-imple-skills
+git clone https://github.com/insightflo/claude-impl-tools.git
+cd claude-impl-tools
 ./install.sh
 ```
 
@@ -35,7 +35,7 @@ TUI-based installer lets you select:
 ### Option 3: Remote Install (No git clone)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/insightflo/claude-imple-skills/main/scripts/quick-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 ```
 
 ---
@@ -223,7 +223,7 @@ These are the flows validated against the current `main` branch:
 ## Repository Structure
 
 ```
-claude-imple-skills/
+claude-impl-tools/
 ├── skills/                    # 21 skills
 │   ├── workflow-guide/        # Meta hub
 │   ├── governance-setup/      # Phase 0 setup
