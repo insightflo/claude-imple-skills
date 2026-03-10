@@ -46,6 +46,14 @@ function main() {
   }
 
   if (process.stdout.isTTY) {
+    const dashboard = path.resolve(__dirname, 'whitebox-dashboard.js');
+    const dashboardResult = spawnSync(process.execPath, [dashboard, 'open', `--project-dir=${options.projectDir}`, '--reveal'], {
+      stdio: 'inherit',
+    });
+    if ((dashboardResult.status || 0) === 0) {
+      process.exit(0);
+    }
+
     const boardShow = path.resolve(__dirname, '../../task-board/scripts/board-show.sh');
     const args = [`--project-dir=${options.projectDir}`];
     if (rebuild.rebuilt.length > 0) args.push('--rebuild');

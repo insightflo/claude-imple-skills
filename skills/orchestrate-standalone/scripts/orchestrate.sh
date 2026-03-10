@@ -20,6 +20,7 @@ NODE_CMD="${NODE_CMD:-node}"
 COLLAB_INIT_SCRIPT="$SCRIPT_DIR/../../../project-team/scripts/collab-init.js"
 BOARD_BUILDER_SCRIPT="$SCRIPT_DIR/../../task-board/scripts/board-builder.js"
 BOARD_SHOW_SCRIPT="$SCRIPT_DIR/../../task-board/scripts/board-show.sh"
+WHITEBOX_DASHBOARD_SCRIPT="$SCRIPT_DIR/../../whitebox/scripts/whitebox-dashboard.js"
 
 MODE="${MODE:-standard}"
 RESUME="${RESUME:-false}"
@@ -153,6 +154,7 @@ build_wave_plan() {
 show_whitebox_board() {
     local phase="${1:-status}"
     local auto_open_tui="${WHITEBOX_AUTO_OPEN_TUI:-1}"
+    local auto_open_browser="${WHITEBOX_AUTO_OPEN_BROWSER:-1}"
 
     if [ ! -f "$BOARD_SHOW_SCRIPT" ]; then
         return 0
@@ -165,8 +167,17 @@ show_whitebox_board() {
         return 0
     fi
 
+    if [ "$auto_open_browser" != "0" ] && [ -f "$WHITEBOX_DASHBOARD_SCRIPT" ] && [ -z "${CI:-}" ]; then
+        local dashboard_url
+        dashboard_url="$($NODE_CMD "$WHITEBOX_DASHBOARD_SCRIPT" open --project-dir="$PROJECT_DIR" 2>/dev/null || true)"
+        if [ -n "$dashboard_url" ]; then
+            log_info "Whitebox dashboard for ${phase}: ${dashboard_url}"
+            return 0
+        fi
+    fi
+
     if [ "$auto_open_tui" = "0" ]; then
-        log_info "Whitebox UI available for ${phase}. Set WHITEBOX_AUTO_OPEN_TUI=1 to open automatically."
+        log_info "Whitebox UI available for ${phase}. Set WHITEBOX_AUTO_OPEN_BROWSER=1 or WHITEBOX_AUTO_OPEN_TUI=1 to open automatically."
         return 0
     fi
 
