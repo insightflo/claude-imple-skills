@@ -60,7 +60,8 @@ version: 2.0.0
      ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ 5단계: 사용자 확인 + 다음 단계 안내                          │
-│   → /agile auto 또는 /orchestrate-standalone 실행 권장        │
+│   → owner 기반 자동 라우팅 확인 + /agile auto 또는            │
+│     /orchestrate-standalone 실행 권장                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -152,6 +153,8 @@ grep -rn "TODO\|FIXME\|XXX" --include="*.ts" --include="*.tsx" --include="*.py" 
   ]
 }
 ```
+
+생성된 TASKS.md에서는 `owner`가 기본 실행기를 결정하고, `model`은 owner/model-routing 자동 라우팅을 덮어야 할 때만 넣습니다.
 
 ## 관련 스킬
 

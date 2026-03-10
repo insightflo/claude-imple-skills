@@ -11,7 +11,7 @@
 #   - risk: low|medium|critical     # 위험도 (critical은 직렬 실행)
 #   - files: src/**/*.ts            # 영향 파일 패턴 (충돌 감지용)
 #   - owner: backend-specialist     # 담당 에이전트
-#   - model: sonnet|gemini          # 사용 모델
+#   - model: sonnet|gemini          # 선택: owner/model-routing을 덮는 명시적 override
 #
 # 메타데이터 설명:
 # =================
@@ -49,6 +49,7 @@
 #   - dba: DB 스키마, 마이그레이션
 #
 # model (사용 모델)
+#   - 선택 필드이며, 없으면 owner와 model-routing.yaml 기반 자동 라우팅 사용
 #   - sonnet: Claude Sonnet (일반 코딩, 논리)
 #   - gemini: Gemini 3.0 (디자인 코딩, UI)
 #   - haiku: Claude Haiku (빠른 수정)
@@ -65,7 +66,7 @@
 #   - risk: critical
 #   - files: src/domains/auth/*.ts, src/api/auth/*.ts
 #   - owner: backend-specialist
-#   - model: sonnet
+#   - model: codex   # 선택: backend-specialist 기본 라우팅을 명시적으로 고정하고 싶을 때만 사용
 #
 # - [ ] T1.2: 로그인 화면 구현
 #   - description: 로그인 폼과 인증 로직을 연결합니다.
@@ -74,7 +75,7 @@
 #   - risk: medium
 #   - files: src/screens/Login/*.tsx
 #   - owner: frontend-specialist
-#   - model: gemini
+#   # model 생략 -> frontend-specialist owner 기준 자동 라우팅
 #
 # - [ ] T1.3: 인증 보안 검토
 #   - description: OWASP Top 10 기반 보안 검토를 수행합니다.
@@ -82,4 +83,4 @@
 #   - domain: shared
 #   - risk: critical
 #   - owner: security-specialist
-#   - model: sonnet
+#   # model 생략 -> security-specialist owner/model-routing 기준 자동 라우팅
