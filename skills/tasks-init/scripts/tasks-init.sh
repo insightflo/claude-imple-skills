@@ -77,6 +77,8 @@ echo ""
 TASK_COUNT=$(grep -c '^\- \[ \]' "${PROJECT_ROOT}/${OUTPUT_FILE}" || echo "0")
 echo "📊 Generated $TASK_COUNT tasks"
 echo ""
+echo "Routing note: owner drives executor selection by default; add 'model:' only for explicit overrides."
+echo ""
 echo "Next steps:"
 echo "  1. Review TASKS.md and adjust as needed"
 echo "  2. Run: /agile auto    (for ≤30 tasks)"

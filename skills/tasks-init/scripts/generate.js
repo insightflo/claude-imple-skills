@@ -12,7 +12,6 @@
  */
 
 const fs = require('fs');
-const path = require('path');
 
 class TaskGenerator {
   constructor(projectInfo, analysisResult) {
@@ -60,7 +59,6 @@ class TaskGenerator {
       domain: 'shared',
       risk: 'low',
       owner: 'project-manager',
-      model: 'sonnet',
       files: ['package.json', 'tsconfig.json', '.eslintrc.js']
     }));
 
@@ -71,8 +69,7 @@ class TaskGenerator {
       deps: [`${phase}.${this.taskIdCounter[phase]}`],
       domain: 'shared',
       risk: 'low',
-      owner: 'chief-architect',
-      model: 'sonnet'
+      owner: 'chief-architect'
     }));
 
     tasks.push(this.createTask({
@@ -83,7 +80,6 @@ class TaskGenerator {
       domain: 'shared',
       risk: 'low',
       owner: 'backend-specialist',
-      model: 'sonnet',
       files: ['src/types/**/*.ts']
     }));
 
@@ -94,8 +90,7 @@ class TaskGenerator {
       deps: [`${phase}.${this.taskIdCounter[phase] - 2}`],
       domain: 'frontend',
       risk: 'low',
-      owner: 'frontend-specialist',
-      model: 'gemini'
+      owner: 'frontend-specialist'
     }));
 
     return tasks;
@@ -128,7 +123,6 @@ class TaskGenerator {
       domain: 'backend',
       risk: this.calculateRisk(featureName, 'backend'),
       owner: 'backend-specialist',
-      model: 'sonnet',
       files: this.guessBackendFiles(featureName),
       metadata: this.getBackendContext(featureName)
     });
@@ -142,7 +136,6 @@ class TaskGenerator {
       domain: 'backend',
       risk: this.calculateRisk(featureName, 'implementation'),
       owner: 'backend-specialist',
-      model: 'sonnet',
       files: this.guessBackendFiles(featureName)
     });
     tasks.push(backendImplTask);
@@ -156,7 +149,6 @@ class TaskGenerator {
       domain: 'frontend',
       risk: 'low',
       owner: 'frontend-specialist',
-      model: 'gemini',
       files: this.guessFrontendFiles(featureName),
       metadata: this.getFrontendContext(featureName)
     });
@@ -184,8 +176,7 @@ class TaskGenerator {
         deps: ['T1.*'], // 모든 T1 완료 후
         domain: feature.domain,
         risk: 'medium',
-        owner: feature.owner,
-        model: feature.domain === 'frontend' ? 'gemini' : 'sonnet'
+        owner: feature.owner
       }));
     }
 
@@ -211,8 +202,7 @@ class TaskGenerator {
         deps: ['T2.*'],
         domain: 'frontend',
         risk: 'low',
-        owner: feature.owner,
-        model: 'gemini'
+        owner: feature.owner
       }));
     }
 
@@ -237,7 +227,7 @@ class TaskGenerator {
       domain,
       risk: risk || 'low',
       owner,
-      model: model || 'sonnet',
+      model: model || null,
       files: Array.isArray(files) ? files : [],
       metadata,
       status: 'pending'
@@ -267,7 +257,7 @@ class TaskGenerator {
   /**
    * 의존성 계산
    */
-  calculateBackendDeps(featureName) {
+  calculateBackendDeps() {
     // 기존 코드 분석 기반 의존성 감지
     const deps = [];
 
@@ -328,7 +318,7 @@ class TaskGenerator {
   /**
    * Specialist 컨텍스트 주입
    */
-  getBackendContext(featureName) {
+  getBackendContext() {
     return {
       specialist: 'backend-specialist',
       considerations: [
@@ -343,7 +333,7 @@ class TaskGenerator {
     };
   }
 
-  getFrontendContext(featureName) {
+  getFrontendContext() {
     return {
       specialist: 'frontend-specialist',
       considerations: [
@@ -406,7 +396,9 @@ class TaskGenerator {
           lines.push(`  - files: ${task.files.join(', ')}`);
         }
         lines.push(`  - owner: ${task.owner}`);
-        lines.push(`  - model: ${task.model}`);
+        if (task.model) {
+          lines.push(`  - model: ${task.model}`);
+        }
         lines.push('');
       }
     }
@@ -421,7 +413,7 @@ class TaskGenerator {
     lines.push('# risk: low | medium | critical (병렬 실행 제어용)');
     lines.push('# files: 영향받는 파일 패턴 (충돌 감지용)');
     lines.push('# owner: 담당 에이전트');
-    lines.push('# model: 사용할 AI 모델 (sonnet | gemini)');
+    lines.push('# model: 선택적 override (owner/model-routing 자동 라우팅을 덮을 때만 사용)');
     lines.push('```');
 
     return lines.join('\n');
