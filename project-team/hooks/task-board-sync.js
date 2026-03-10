@@ -150,6 +150,22 @@ function parseFrontmatterField(content, fieldName) {
   return fieldMatch ? fieldMatch[1].trim().replace(/^['"]|['"]$/g, '').replace(/^\[(.*)\]$/, '$1') : null;
 }
 
+function upsertFrontmatterField(content, fieldName, value) {
+  const newline = content.includes('\r\n') ? '\r\n' : '\n';
+  const fieldLine = `${fieldName}: ${value}`;
+  const block = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!block) return content;
+
+  const lines = block[1].split(/\r?\n/);
+  const fieldIndex = lines.findIndex((line) => line.startsWith(`${fieldName}:`));
+  if (fieldIndex >= 0) {
+    lines[fieldIndex] = fieldLine;
+  } else {
+    lines.push(fieldLine);
+  }
+  return content.replace(block[0], `---${newline}${lines.join(newline)}${newline}---`);
+}
+
 function handleReqFileEdit(filePath, newContent) {
   if (!filePath) return null;
   const rel = path.relative(PROJECT_DIR, path.resolve(PROJECT_DIR, filePath)).replace(/\\/g, '/');
@@ -183,6 +199,35 @@ function handleDecisionFileEdit(filePath, newContent) {
     decision_id: decisionId,
     req_id: reqId || null,
     status: status ? status.toUpperCase() : null,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function resolveEscalatedReqFromDecision(projectDir, decisionEvent) {
+  if (!decisionEvent || !decisionEvent.req_id || decisionEvent.status !== 'FINAL') return null;
+
+  const reqPath = path.join(projectDir, '.claude', 'collab', 'requests', `${decisionEvent.req_id}.md`);
+  if (!fs.existsSync(reqPath)) return null;
+
+  let content = '';
+  try {
+    content = fs.readFileSync(reqPath, 'utf8');
+  } catch {
+    return null;
+  }
+
+  if (parseFrontmatterStatus(content) !== 'ESCALATED') return null;
+
+  let updated = upsertFrontmatterField(content, 'status', 'RESOLVED');
+  updated = upsertFrontmatterField(updated, 'resolution_decision', decisionEvent.decision_id);
+  updated = upsertFrontmatterField(updated, 'resolved_at', new Date().toISOString());
+  fs.writeFileSync(reqPath, updated, 'utf8');
+
+  return {
+    type: 'req_resolved',
+    req_id: decisionEvent.req_id,
+    status: 'RESOLVED',
+    decision_id: decisionEvent.decision_id,
     timestamp: new Date().toISOString(),
   };
 }
@@ -238,6 +283,8 @@ async function main() {
     if (reqEvent) events.push(reqEvent);
     const decisionEvent = handleDecisionFileEdit(filePath, content);
     if (decisionEvent) events.push(decisionEvent);
+    const autoResolvedReqEvent = resolveEscalatedReqFromDecision(PROJECT_DIR, decisionEvent);
+    if (autoResolvedReqEvent) events.push(autoResolvedReqEvent);
   }
 
   if (events.length === 0) return;
@@ -274,6 +321,7 @@ if (typeof module !== 'undefined' && module.exports) {
     handleTaskUpdate,
     handleReqFileEdit,
     handleDecisionFileEdit,
+    resolveEscalatedReqFromDecision,
     handleTaskStartedEdit,
     readTaskContext,
     taskStartedMarkerPath,

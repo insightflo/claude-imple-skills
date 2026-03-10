@@ -72,6 +72,12 @@ struct PendingDecision {
     reason: Option<String>,
     #[serde(default)]
     recommendation: Option<String>,
+    #[serde(default)]
+    decision_id: Option<String>,
+    #[serde(default)]
+    decision_path: Option<String>,
+    #[serde(default)]
+    decision_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -201,6 +207,18 @@ struct ExplainCorrelation {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
+struct ExplainLinkedDecision {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    ref_req: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
 struct ExplainReport {
     #[serde(default)]
     ok: bool,
@@ -218,6 +236,8 @@ struct ExplainReport {
     evidence_paths: Vec<String>,
     #[serde(default)]
     trigger: Option<ExplainTrigger>,
+    #[serde(default)]
+    linked_decision: Option<ExplainLinkedDecision>,
     #[serde(default)]
     correlation: ExplainCorrelation,
 }
@@ -1144,6 +1164,19 @@ fn intervention_detail_text(
                 queue_item_label(item),
                 format!("decision {}", decision.id),
                 format!(
+                    "dec {}{}",
+                    decision.decision_id.as_deref().unwrap_or("none"),
+                    decision
+                        .decision_status
+                        .as_deref()
+                        .map(|status| format!(" ({status})"))
+                        .unwrap_or_default()
+                ),
+                format!(
+                    "dec_path {}",
+                    decision.decision_path.as_deref().unwrap_or("none")
+                ),
+                format!(
                     "trigger {}",
                     decision
                         .trigger_type
@@ -1206,6 +1239,30 @@ fn intervention_detail_text(
             .clone()
             .unwrap_or_else(|| "none".to_string())
     ));
+
+    if let Some(linked_decision) = &report.linked_decision {
+        lines.push(format!(
+            "linked_decision {}{}",
+            if linked_decision.id.is_empty() {
+                "none"
+            } else {
+                linked_decision.id.as_str()
+            },
+            linked_decision
+                .status
+                .as_deref()
+                .map(|status| format!(" ({status})"))
+                .unwrap_or_default()
+        ));
+        lines.push(format!(
+            "linked_req {}",
+            linked_decision.ref_req.as_deref().unwrap_or("none")
+        ));
+        lines.push(format!(
+            "linked_path {}",
+            linked_decision.path.as_deref().unwrap_or("none")
+        ));
+    }
 
     if let Some(trigger) = &report.trigger {
         lines.push(format!(
@@ -2235,6 +2292,11 @@ mod tests {
                             "Review the escalated request and create or apply a DEC ruling before continuing."
                                 .to_string(),
                         ),
+                        decision_id: Some("DEC-20260309-001".to_string()),
+                        decision_path: Some(
+                            ".claude/collab/decisions/DEC-20260309-001.md".to_string(),
+                        ),
+                        decision_status: Some("FINAL".to_string()),
                     }],
                 },
                 summary: WhiteboxSummary {
@@ -2377,6 +2439,53 @@ mod tests {
             .iter()
             .any(|line| line.contains("evidence /tmp/.claude/collab/control-state.json")));
         assert!(!lines.iter().any(|line| line.contains("legacy preview")));
+    }
+
+    #[test]
+    fn explain_detail_surfaces_linked_decision_metadata() {
+        let lines = intervention_detail_text(
+            Some(&QueueItem::Decision(PendingDecision {
+                id: "req-conflict-REQ-77".to_string(),
+                title: "REQ conflict REQ-77".to_string(),
+                task_id: Some("T9.1".to_string()),
+                req_id: Some("REQ-77".to_string()),
+                decision_type: Some("agent_conflict".to_string()),
+                trigger_type: Some("agent_conflict".to_string()),
+                reason: Some("Request escalated for mediation.".to_string()),
+                recommendation: Some("Apply the DEC ruling.".to_string()),
+                decision_id: Some("DEC-20260309-001".to_string()),
+                decision_path: Some(".claude/collab/decisions/DEC-20260309-001.md".to_string()),
+                decision_status: Some("FINAL".to_string()),
+            })),
+            Some(&ExplainReport {
+                ok: true,
+                target: ExplainTarget {
+                    target_type: "req".to_string(),
+                    id: "REQ-77".to_string(),
+                },
+                reason: Some("Use the backend contract and adapt the frontend mapper.".to_string()),
+                source: Some("DEC-20260309-001 (FINAL)".to_string()),
+                remediation: Some(
+                    "BackendSpecialist: keep the contract stable. FrontendSpecialist: update the mapper before resuming."
+                        .to_string(),
+                ),
+                linked_decision: Some(ExplainLinkedDecision {
+                    id: "DEC-20260309-001".to_string(),
+                    status: Some("FINAL".to_string()),
+                    ref_req: Some("REQ-77".to_string()),
+                    path: Some(".claude/collab/decisions/DEC-20260309-001.md".to_string()),
+                }),
+                ..Default::default()
+            }),
+        );
+
+        assert!(lines
+            .iter()
+            .any(|line| line.contains("linked_decision DEC-20260309-001 (FINAL)")));
+        assert!(lines.iter().any(|line| line.contains("linked_req REQ-77")));
+        assert!(lines.iter().any(|line| {
+            line.contains("linked_path .claude/collab/decisions/DEC-20260309-001.md")
+        }));
     }
 
     #[test]
@@ -2669,6 +2778,7 @@ mod tests {
         assert!(snapshot.contains("decisions=1"));
         assert!(snapshot.contains("Intervention Queue (1)"));
         assert!(snapshot.contains("[decision] T9.1"));
+        assert!(snapshot.contains("dec DEC-20260309-001 (FINAL)"));
         assert!(snapshot.contains("trigger agent_conflict"));
         assert!(snapshot.contains("read-only selection"));
     }

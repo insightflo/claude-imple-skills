@@ -2443,6 +2443,58 @@ Use the backend contract and adapt the frontend mapper.
     ]));
   });
 
+  test('task-board-sync auto-resolves escalated REQ when final DEC is written', () => {
+    const projectDir = makeTempProject('whitebox-decision-auto-resolve-');
+    initCollabArtifacts(projectDir);
+    const requestPath = path.join(projectDir, '.claude', 'collab', 'requests', 'REQ-77.md');
+    fs.mkdirSync(path.dirname(requestPath), { recursive: true });
+    fs.writeFileSync(requestPath, '---\nid: REQ-77\nstatus: ESCALATED\nfrom: frontend-specialist\n---\n\nEscalated disagreement.\n', 'utf8');
+
+    const decisionPath = path.join(projectDir, '.claude', 'collab', 'decisions', 'DEC-20260309-001.md');
+    fs.mkdirSync(path.dirname(decisionPath), { recursive: true });
+    fs.writeFileSync(decisionPath, '---\nid: DEC-20260309-001\nref_req: REQ-77\nstatus: FINAL\n---\n\n## Decision Summary\nUse the backend contract.\n', 'utf8');
+
+    const result = spawnSync(process.execPath, [taskBoardSyncScript], {
+      cwd: projectDir,
+      env: {
+        ...process.env,
+        CLAUDE_PROJECT_DIR: projectDir,
+      },
+      input: JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Write',
+        tool_input: {
+          file_path: '.claude/collab/decisions/DEC-20260309-001.md',
+        },
+      }),
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+
+    const reqContent = fs.readFileSync(requestPath, 'utf8');
+    expect(reqContent).toContain('status: RESOLVED');
+    expect(reqContent).toContain('resolution_decision: DEC-20260309-001');
+    expect(reqContent).toContain('resolved_at: ');
+
+    const parsed = readEvents({ projectDir, tolerateTrailingPartialLine: false });
+    expect(parsed.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'decision_written',
+        correlation_id: 'REQ-77',
+      }),
+      expect.objectContaining({
+        type: 'req_resolved',
+        correlation_id: 'REQ-77',
+        data: expect.objectContaining({
+          req_id: 'REQ-77',
+          status: 'RESOLVED',
+          decision_id: 'DEC-20260309-001',
+        }),
+      }),
+    ]));
+  });
+
   test('task-board-sync skips task_started without task context', () => {
     const projectDir = makeTempProject('whitebox-task-started-missing-');
     initCollabArtifacts(projectDir);
