@@ -54,10 +54,32 @@ struct Card {
     blocker_reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
+struct PendingDecision {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    task_id: Option<String>,
+    #[serde(default)]
+    req_id: Option<String>,
+    #[serde(default)]
+    decision_type: Option<String>,
+    #[serde(default)]
+    trigger_type: Option<String>,
+    #[serde(default)]
+    reason: Option<String>,
+    #[serde(default)]
+    recommendation: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 struct BoardState {
     #[serde(default)]
     columns: HashMap<String, Vec<Card>>,
+    #[serde(default)]
+    decisions: Vec<PendingDecision>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -113,6 +135,8 @@ struct WhiteboxSummary {
     #[serde(default)]
     pending_approval_count: usize,
     #[serde(default)]
+    pending_decision_count: usize,
+    #[serde(default)]
     stale_artifact_count: usize,
     #[serde(default)]
     run_id_short: Option<String>,
@@ -128,6 +152,12 @@ struct ControlState {
     pending_approval_count: usize,
     #[serde(default)]
     pending_approvals: Vec<PendingApproval>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum QueueItem {
+    Approval(PendingApproval),
+    Decision(PendingDecision),
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -218,7 +248,7 @@ struct SelectionState {
 #[derive(Debug, Clone)]
 struct DetailState {
     explain_report: Option<ExplainReport>,
-    current_approval: Option<PendingApproval>,
+    current_item: Option<QueueItem>,
     pending_request: Option<ExplainRequest>,
     active_request_id: Option<u64>,
     next_request_id: u64,
@@ -228,7 +258,7 @@ impl Default for DetailState {
     fn default() -> Self {
         Self {
             explain_report: None,
-            current_approval: None,
+            current_item: None,
             pending_request: None,
             active_request_id: None,
             next_request_id: 1,
@@ -294,7 +324,7 @@ struct SubmitRequest {
 #[derive(Debug, Clone)]
 struct ExplainRequest {
     request_id: u64,
-    approval: PendingApproval,
+    item: QueueItem,
 }
 
 #[derive(Debug, Clone)]
@@ -308,7 +338,7 @@ struct SubmitResult {
 #[derive(Debug, Clone)]
 struct ExplainResult {
     request_id: u64,
-    approval: PendingApproval,
+    item: QueueItem,
     report: Option<ExplainReport>,
 }
 
@@ -585,10 +615,10 @@ impl ExplainController {
     fn dispatch(&self, project_dir: PathBuf, request: ExplainRequest) {
         let sender = self.sender.clone();
         thread::spawn(move || {
-            let report = fetch_explain_report(&project_dir, Some(&request.approval));
+            let report = fetch_explain_report(&project_dir, Some(&request.item));
             let _ = sender.send(ExplainResult {
                 request_id: request.request_id,
-                approval: request.approval,
+                item: request.item,
                 report,
             });
         });
@@ -624,11 +654,87 @@ fn load_snapshot(project_dir: &Path) -> SnapshotState {
     }
 }
 
-fn clamp_selection(selection: usize, control: &ControlState) -> usize {
-    if control.pending_approvals.is_empty() {
+fn queue_items(snapshot: &SnapshotState) -> Vec<QueueItem> {
+    snapshot
+        .control
+        .pending_approvals
+        .iter()
+        .cloned()
+        .map(QueueItem::Approval)
+        .chain(
+            snapshot
+                .board
+                .decisions
+                .iter()
+                .cloned()
+                .map(QueueItem::Decision),
+        )
+        .collect()
+}
+
+fn queue_len(snapshot: &SnapshotState) -> usize {
+    snapshot.control.pending_approvals.len() + snapshot.board.decisions.len()
+}
+
+fn queue_item_key(item: &QueueItem) -> String {
+    match item {
+        QueueItem::Approval(approval) => format!("approval:{}", approval.gate_id),
+        QueueItem::Decision(decision) => format!("decision:{}", decision.id),
+    }
+}
+
+fn queue_item_label(item: &QueueItem) -> String {
+    match item {
+        QueueItem::Approval(approval) => approval
+            .task_id
+            .clone()
+            .or_else(|| approval.gate_name.clone())
+            .unwrap_or_else(|| approval.gate_id.clone()),
+        QueueItem::Decision(decision) => decision
+            .task_id
+            .clone()
+            .or_else(|| decision.req_id.clone())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| {
+                if decision.title.is_empty() {
+                    decision.id.clone()
+                } else {
+                    decision.title.clone()
+                }
+            }),
+    }
+}
+
+fn queue_item_task_id(item: &QueueItem) -> Option<&str> {
+    match item {
+        QueueItem::Approval(approval) => approval.task_id.as_deref(),
+        QueueItem::Decision(decision) => decision.task_id.as_deref(),
+    }
+}
+
+fn queue_item_tag(item: &QueueItem) -> &'static str {
+    match item {
+        QueueItem::Approval(_) => "approval",
+        QueueItem::Decision(_) => "decision",
+    }
+}
+
+fn queue_item_supports_control(item: &QueueItem) -> bool {
+    matches!(item, QueueItem::Approval(_))
+}
+
+fn selected_item_supports_control(app: &App) -> bool {
+    selected_item(app)
+        .as_ref()
+        .is_some_and(queue_item_supports_control)
+}
+
+fn clamp_selection(selection: usize, snapshot: &SnapshotState) -> usize {
+    let count = queue_len(snapshot);
+    if count == 0 {
         0
     } else {
-        selection.min(control.pending_approvals.len().saturating_sub(1))
+        selection.min(count.saturating_sub(1))
     }
 }
 
@@ -640,7 +746,7 @@ fn load_app(project_dir: PathBuf) -> App {
         detail: DetailState::default(),
         transient: TransientState {
             last_action:
-                "Use j/k or arrows to select an approval, a to approve, r to reject, q to quit."
+                "Use j/k or arrows to select an intervention, Enter for detail, q to quit."
                     .to_string(),
             optimistic_action: None,
             recent_highlight: None,
@@ -652,7 +758,7 @@ fn load_app(project_dir: PathBuf) -> App {
         view: ViewState::default(),
         project_dir,
     };
-    restore_selection_by_gate(&mut app.selection, &app.snapshot.control);
+    restore_selection_by_gate(&mut app.selection, &app.snapshot);
     refresh_explain_detail(&mut app);
     app
 }
@@ -793,35 +899,31 @@ fn next_explain_request_id(detail: &mut DetailState) -> u64 {
 
 fn reload_app(app: &mut App, now: Duration) {
     app.snapshot = load_snapshot(&app.project_dir);
-    restore_selection_by_gate(&mut app.selection, &app.snapshot.control);
+    restore_selection_by_gate(&mut app.selection, &app.snapshot);
     reconcile_optimistic_action(&mut app.transient, &app.snapshot.control, now, true);
     refresh_explain_detail(app);
 }
 
-fn restore_selection_by_gate(selection: &mut SelectionState, control: &ControlState) {
+fn restore_selection_by_gate(selection: &mut SelectionState, snapshot: &SnapshotState) {
+    let items = queue_items(snapshot);
     if let Some(selected_gate_id) = selection.selected_gate_id.as_deref() {
-        if let Some(idx) = control
-            .pending_approvals
+        if let Some(idx) = items
             .iter()
-            .position(|approval| approval.gate_id == selected_gate_id)
+            .position(|item| queue_item_key(item) == selected_gate_id)
         {
             selection.selected_approval = idx;
             return;
         }
     }
 
-    selection.selected_approval = clamp_selection(selection.selected_approval, control);
-    selection.selected_gate_id = control
-        .pending_approvals
-        .get(selection.selected_approval)
-        .map(|approval| approval.gate_id.clone());
+    selection.selected_approval = clamp_selection(selection.selected_approval, snapshot);
+    selection.selected_gate_id = items.get(selection.selected_approval).map(queue_item_key);
 }
 
-fn update_selected_gate(selection: &mut SelectionState, control: &ControlState) {
-    selection.selected_gate_id = control
-        .pending_approvals
+fn update_selected_gate(selection: &mut SelectionState, snapshot: &SnapshotState) {
+    selection.selected_gate_id = queue_items(snapshot)
         .get(selection.selected_approval)
-        .map(|approval| approval.gate_id.clone());
+        .map(queue_item_key);
 }
 
 fn optimistic_phase_label(phase: OptimisticPhase) -> &'static str {
@@ -902,28 +1004,40 @@ fn clear_expired_highlight(transient: &mut TransientState, now: Duration) {
     }
 }
 
-fn selected_approval<'a>(app: &'a App) -> Option<&'a PendingApproval> {
-    app.snapshot
-        .control
-        .pending_approvals
-        .get(app.selection.selected_approval)
+fn selected_item(app: &App) -> Option<QueueItem> {
+    queue_items(&app.snapshot)
+        .into_iter()
+        .nth(app.selection.selected_approval)
 }
 
-fn fetch_explain_report(
-    project_dir: &Path,
-    approval: Option<&PendingApproval>,
-) -> Option<ExplainReport> {
-    let approval = approval?;
+fn fetch_explain_report(project_dir: &Path, item: Option<&QueueItem>) -> Option<ExplainReport> {
+    let item = item?;
     let mut command = Command::new("node");
     command
         .arg(WHITEBOX_EXPLAIN_SCRIPT)
         .arg("--json")
         .arg(format!("--project-dir={}", project_dir.display()));
 
-    if let Some(task_id) = approval.task_id.as_ref().filter(|value| !value.is_empty()) {
-        command.arg(format!("--task-id={task_id}"));
-    } else if !approval.gate_id.is_empty() {
-        command.arg(format!("--gate={}", approval.gate_id));
+    match item {
+        QueueItem::Approval(approval) => {
+            if let Some(task_id) = approval.task_id.as_ref().filter(|value| !value.is_empty()) {
+                command.arg(format!("--task-id={task_id}"));
+            } else if !approval.gate_id.is_empty() {
+                command.arg(format!("--gate={}", approval.gate_id));
+            } else {
+                return None;
+            }
+        }
+        QueueItem::Decision(decision) => {
+            if let Some(task_id) = decision.task_id.as_ref().filter(|value| !value.is_empty()) {
+                command.arg(format!("--task-id={task_id}"));
+            } else if let Some(req_id) = decision.req_id.as_ref().filter(|value| !value.is_empty())
+            {
+                command.arg(format!("--req-id={req_id}"));
+            } else {
+                return None;
+            }
+        }
     }
 
     let output = command.output().ok()?;
@@ -935,93 +1049,119 @@ fn fetch_explain_report(
 }
 
 fn refresh_explain_detail(app: &mut App) {
-    let Some(selected) = selected_approval(app).cloned() else {
+    let Some(selected) = selected_item(app) else {
         app.detail.explain_report = None;
-        app.detail.current_approval = None;
+        app.detail.current_item = None;
         app.detail.pending_request = None;
         app.detail.active_request_id = None;
         return;
     };
 
-    let context_changed = app.detail.current_approval.as_ref() != Some(&selected);
+    let context_changed = app.detail.current_item.as_ref() != Some(&selected);
     let request_id = next_explain_request_id(&mut app.detail);
     if context_changed {
         app.detail.explain_report = None;
     }
-    app.detail.current_approval = Some(selected.clone());
+    app.detail.current_item = Some(selected.clone());
     app.detail.active_request_id = Some(request_id);
     app.detail.pending_request = Some(ExplainRequest {
         request_id,
-        approval: selected,
+        item: selected,
     });
 }
 
 fn hydrate_explain_detail_for_snapshot(app: &mut App) {
-    let approval = app
+    let item = app
         .detail
         .pending_request
         .take()
-        .map(|request| request.approval)
-        .or_else(|| app.detail.current_approval.clone());
+        .map(|request| request.item)
+        .or_else(|| app.detail.current_item.clone());
     app.detail.active_request_id = None;
-    app.detail.explain_report = fetch_explain_report(&app.project_dir, approval.as_ref());
+    app.detail.explain_report = fetch_explain_report(&app.project_dir, item.as_ref());
 }
 
-fn approval_detail_text(
-    selected: Option<&PendingApproval>,
+fn intervention_detail_text(
+    selected: Option<&QueueItem>,
     report: Option<&ExplainReport>,
 ) -> Vec<String> {
-    let Some(approval) = selected else {
+    let Some(item) = selected else {
         return vec![
-            "No pending approvals.".to_string(),
+            "No pending interventions.".to_string(),
             "This snapshot still shows the MVP key hints.".to_string(),
         ];
     };
 
     let Some(report) = report else {
-        let evidence = if approval.evidence_paths.is_empty() {
-            "none".to_string()
-        } else {
-            approval.evidence_paths.join(", ")
-        };
-        return vec![
-            format!(
-                "{}",
-                approval
-                    .task_id
-                    .clone()
-                    .unwrap_or_else(|| approval.gate_id.clone())
-            ),
-            format!(
-                "created {}",
-                approval.created_at.as_deref().unwrap_or("unknown")
-            ),
-            format!(
-                "trigger {}",
-                approval
-                    .trigger_type
-                    .as_deref()
-                    .unwrap_or("user_confirmation")
-            ),
-            format!(
-                "corr {}",
-                approval.correlation_id.as_deref().unwrap_or("none")
-            ),
-            format!(
-                "preview {}",
-                if approval.preview.is_empty() {
-                    "none"
+        return match item {
+            QueueItem::Approval(approval) => {
+                let evidence = if approval.evidence_paths.is_empty() {
+                    "none".to_string()
                 } else {
-                    approval.preview.as_str()
-                }
-            ),
-            format!("evidence {}", evidence),
-            format!(
-                "recommendation {}",
-                approval.recommendation.as_deref().unwrap_or("none")
-            ),
-            "Explain details unavailable. Awaiting evidence-backed detail output.".to_string(),
-        ];
+                    approval.evidence_paths.join(", ")
+                };
+                vec![
+                    format!(
+                        "{}",
+                        approval
+                            .task_id
+                            .clone()
+                            .unwrap_or_else(|| approval.gate_id.clone())
+                    ),
+                    format!(
+                        "created {}",
+                        approval.created_at.as_deref().unwrap_or("unknown")
+                    ),
+                    format!(
+                        "trigger {}",
+                        approval
+                            .trigger_type
+                            .as_deref()
+                            .unwrap_or("user_confirmation")
+                    ),
+                    format!(
+                        "corr {}",
+                        approval.correlation_id.as_deref().unwrap_or("none")
+                    ),
+                    format!(
+                        "preview {}",
+                        if approval.preview.is_empty() {
+                            "none"
+                        } else {
+                            approval.preview.as_str()
+                        }
+                    ),
+                    format!("evidence {}", evidence),
+                    format!(
+                        "recommendation {}",
+                        approval.recommendation.as_deref().unwrap_or("none")
+                    ),
+                    "Explain details unavailable. Awaiting evidence-backed detail output."
+                        .to_string(),
+                ]
+            }
+            QueueItem::Decision(decision) => vec![
+                queue_item_label(item),
+                format!("decision {}", decision.id),
+                format!(
+                    "trigger {}",
+                    decision
+                        .trigger_type
+                        .as_deref()
+                        .or(decision.decision_type.as_deref())
+                        .unwrap_or("user_confirmation")
+                ),
+                format!("task {}", decision.task_id.as_deref().unwrap_or("none")),
+                format!("req {}", decision.req_id.as_deref().unwrap_or("none")),
+                format!("reason {}", decision.reason.as_deref().unwrap_or("none")),
+                format!(
+                    "recommendation {}",
+                    decision.recommendation.as_deref().unwrap_or("none")
+                ),
+                "Read-only intervention. Inspect explain context when task or request evidence exists."
+                    .to_string(),
+            ],
+        };
     };
 
     let mut lines = vec![format!(
@@ -1032,10 +1172,17 @@ fn approval_detail_text(
             report.target.target_type.as_str()
         },
         if report.target.id.is_empty() {
-            approval
-                .task_id
-                .as_deref()
-                .unwrap_or(approval.gate_id.as_str())
+            match item {
+                QueueItem::Approval(approval) => approval
+                    .task_id
+                    .as_deref()
+                    .unwrap_or(approval.gate_id.as_str()),
+                QueueItem::Decision(decision) => decision
+                    .task_id
+                    .as_deref()
+                    .or(decision.req_id.as_deref())
+                    .unwrap_or(decision.id.as_str()),
+            }
         } else {
             report.target.id.as_str()
         }
@@ -1140,6 +1287,7 @@ fn status_color(status: &str) -> Color {
         "blocked" => Color::LightRed,
         "stale" => Color::Yellow,
         "approval_required" => Color::Yellow,
+        "decision_pending" => Color::Yellow,
         "running" => Color::LightBlue,
         "clear" => Color::LightGreen,
         _ => Color::Gray,
@@ -1211,12 +1359,12 @@ fn selected_style(selected: bool) -> Style {
     }
 }
 
-fn pending_approval_task_ids(app: &App) -> Vec<&str> {
-    app.snapshot
-        .control
-        .pending_approvals
+fn pending_intervention_task_tags(app: &App) -> HashMap<String, &'static str> {
+    queue_items(&app.snapshot)
         .iter()
-        .filter_map(|approval| approval.task_id.as_deref())
+        .filter_map(|item| {
+            queue_item_task_id(item).map(|task_id| (task_id.to_string(), queue_item_tag(item)))
+        })
         .collect()
 }
 
@@ -1290,6 +1438,14 @@ fn render_header(app: &App, area: Rect, frame: &mut ratatui::Frame) {
             )),
             Span::raw("  "),
             Span::raw(format!(
+                "decisions={}",
+                app.snapshot
+                    .summary
+                    .pending_decision_count
+                    .max(app.snapshot.board.decisions.len())
+            )),
+            Span::raw("  "),
+            Span::raw(format!(
                 "stale={}",
                 app.snapshot.summary.stale_artifact_count
             )),
@@ -1313,15 +1469,18 @@ fn render_header(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 }
 
 fn render_column(app: &App, area: Rect, frame: &mut ratatui::Frame, column: &str) {
-    let pending_tasks = pending_approval_task_ids(app);
+    let pending_tasks = pending_intervention_task_tags(app);
     let items: Vec<ListItem> = column_cards(app, column)
         .iter()
         .map(|card| {
             let mut lines = card_lines(card, column);
 
-            if pending_tasks.iter().any(|task_id| *task_id == card.id) && lines.len() < 3 {
+            if let Some(tag) = pending_tasks.get(card.id.as_str()) {
+                if lines.len() == 3 {
+                    lines.pop();
+                }
                 lines.push(Line::from(Span::styled(
-                    "[approval] operator decision required",
+                    format!("[{tag}] operator review required"),
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
@@ -1355,7 +1514,7 @@ fn render_column(app: &App, area: Rect, frame: &mut ratatui::Frame, column: &str
 
 fn render_compact_board(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     let mut items: Vec<ListItem> = Vec::new();
-    let pending_tasks = pending_approval_task_ids(app);
+    let pending_tasks = pending_intervention_task_tags(app);
 
     for column in COLUMN_ORDER {
         let cards = column_cards(app, column);
@@ -1373,9 +1532,12 @@ fn render_compact_board(app: &App, area: Rect, frame: &mut ratatui::Frame) {
         for card in cards {
             let mut lines = card_lines(card, column);
 
-            if pending_tasks.iter().any(|task_id| *task_id == card.id) && lines.len() < 3 {
+            if let Some(tag) = pending_tasks.get(card.id.as_str()) {
+                if lines.len() == 3 {
+                    lines.pop();
+                }
                 lines.push(Line::from(Span::styled(
-                    "[approval] operator decision required",
+                    format!("[{tag}] operator review required"),
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
@@ -1418,36 +1580,32 @@ fn render_compact_board(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 }
 
 fn render_approvals(app: &App, area: Rect, frame: &mut ratatui::Frame) {
-    let selected_gate = selected_approval(app)
-        .map(|approval| approval.gate_id.clone())
+    let selected_gate = selected_item(app)
+        .as_ref()
+        .map(queue_item_key)
         .unwrap_or_default();
-    let items: Vec<ListItem> = app
-        .snapshot
-        .control
-        .pending_approvals
+    let queue = queue_items(&app.snapshot);
+    let items: Vec<ListItem> = queue
         .iter()
         .enumerate()
-        .map(|(idx, approval)| {
-            let label = approval
-                .task_id
-                .clone()
-                .or_else(|| approval.gate_name.clone())
-                .unwrap_or_else(|| approval.gate_id.clone());
+        .map(|(idx, item)| {
+            let label = queue_item_label(item);
             let prefix = if idx == app.selection.selected_approval {
                 ">"
             } else {
                 " "
             };
+            let tag = queue_item_tag(item);
             ListItem::new(Line::from(Span::styled(
-                format!("{prefix} {}", label),
+                format!("{prefix} [{tag}] {label}"),
                 selected_style(idx == app.selection.selected_approval),
             )))
         })
         .collect();
 
-    let selected = selected_approval(app);
+    let selected = queue.get(app.selection.selected_approval);
     let detail_lines: Vec<Line> =
-        approval_detail_text(selected, app.detail.explain_report.as_ref())
+        intervention_detail_text(selected, app.detail.explain_report.as_ref())
             .into_iter()
             .enumerate()
             .map(|(idx, text)| {
@@ -1470,8 +1628,12 @@ fn render_approvals(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     let list = List::new(items).block(
         Block::default()
             .title(format!(
-                "Approvals ({})",
-                app.snapshot.control.pending_approval_count
+                "Interventions ({} approvals, {} decisions)",
+                app.snapshot.control.pending_approval_count,
+                app.snapshot
+                    .summary
+                    .pending_decision_count
+                    .max(app.snapshot.board.decisions.len())
             ))
             .borders(Borders::ALL)
             .border_style(if selected_gate.is_empty() {
@@ -1485,7 +1647,7 @@ fn render_approvals(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     let details = Paragraph::new(detail_lines)
         .block(
             Block::default()
-                .title("Approval Details")
+                .title("Intervention Details")
                 .borders(Borders::ALL),
         )
         .wrap(Wrap { trim: true });
@@ -1493,9 +1655,10 @@ fn render_approvals(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 }
 
 fn render_context_pane(app: &App, area: Rect, frame: &mut ratatui::Frame) {
-    let selected = selected_approval(app);
+    let queue = queue_items(&app.snapshot);
+    let selected = queue.get(app.selection.selected_approval);
     let mut preview_lines: Vec<Line> =
-        approval_detail_text(selected, app.detail.explain_report.as_ref())
+        intervention_detail_text(selected, app.detail.explain_report.as_ref())
             .into_iter()
             .take(7)
             .enumerate()
@@ -1517,25 +1680,19 @@ fn render_context_pane(app: &App, area: Rect, frame: &mut ratatui::Frame) {
         .constraints([Constraint::Length(8), Constraint::Min(8)])
         .split(area);
 
-    let approval_items: Vec<ListItem> = app
-        .snapshot
-        .control
-        .pending_approvals
+    let approval_items: Vec<ListItem> = queue
         .iter()
         .enumerate()
-        .map(|(idx, approval)| {
-            let label = approval
-                .task_id
-                .clone()
-                .or_else(|| approval.gate_name.clone())
-                .unwrap_or_else(|| approval.gate_id.clone());
+        .map(|(idx, item)| {
+            let label = queue_item_label(item);
             let prefix = if idx == app.selection.selected_approval {
                 ">"
             } else {
                 " "
             };
+            let tag = queue_item_tag(item);
             ListItem::new(Line::from(Span::styled(
-                format!("{prefix} {}", label),
+                format!("{prefix} [{tag}] {label}"),
                 selected_style(idx == app.selection.selected_approval),
             )))
         })
@@ -1543,10 +1700,7 @@ fn render_context_pane(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 
     let queue = List::new(approval_items).block(
         Block::default()
-            .title(format!(
-                "Approval Queue ({})",
-                app.snapshot.control.pending_approval_count
-            ))
+            .title(format!("Intervention Queue ({})", queue_len(&app.snapshot)))
             .borders(Borders::ALL),
     );
     frame.render_widget(queue, chunks[0]);
@@ -1626,7 +1780,7 @@ fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
                 next.remediation.clone()
             }
         })
-        .unwrap_or_else(|| "Whitebox approval shell ready.".to_string());
+        .unwrap_or_else(|| "Whitebox intervention shell ready.".to_string());
 
     let mut text = vec![
         Line::from(format!("project {}", app.project_dir.display())),
@@ -1642,10 +1796,13 @@ fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
         )));
     }
     let key_hint = match app.view.mode {
-        ViewMode::Board => match layout_mode(area.width) {
-            LayoutMode::Wide => "keys j/k/arrows move  Enter detail  a approve  r reject  q quit",
-            LayoutMode::Narrow => "keys j/k/arrows move  Enter detail  a approve  r reject  q quit",
-        },
+        ViewMode::Board => {
+            if selected_item_supports_control(app) {
+                "keys j/k/arrows move  Enter detail  a approve  r reject  q quit"
+            } else {
+                "keys j/k/arrows move  Enter detail  q quit  read-only selection"
+            }
+        }
         ViewMode::Detail => {
             if detail_has_actions(app) {
                 "keys j/k/arrows move  a approve  r reject  q/Esc board"
@@ -1741,8 +1898,8 @@ fn apply_control(app: &mut App, action: &str, now: Duration) {
         return;
     }
 
-    let Some(approval) = selected_approval(app).cloned() else {
-        app.transient.last_action = "No pending approval selected.".to_string();
+    let Some(item) = selected_item(app) else {
+        app.transient.last_action = "No pending intervention selected.".to_string();
         app.transient.optimistic_action = Some(OptimisticAction {
             gate_id: "none".to_string(),
             task_id: None,
@@ -1750,6 +1907,12 @@ fn apply_control(app: &mut App, action: &str, now: Duration) {
             phase: OptimisticPhase::Failed,
             deadline_at: now,
         });
+        return;
+    };
+
+    let QueueItem::Approval(approval) = item else {
+        app.transient.last_action =
+            "Selected intervention is read-only; inspect details instead.".to_string();
         return;
     };
 
@@ -1815,7 +1978,7 @@ fn handle_explain_result(app: &mut App, result: ExplainResult) {
         return;
     }
 
-    if app.detail.current_approval.as_ref() != Some(&result.approval) {
+    if app.detail.current_item.as_ref() != Some(&result.item) {
         return;
     }
 
@@ -1824,7 +1987,7 @@ fn handle_explain_result(app: &mut App, result: ExplainResult) {
 }
 
 fn move_selection(app: &mut App, delta: isize) {
-    let count = app.snapshot.control.pending_approvals.len();
+    let count = queue_len(&app.snapshot);
     if count == 0 {
         app.selection.selected_approval = 0;
         return;
@@ -1833,7 +1996,7 @@ fn move_selection(app: &mut App, delta: isize) {
     let current = app.selection.selected_approval as isize;
     let next = (current + delta).rem_euclid(count as isize);
     app.selection.selected_approval = next as usize;
-    update_selected_gate(&mut app.selection, &app.snapshot.control);
+    update_selected_gate(&mut app.selection, &app.snapshot);
     if app.view.mode == ViewMode::Detail {
         refresh_explain_detail(app);
     } else {
@@ -1875,7 +2038,8 @@ fn key_to_event(code: KeyCode, now: Duration) -> Option<AppEvent> {
 fn app_event_allowed(app: &App, event: &AppEvent) -> bool {
     match event {
         AppEvent::ApproveSelected(_) | AppEvent::RejectSelected(_) => {
-            app.view.mode != ViewMode::Detail || detail_has_actions(app)
+            let control_allowed = selected_item_supports_control(app);
+            control_allowed && (app.view.mode != ViewMode::Detail || detail_has_actions(app))
         }
         _ => true,
     }
@@ -2046,6 +2210,75 @@ mod tests {
         }
     }
 
+    fn app_with_decision() -> App {
+        App {
+            snapshot: SnapshotState {
+                board: BoardState {
+                    columns: HashMap::from([(
+                        "Blocked".to_string(),
+                        vec![Card {
+                            id: "T9.1".to_string(),
+                            title: "Resolve escalated request".to_string(),
+                            agent: Some("lead".to_string()),
+                            blocker_reason: Some("Request escalated for mediation.".to_string()),
+                        }],
+                    )]),
+                    decisions: vec![PendingDecision {
+                        id: "req-conflict-REQ-77".to_string(),
+                        title: "REQ conflict REQ-77".to_string(),
+                        task_id: Some("T9.1".to_string()),
+                        req_id: Some("REQ-77".to_string()),
+                        decision_type: Some("agent_conflict".to_string()),
+                        trigger_type: Some("agent_conflict".to_string()),
+                        reason: Some("Request escalated for mediation.".to_string()),
+                        recommendation: Some(
+                            "Review the escalated request and create or apply a DEC ruling before continuing."
+                                .to_string(),
+                        ),
+                    }],
+                },
+                summary: WhiteboxSummary {
+                    gate_status: "decision_pending".to_string(),
+                    blocked_count: 1,
+                    pending_approval_count: 0,
+                    pending_decision_count: 1,
+                    stale_artifact_count: 0,
+                    run_id_short: Some("run-decision".to_string()),
+                    tasks: TasksSummary {
+                        done: 0,
+                        total: 1,
+                        current_phase: Some("T9".to_string()),
+                        next_task: Some("T9.1".to_string()),
+                    },
+                    next_remediation_target: Some(NextRemediationTarget {
+                        id: "req-conflict-REQ-77".to_string(),
+                        reason: "Request escalated for mediation.".to_string(),
+                        remediation:
+                            "Review the escalated request and create or apply a DEC ruling before continuing."
+                                .to_string(),
+                    }),
+                },
+                control: ControlState::default(),
+            },
+            selection: SelectionState {
+                selected_approval: 0,
+                selected_gate_id: Some("decision:req-conflict-REQ-77".to_string()),
+            },
+            detail: DetailState::default(),
+            transient: TransientState {
+                last_action: String::new(),
+                optimistic_action: None,
+                recent_highlight: None,
+                pending_submit: None,
+                active_submit: None,
+                next_submit_request_id: 1,
+                quit_requested: false,
+            },
+            view: ViewState::default(),
+            project_dir: PathBuf::from("."),
+        }
+    }
+
     fn dispatch_pending_submit_for_test(app: &mut App) -> u64 {
         let request = app
             .transient
@@ -2128,7 +2361,7 @@ mod tests {
         )
         .expect("valid explain report json");
 
-        let lines = approval_detail_text(Some(&approval), Some(&report));
+        let lines = intervention_detail_text(Some(&QueueItem::Approval(approval)), Some(&report));
 
         assert!(lines
             .iter()
@@ -2197,30 +2430,37 @@ mod tests {
     fn selected_gate_survives_reordered_reload() {
         let mut selection = SelectionState {
             selected_approval: 1,
-            selected_gate_id: Some("gate-b".to_string()),
+            selected_gate_id: Some("approval:gate-b".to_string()),
         };
-        let reordered = ControlState {
-            pending_approval_count: 3,
-            pending_approvals: vec![
-                PendingApproval {
-                    gate_id: "gate-c".to_string(),
-                    ..Default::default()
-                },
-                PendingApproval {
-                    gate_id: "gate-a".to_string(),
-                    ..Default::default()
-                },
-                PendingApproval {
-                    gate_id: "gate-b".to_string(),
-                    ..Default::default()
-                },
-            ],
+        let reordered = SnapshotState {
+            board: BoardState::default(),
+            summary: WhiteboxSummary::default(),
+            control: ControlState {
+                pending_approval_count: 3,
+                pending_approvals: vec![
+                    PendingApproval {
+                        gate_id: "gate-c".to_string(),
+                        ..Default::default()
+                    },
+                    PendingApproval {
+                        gate_id: "gate-a".to_string(),
+                        ..Default::default()
+                    },
+                    PendingApproval {
+                        gate_id: "gate-b".to_string(),
+                        ..Default::default()
+                    },
+                ],
+            },
         };
 
         restore_selection_by_gate(&mut selection, &reordered);
 
         assert_eq!(selection.selected_approval, 2);
-        assert_eq!(selection.selected_gate_id.as_deref(), Some("gate-b"));
+        assert_eq!(
+            selection.selected_gate_id.as_deref(),
+            Some("approval:gate-b")
+        );
     }
 
     #[test]
@@ -2329,11 +2569,11 @@ mod tests {
             ..Default::default()
         }];
         app.selection.selected_approval = 0;
-        app.selection.selected_gate_id = Some("gate-1".to_string());
+        app.selection.selected_gate_id = Some("approval:gate-1".to_string());
 
         let narrow = snapshot_with_size(app.clone(), 100, 40).expect("narrow snapshot renders");
         assert!(narrow.contains("Board (compact)"));
-        assert!(!narrow.contains("Approval Queue (1)"));
+        assert!(!narrow.contains("Intervention Queue (1)"));
 
         let wide = snapshot_with_size(app, 160, 40).expect("wide snapshot renders");
         assert!(!wide.contains("Board (compact)"));
@@ -2359,7 +2599,7 @@ mod tests {
 
         assert!(snapshot.contains("Backlog (1)"));
         assert!(snapshot.contains("Blocked (1)"));
-        assert!(snapshot.contains("Approval Queue (1)"));
+        assert!(snapshot.contains("Intervention Queue (1)"));
         assert!(snapshot.contains("Context Preview"));
         assert!(snapshot.contains("Enter detail"));
     }
@@ -2373,14 +2613,14 @@ mod tests {
 
         assert!(snapshot.contains("Focus"));
         assert!(snapshot.contains("Detail Mode"));
-        assert!(snapshot.contains("Approval Details"));
+        assert!(snapshot.contains("Intervention Details"));
         assert!(snapshot.contains("Approve/reject is available for this detail."));
     }
 
     #[test]
     fn detail_without_options_is_read_only() {
         let mut app = app_with_pending(1);
-        app.detail.current_approval = selected_approval(&app).cloned();
+        app.detail.current_item = selected_item(&app);
         app.detail.explain_report = Some(ExplainReport {
             ok: false,
             target: ExplainTarget {
@@ -2400,6 +2640,37 @@ mod tests {
 
         let snapshot = snapshot(app).expect("read-only detail snapshot renders");
         assert!(snapshot.contains("read-only detail"));
+    }
+
+    #[test]
+    fn decision_selection_is_read_only_in_board_mode() {
+        let mut app = app_with_decision();
+
+        assert!(!selected_item_supports_control(&app));
+        assert!(!app_event_allowed(
+            &app,
+            &AppEvent::ApproveSelected(Duration::from_secs(1))
+        ));
+
+        apply_control(&mut app, "approve", Duration::from_secs(1));
+        assert_eq!(
+            app.transient.last_action,
+            "Selected intervention is read-only; inspect details instead."
+        );
+    }
+
+    #[test]
+    fn decision_snapshot_surfaces_intervention_queue_and_context() {
+        let app = app_with_decision();
+
+        let snapshot = snapshot(app).expect("decision snapshot renders");
+
+        assert!(snapshot.contains("gate=decision_pending"));
+        assert!(snapshot.contains("decisions=1"));
+        assert!(snapshot.contains("Intervention Queue (1)"));
+        assert!(snapshot.contains("[decision] T9.1"));
+        assert!(snapshot.contains("trigger agent_conflict"));
+        assert!(snapshot.contains("read-only selection"));
     }
 
     #[test]
@@ -2427,7 +2698,7 @@ mod tests {
             &mut app,
             AppEvent::ExplainFinished(ExplainResult {
                 request_id: stale_request.request_id,
-                approval: stale_request.approval.clone(),
+                item: stale_request.item.clone(),
                 report: Some(ExplainReport {
                     ok: true,
                     target: ExplainTarget {
@@ -2450,16 +2721,13 @@ mod tests {
             app.detail.active_request_id,
             Some(active_request.request_id)
         );
-        assert_eq!(
-            app.detail.current_approval.as_ref(),
-            Some(&active_request.approval)
-        );
+        assert_eq!(app.detail.current_item.as_ref(), Some(&active_request.item));
 
         update(
             &mut app,
             AppEvent::ExplainFinished(ExplainResult {
                 request_id: active_request.request_id,
-                approval: active_request.approval.clone(),
+                item: active_request.item.clone(),
                 report: Some(ExplainReport {
                     ok: true,
                     target: ExplainTarget {
@@ -2516,10 +2784,7 @@ mod tests {
             app.detail.active_request_id,
             Some(second_request.request_id)
         );
-        assert_eq!(
-            app.detail.current_approval.as_ref(),
-            Some(&second_request.approval)
-        );
+        assert_eq!(app.detail.current_item.as_ref(), Some(&second_request.item));
         assert!(app.detail.explain_report.is_none());
     }
 
