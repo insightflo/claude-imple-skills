@@ -163,6 +163,78 @@ function parseInterventionQueue(projectDir) {
   }));
 }
 
+function sanitizeDecisionIdPart(value) {
+  return String(value || 'unknown')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'unknown';
+}
+
+function extractTaskId(value) {
+  const input = String(value || '').trim();
+  if (!input) return null;
+  const match = input.match(/^([A-Z0-9]+-T[0-9]+|T[0-9]+\.[0-9A-Z]+)$/i);
+  return match ? match[1] : null;
+}
+
+function inferHookTriggerType(data = {}) {
+  const riskLevel = String(data.risk_level || '').toUpperCase();
+  const severity = String(data.severity || '').toLowerCase();
+  if (riskLevel === 'CRITICAL' || riskLevel === 'HIGH' || severity === 'critical' || severity === 'error') {
+    return 'risk_acknowledgement';
+  }
+  return 'user_confirmation';
+}
+
+function defaultHookRecommendation(triggerType, hookName) {
+  if (triggerType === 'risk_acknowledgement') {
+    return 'Review the hook findings and accept the risk only if you want to proceed without changing the plan.';
+  }
+  return `Review the ${hookName || 'hook'} findings and decide whether to proceed after addressing them.`;
+}
+
+function parseHookInterventions(projectDir) {
+  const parsed = readEvents({ projectDir, file: EVENTS_REL_PATH, tolerateTrailingPartialLine: true });
+  const latestByKey = new Map();
+
+  for (const event of parsed.events) {
+    if (!event || event.type !== 'hook.decision') continue;
+    const data = event.data && typeof event.data === 'object' ? event.data : {};
+    const hookName = String(data.hook || event.producer || 'hook').trim() || 'hook';
+    const correlationId = String(event.correlation_id || '').trim() || 'unknown';
+    const key = `${hookName}:${correlationId}`;
+    const current = latestByKey.get(key);
+    if (!current || String(current.ts || '') <= String(event.ts || '')) {
+      latestByKey.set(key, event);
+    }
+  }
+
+  return Array.from(latestByKey.values()).flatMap((event) => {
+    const data = event.data && typeof event.data === 'object' ? event.data : {};
+    const decision = String(data.decision || '').toLowerCase();
+    if (!decision || decision === 'allow' || decision === 'skip') return [];
+
+    const hookName = String(data.hook || event.producer || 'hook').trim() || 'hook';
+    const correlationId = String(event.correlation_id || '').trim() || 'unknown';
+    const triggerType = inferHookTriggerType(data);
+    const taskId = extractTaskId(correlationId);
+
+    return [{
+      id: `hook-${sanitizeDecisionIdPart(hookName)}-${sanitizeDecisionIdPart(correlationId)}`,
+      title: `${hookName} intervention`,
+      status: 'decision_pending',
+      agent: null,
+      source: 'hook-event',
+      decision_type: triggerType,
+      task_id: taskId,
+      allowed_actions: [],
+      reason: data.summary || `${hookName} ${decision}`,
+      recommendation: data.remediation || defaultHookRecommendation(triggerType, hookName),
+      trigger_type: triggerType,
+    }];
+  });
+}
+
 // ---------------------------------------------------------------------------
 // REQ files parser
 // ---------------------------------------------------------------------------
@@ -177,6 +249,33 @@ function parseFrontmatter(content) {
     meta[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim();
   }
   return meta;
+}
+
+function parseFrontmatterDocument(content) {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?(?:\n|$)([\s\S]*)$/);
+  if (!match) {
+    return { meta: {}, body: content || '' };
+  }
+  return {
+    meta: parseFrontmatter(content),
+    body: match[2] || '',
+  }
+}
+
+function parseMarkdownSections(body) {
+  const sections = {};
+  let current = null;
+  for (const rawLine of String(body || '').split('\n')) {
+    const line = rawLine.replace(/\r$/, '');
+    const heading = line.match(/^##\s+(.+)$/);
+    if (heading) {
+      current = heading[1].trim().toLowerCase();
+      if (!sections[current]) sections[current] = [];
+      continue;
+    }
+    if (current) sections[current].push(line);
+  }
+  return Object.fromEntries(Object.entries(sections).map(([key, lines]) => [key, lines.join('\n').trim()]));
 }
 
 function parseReqFiles(requestsDir) {
@@ -197,6 +296,79 @@ function parseReqFiles(requestsDir) {
       };
     } catch { return null; }
   }).filter(Boolean);
+}
+
+function parseDecisionFiles(decisionsDir, projectDir) {
+  if (!fs.existsSync(decisionsDir)) return [];
+  return fs.readdirSync(decisionsDir)
+    .filter((f) => f.match(/^DEC-.*\.md$/))
+    .sort((a, b) => a.localeCompare(b))
+    .map((f) => {
+      try {
+        const filePath = path.join(decisionsDir, f);
+        const content = fs.readFileSync(filePath, 'utf8');
+        const { meta, body } = parseFrontmatterDocument(content);
+        const sections = parseMarkdownSections(body);
+        return {
+          id: (meta.id || path.basename(f, '.md')).trim(),
+          ref_req: String(meta.ref_req || '').trim(),
+          status: String(meta.status || '').trim().toUpperCase() || 'FINAL',
+          summary: sections['decision summary'] || '',
+          conflict: sections['context & conflict'] || '',
+          required_actions: sections['required actions'] || '',
+          file_path: path.relative(projectDir, filePath).replace(/\\/g, '/'),
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function indexDecisionsByReq(decisions) {
+  const latestByReq = new Map();
+  for (const decision of decisions) {
+    if (!decision || !decision.ref_req) continue;
+    const current = latestByReq.get(decision.ref_req);
+    if (!current || String(current.id || '') <= String(decision.id || '')) {
+      latestByReq.set(decision.ref_req, decision);
+    }
+  }
+  return latestByReq;
+}
+
+function parseReqConflictInterventions(reqs, decisionsByReq = new Map()) {
+  return reqs
+    .filter((req) => req && req.status === 'ESCALATED')
+    .map((req) => {
+      const linkedDecision = decisionsByReq.get(req.id) || null;
+      const decisionSummary = linkedDecision && linkedDecision.summary
+        ? linkedDecision.summary
+        : null;
+      const decisionActions = linkedDecision && linkedDecision.required_actions
+        ? linkedDecision.required_actions.replace(/\n+/g, ' ').trim()
+        : null;
+      return {
+        id: `req-conflict-${sanitizeDecisionIdPart(req.id)}`,
+        title: `REQ conflict ${req.id}`,
+        status: 'decision_pending',
+        agent: req.agent || null,
+        source: 'req-conflict',
+        decision_type: 'agent_conflict',
+        req_id: req.id,
+        allowed_actions: [],
+        reason: linkedDecision
+          ? `Linked ruling ${linkedDecision.id}: ${decisionSummary || 'Final mediation is available.'}`
+          : 'Request escalated for mediation.',
+        recommendation: linkedDecision
+          ? (decisionActions || `Apply ${linkedDecision.id} and update the request status when the ruling is complete.`)
+          : 'Review the escalated request and create or apply a DEC ruling before continuing.',
+        trigger_type: 'agent_conflict',
+        decision_id: linkedDecision ? linkedDecision.id : null,
+        decision_path: linkedDecision ? linkedDecision.file_path : null,
+        decision_status: linkedDecision ? linkedDecision.status : null,
+      };
+    });
 }
 
 function readTextIfExists(filePath) {
@@ -383,6 +555,10 @@ function buildBoard(cards, options = {}) {
       agent: card.agent || null,
       source: card.source,
       ...(card.task_id ? { task_id: card.task_id } : {}),
+      ...(card.req_id ? { req_id: card.req_id } : {}),
+      ...(card.decision_id ? { decision_id: card.decision_id } : {}),
+      ...(card.decision_path ? { decision_path: card.decision_path } : {}),
+      ...(card.decision_status ? { decision_status: card.decision_status } : {}),
       ...(card.decision_type ? { decision_type: card.decision_type } : {}),
       ...(card.reason ? { reason: card.reason } : {}),
       ...(card.recommendation ? { recommendation: card.recommendation } : {}),
@@ -396,14 +572,18 @@ function buildBoard(cards, options = {}) {
       remediation: eventMeta && eventMeta.remediation ? eventMeta.remediation : null,
     });
 
-    if (Array.isArray(card.allowed_actions) && card.allowed_actions.length > 0) {
+    if (card.decision_type || (Array.isArray(card.allowed_actions) && card.allowed_actions.length > 0)) {
       state.decisions.push({
         id: card.id,
         title: card.title,
         status: card.status,
         task_id: card.task_id || null,
+        req_id: card.req_id || null,
+        decision_id: card.decision_id || null,
+        decision_path: card.decision_path || null,
+        decision_status: card.decision_status || null,
         decision_type: card.decision_type || null,
-        allowed_actions: card.allowed_actions,
+        allowed_actions: Array.isArray(card.allowed_actions) ? card.allowed_actions : [],
         reason: card.reason || null,
         recommendation: card.recommendation || null,
         trigger_type: card.trigger_type || null,
@@ -420,8 +600,12 @@ function buildBoard(cards, options = {}) {
 
 function computeCanonicalFingerprint(projectDir, statePath) {
   const requestsDir = path.join(projectDir, '.claude', 'collab', 'requests');
+  const decisionsDir = path.join(projectDir, '.claude', 'collab', 'decisions');
   const requestFiles = fs.existsSync(requestsDir)
     ? fs.readdirSync(requestsDir).filter((name) => name.endsWith('.md')).sort((a, b) => a.localeCompare(b))
+    : [];
+  const decisionFiles = fs.existsSync(decisionsDir)
+    ? fs.readdirSync(decisionsDir).filter((name) => name.endsWith('.md')).sort((a, b) => a.localeCompare(b))
     : [];
 
   const parts = [
@@ -432,6 +616,10 @@ function computeCanonicalFingerprint(projectDir, statePath) {
 
   for (const requestFile of requestFiles) {
     parts.push(readTextIfExists(path.join(requestsDir, requestFile)));
+  }
+
+  for (const decisionFile of decisionFiles) {
+    parts.push(readTextIfExists(path.join(decisionsDir, decisionFile)));
   }
 
   return sha256(parts);
@@ -492,15 +680,18 @@ function main() {
     : path.join(p, '.claude', 'orchestrate-state.json');
   const orchestrateState = parseOrchestrateState(statePath);
   const reqs = parseReqFiles(path.join(p, '.claude', 'collab', 'requests'));
+  const linkedDecisions = parseDecisionFiles(path.join(p, '.claude', 'collab', 'decisions'), p);
+  const reqInterventions = parseReqConflictInterventions(reqs, indexDecisionsByReq(linkedDecisions));
   const decisions = parseDecisions(statePath);
   const interventions = parseInterventionQueue(p);
+  const hookInterventions = parseHookInterventions(p);
   const eventContext = parseEventContext(p);
   const fingerprint = computeCanonicalFingerprint(p, statePath);
   const staleMarkers = opts.dryRun
     ? activeStaleMarkers(p)
     : activeStaleMarkers(p, { artifactToClear: BOARD_STATE_REL_PATH });
 
-  const cards = mergeSources(tasksMd, orchestrateState, reqs, decisions.concat(interventions));
+  const cards = mergeSources(tasksMd, orchestrateState, reqs, decisions.concat(interventions, hookInterventions, reqInterventions));
   const board = buildBoard(cards, {
     eventContext,
     fingerprint,

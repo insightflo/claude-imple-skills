@@ -13,6 +13,7 @@
  *   task_blocked    — task failed or timed out
  *   req_escalated   — REQ status changed to ESCALATED
  *   req_resolved    — REQ status changed to RESOLVED or REJECTED
+ *   decision_written — DEC file written or updated for an escalated REQ
  *
  * Board columns (from communication-protocol.md §10):
  *   Backlog     ← pending
@@ -142,6 +143,13 @@ function parseFrontmatterStatus(content) {
   return statusMatch ? statusMatch[1].trim().replace(/^['"]|['"]$/g, '').toUpperCase() : null;
 }
 
+function parseFrontmatterField(content, fieldName) {
+  const block = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!block) return null;
+  const fieldMatch = block[1].match(new RegExp(`^${fieldName}:\\s*(.+)$`, 'm'));
+  return fieldMatch ? fieldMatch[1].trim().replace(/^['"]|['"]$/g, '').replace(/^\[(.*)\]$/, '$1') : null;
+}
+
 function handleReqFileEdit(filePath, newContent) {
   if (!filePath) return null;
   const rel = path.relative(PROJECT_DIR, path.resolve(PROJECT_DIR, filePath)).replace(/\\/g, '/');
@@ -159,6 +167,24 @@ function handleReqFileEdit(filePath, newContent) {
     return { type: 'req_resolved', req_id: reqId, status, timestamp: new Date().toISOString() };
   }
   return null;
+}
+
+function handleDecisionFileEdit(filePath, newContent) {
+  if (!filePath) return null;
+  const rel = path.relative(PROJECT_DIR, path.resolve(PROJECT_DIR, filePath)).replace(/\\/g, '/');
+  if (!rel.startsWith('.claude/collab/decisions/') || !/^\.claude\/collab\/decisions\/DEC-.*\.md$/.test(rel)) return null;
+
+  const decisionId = parseFrontmatterField(newContent || '', 'id') || path.basename(rel, '.md');
+  const reqId = parseFrontmatterField(newContent || '', 'ref_req');
+  const status = parseFrontmatterField(newContent || '', 'status');
+
+  return {
+    type: 'decision_written',
+    decision_id: decisionId,
+    req_id: reqId || null,
+    status: status ? status.toUpperCase() : null,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 function handleTaskStartedEdit(filePath) {
@@ -210,6 +236,8 @@ async function main() {
     if (taskStartedEvent) events.push(taskStartedEvent);
     const reqEvent = handleReqFileEdit(filePath, content);
     if (reqEvent) events.push(reqEvent);
+    const decisionEvent = handleDecisionFileEdit(filePath, content);
+    if (decisionEvent) events.push(decisionEvent);
   }
 
   if (events.length === 0) return;
@@ -245,6 +273,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     handleTaskUpdate,
     handleReqFileEdit,
+    handleDecisionFileEdit,
     handleTaskStartedEdit,
     readTaskContext,
     taskStartedMarkerPath,

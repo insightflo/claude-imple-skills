@@ -155,11 +155,20 @@ if (decisions.length > 0) {
     const actions = Array.isArray(decision.allowed_actions) ? decision.allowed_actions.join('/') : '';
     process.stdout.write(`- ${decision.id}: ${decision.title}\n`);
     if (decision.task_id) process.stdout.write(`  task: ${decision.task_id}\n`);
+    if (decision.req_id) process.stdout.write(`  req: ${decision.req_id}\n`);
+    if (decision.decision_id) process.stdout.write(`  dec: ${decision.decision_id}${decision.decision_status ? ` (${decision.decision_status})` : ''}\n`);
+    if (decision.decision_path) process.stdout.write(`  dec_path: ${decision.decision_path}\n`);
     if (decision.trigger_type) process.stdout.write(`  trigger: ${decision.trigger_type}\n`);
     if (decision.reason) process.stdout.write(`  reason: ${decision.reason}\n`);
     if (decision.recommendation) process.stdout.write(`  recommendation: ${decision.recommendation}\n`);
     if (actions) process.stdout.write(`  actions: ${actions}\n`);
-    process.stdout.write(`  run: bash skills/task-board/scripts/board-show.sh --approve=${decision.id} --project-dir=.\n`);
+    if (actions) {
+      process.stdout.write(`  run: bash skills/task-board/scripts/board-show.sh --approve=${decision.id} --project-dir=.\n`);
+    } else if (decision.task_id) {
+      process.stdout.write(`  inspect: node skills/whitebox/scripts/whitebox-explain.js --task-id=${decision.task_id} --project-dir=.\n`);
+    } else if (decision.req_id) {
+      process.stdout.write(`  inspect: node skills/whitebox/scripts/whitebox-explain.js --req-id=${decision.req_id} --project-dir=.\n`);
+    }
   }
   process.stdout.write('\n');
 }
