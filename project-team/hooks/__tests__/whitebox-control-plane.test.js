@@ -9,6 +9,7 @@ const { writeControlCommand } = require('../../../project-team/scripts/lib/white
 const { scanForbiddenIntegrationMetadata } = require('../../../project-team/scripts/subscription-policy-check');
 const { buildWhiteboxSummary } = require('../../../skills/whitebox/scripts/whitebox-summary');
 const { buildExplain } = require('../../../skills/whitebox/scripts/whitebox-explain');
+const { dashboardStatePath, startServer } = require('../../../skills/whitebox/scripts/whitebox-dashboard');
 
 const boardBuilderScript = path.resolve(__dirname, '../../../skills/task-board/scripts/board-builder.js');
 const whiteboxControlScript = path.resolve(__dirname, '../../../skills/whitebox/scripts/whitebox-control.js');
@@ -27,6 +28,12 @@ function makeTempProject(prefix) {
 function writeJson(filePath, payload) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+}
+
+function readControlLog(projectDir) {
+  const filePath = path.join(projectDir, '.claude', 'collab', 'control.ndjson');
+  const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8').trim() : '';
+  return content ? content.split('\n').filter(Boolean).map((line) => JSON.parse(line)) : [];
 }
 
 function initCollabArtifacts(projectDir) {
@@ -1860,11 +1867,7 @@ Use the backend contract and adapt the frontend mapper.
     expect(result.stdout).toContain('dec_path: .claude/collab/decisions/DEC-20260309-001.md');
   });
 
-  test('interactive TUI approve key routes through whitebox control CLI', () => {
-    if (spawnSync('tmux', ['-V'], { encoding: 'utf8' }).status !== 0) {
-      return;
-    }
-
+  test('dashboard approve action routes through whitebox control CLI', async () => {
     const projectDir = makeTempProject('whitebox-tui-approve-');
     fs.writeFileSync(path.join(projectDir, 'TASKS.md'), '## Phase 7\n### [ ] T7.2: Interactive approval\n', 'utf8');
     writeJson(path.join(projectDir, '.claude', 'orchestrate-state.json'), { tasks: [] });
@@ -1880,44 +1883,53 @@ Use the backend contract and adapt the frontend mapper.
       tasks: { done: 0, total: 1 },
       next_remediation_target: { id: 'gate-tui-1', reason: 'Approval required for T7.2', remediation: 'Approve or reject' },
     });
-    writeJson(path.join(projectDir, '.claude', 'collab', 'control-state.json'), {
-      pending_approval_count: 1,
-      pending_approvals: [{
-        gate_id: 'gate-tui-1',
-        task_id: 'T7.2',
-        created_at: '2026-03-07T00:00:00.000Z',
-        correlation_id: 'gate:tui-1',
-        evidence_paths: [],
-      }],
-      resolved_approvals: [],
-    });
     fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '', 'utf8');
     fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'control.ndjson'), '', 'utf8');
+    await writeEvent({
+      type: 'approval_required',
+      producer: 'jest',
+      correlation_id: 'gate:tui-1',
+      data: {
+        gate_id: 'gate-tui-1',
+        gate_name: 'Interactive approval',
+        task_id: 'T7.2',
+        choices: ['approve', 'reject'],
+        preview: 'Approval required for T7.2',
+      },
+    }, { projectDir });
+    await writeEvent({
+      type: 'execution_paused',
+      producer: 'jest',
+      correlation_id: 'gate:tui-1',
+      data: {
+        gate_id: 'gate-tui-1',
+        task_id: 'T7.2',
+        trigger_type: 'user_confirmation',
+        trigger_reason: 'Approval required for T7.2',
+      },
+    }, { projectDir });
 
-    spawnSync('cargo', ['build', '--manifest-path', path.resolve(__dirname, '../../../skills/task-board/tui/Cargo.toml')], {
-      cwd: path.resolve(__dirname, '../../..'),
-      encoding: 'utf8',
-    });
-
-    const session = `wb-${Date.now()}`;
-    const launch = spawnSync('tmux', ['new-session', '-d', '-s', session], { encoding: 'utf8' });
-    expect(launch.status).toBe(0);
+    const { server, state } = await startServer({ projectDir, host: '127.0.0.1', port: 0 });
     try {
-      spawnSync('tmux', ['send-keys', '-t', session, `${boardShowScript} --project-dir="${projectDir}"`, 'Enter'], { encoding: 'utf8' });
-      spawnSync('bash', ['-lc', 'sleep 1'], { encoding: 'utf8' });
-      spawnSync('tmux', ['send-keys', '-t', session, 'a'], { encoding: 'utf8' });
-      spawnSync('bash', ['-lc', 'sleep 1'], { encoding: 'utf8' });
-      spawnSync('tmux', ['send-keys', '-t', session, 'q'], { encoding: 'utf8' });
-    } finally {
-      spawnSync('tmux', ['kill-session', '-t', session], { encoding: 'utf8' });
-    }
+      const response = await fetch(new URL('/api/control', state.url), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', gateId: 'gate-tui-1' }),
+      });
+      const payload = await response.json();
+      const controlLog = readControlLog(projectDir);
 
-    const controlLog = fs.readFileSync(path.join(projectDir, '.claude', 'collab', 'control.ndjson'), 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
-    expect(controlLog).toHaveLength(1);
-    expect(controlLog[0]).toMatchObject({
-      type: 'approve',
-      target: { gate_id: 'gate-tui-1', task_id: 'T7.2' },
-    });
+      expect(response.status).toBe(200);
+      expect(payload.result).toBe('approved');
+      expect(controlLog).toHaveLength(1);
+      expect(controlLog[0]).toMatchObject({
+        type: 'approve',
+        target: { gate_id: 'gate-tui-1', task_id: 'T7.2' },
+      });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      fs.rmSync(dashboardStatePath(projectDir), { force: true });
+    }
   });
 
   test('worker timeout emits a single finish event even when close follows SIGTERM', async () => {
