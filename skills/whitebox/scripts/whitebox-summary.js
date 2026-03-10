@@ -84,7 +84,7 @@ function latestRunCard(cards) {
   })[0] || null;
 }
 
-function nextRemediation(staleMarkers, pendingApprovals, blockedCards, tasksStats) {
+function nextRemediation(staleMarkers, pendingApprovals, pendingDecisions, blockedCards, tasksStats) {
   if (staleMarkers.length > 0) {
     const marker = staleMarkers[0];
     return {
@@ -104,6 +104,18 @@ function nextRemediation(staleMarkers, pendingApprovals, blockedCards, tasksStat
       remediation: 'Review the approval details and run approve or reject through /whitebox approvals.',
       trigger_type: gate.trigger_type || 'user_confirmation',
       recommendation: gate.recommendation || null,
+    };
+  }
+
+  if (pendingDecisions.length > 0) {
+    const decision = pendingDecisions[0];
+    return {
+      type: 'decision',
+      id: decision.id,
+      reason: decision.reason || `Decision pending for ${decision.req_id || decision.task_id || decision.id}`,
+      remediation: decision.recommendation || 'Inspect the pending intervention details and resolve the underlying conflict before continuing.',
+      trigger_type: decision.trigger_type || decision.decision_type || 'user_confirmation',
+      recommendation: decision.recommendation || null,
     };
   }
 
@@ -129,9 +141,10 @@ function nextRemediation(staleMarkers, pendingApprovals, blockedCards, tasksStat
   return null;
 }
 
-function computeGateStatus(staleMarkers, pendingApprovals, blockedCards, inProgressCards, tasksStats) {
+function computeGateStatus(staleMarkers, pendingApprovals, pendingDecisions, blockedCards, inProgressCards, tasksStats) {
   if (staleMarkers.length > 0) return 'stale';
   if (pendingApprovals.length > 0) return 'approval_required';
+  if (pendingDecisions.length > 0) return 'decision_pending';
   if (blockedCards.length > 0) return 'blocked';
   if (inProgressCards.length > 0) return 'running';
   if (tasksStats.total > 0 && tasksStats.done === tasksStats.total) return 'clear';
@@ -152,21 +165,25 @@ function buildWhiteboxSummary(projectDir) {
   });
   const staleMarkers = readMarkers(projectDir).filter((entry) => entry && !entry.cleared_by);
   const blockedCards = Array.isArray(board.columns?.Blocked) ? board.columns.Blocked : [];
+  const pendingDecisions = Array.isArray(board.decisions)
+    ? board.decisions.filter((decision) => decision && decision.status === 'decision_pending')
+    : [];
   const inProgressCards = Array.isArray(board.columns?.['In Progress']) ? board.columns['In Progress'] : [];
   const allCards = flattenColumns(board.columns);
   const runCard = latestRunCard(allCards);
   const pendingApprovals = Array.isArray(controlState.pending_approvals) ? controlState.pending_approvals : [];
-  const next = nextRemediation(staleMarkers, pendingApprovals, blockedCards, tasksStats);
+  const next = nextRemediation(staleMarkers, pendingApprovals, pendingDecisions, blockedCards, tasksStats);
 
   return {
     schema_version: WHITEBOX_SUMMARY_SCHEMA_VERSION,
     generated_at: new Date().toISOString(),
-    ok: staleMarkers.length === 0 && pendingApprovals.length === 0,
+    ok: staleMarkers.length === 0 && pendingApprovals.length === 0 && pendingDecisions.length === 0,
     run_id: runCard ? runCard.run_id : null,
     run_id_short: runCard && runCard.run_id ? String(runCard.run_id).slice(0, 12) : null,
-    gate_status: computeGateStatus(staleMarkers, pendingApprovals, blockedCards, inProgressCards, tasksStats),
+    gate_status: computeGateStatus(staleMarkers, pendingApprovals, pendingDecisions, blockedCards, inProgressCards, tasksStats),
     blocked_count: blockedCards.length,
     pending_approval_count: pendingApprovals.length,
+    pending_decision_count: pendingDecisions.length,
     pending_approvals: pendingApprovals.slice(0, 10).map((gate) => ({
       gate_id: gate.gate_id,
       gate_name: gate.gate_name || null,

@@ -12,6 +12,7 @@ function formatHuman(summary) {
     `gate_status: ${summary.gate_status}`,
     `blocked_count: ${summary.blocked_count}`,
     `pending_approval_count: ${summary.pending_approval_count || 0}`,
+    `pending_decision_count: ${summary.pending_decision_count || 0}`,
     `run_id: ${summary.run_id || 'none'}`,
     `stale_artifacts: ${summary.stale_artifact_count}`,
   ];
