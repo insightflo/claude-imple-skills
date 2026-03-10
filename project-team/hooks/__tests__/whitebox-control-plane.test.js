@@ -174,6 +174,36 @@ describe('whitebox control plane', () => {
     });
   });
 
+  test('buildWhiteboxSummary surfaces pending read-only decisions', () => {
+    const projectDir = makeTempProject('whitebox-summary-decisions-');
+    writeJson(path.join(projectDir, '.claude', 'collab', 'board-state.json'), {
+      schema_version: '1.1',
+      columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
+      decisions: [{
+        id: 'req-conflict-REQ-77',
+        title: 'REQ conflict REQ-77',
+        status: 'decision_pending',
+        req_id: 'REQ-77',
+        decision_type: 'agent_conflict',
+        trigger_type: 'agent_conflict',
+        reason: 'Request escalated for mediation.',
+        recommendation: 'Review the escalated request and create or apply a DEC ruling before continuing.',
+        allowed_actions: [],
+      }],
+      derived_from: { fingerprint: 'fixture-decision-fingerprint' },
+    });
+
+    const summary = buildWhiteboxSummary(projectDir);
+    expect(summary.ok).toBe(false);
+    expect(summary.gate_status).toBe('decision_pending');
+    expect(summary.pending_decision_count).toBe(1);
+    expect(summary.next_remediation_target).toMatchObject({
+      type: 'decision',
+      id: 'req-conflict-REQ-77',
+      trigger_type: 'agent_conflict',
+    });
+  });
+
   test('buildExplain returns actionable blocker details for a task', () => {
     const projectDir = makeTempProject('whitebox-explain-');
     writeJson(path.join(projectDir, '.claude', 'collab', 'board-state.json'), {
@@ -213,6 +243,115 @@ describe('whitebox control plane', () => {
     expect(report.source).toBe('fixture');
     expect(report.remediation).toMatch(/Resolve the blocker/);
     expect(report.correlation.run_id).toBe('run-explain-1');
+  });
+
+  test('buildExplain derives trigger metadata from hook decisions', () => {
+    const projectDir = makeTempProject('whitebox-explain-hook-trigger-');
+    writeJson(path.join(projectDir, '.claude', 'collab', 'board-state.json'), {
+      columns: {
+        Backlog: [],
+        'In Progress': [],
+        Blocked: [{
+          id: 'T5.4',
+          title: 'T5.4: Review risky change',
+          blocker_reason: 'HIGH risk for T5.4; 2 direct dependents, 3 indirect dependents.',
+          blocker_source: 'pre-edit-impact-check',
+          remediation: 'Review the impact report before proceeding.',
+          run_id: 'run-hook-trigger-1',
+          last_event_type: 'hook.decision',
+          last_event_ts: '2026-03-09T00:00:00.000Z',
+        }],
+        Done: [],
+      },
+    });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), `${JSON.stringify({
+      schema_version: '1.0',
+      event_id: 'evt-hook-trigger-1',
+      ts: '2026-03-09T00:00:00.000Z',
+      type: 'hook.decision',
+      producer: 'pre-edit-impact-check',
+      correlation_id: 'T5.4',
+      data: {
+        hook: 'pre-edit-impact-check',
+        decision: 'warn',
+        severity: 'error',
+        risk_level: 'HIGH',
+        summary: 'HIGH risk for T5.4; 2 direct dependents, 3 indirect dependents.',
+        remediation: 'Review the impact report before proceeding.',
+        run_id: 'run-hook-trigger-1',
+        task_id: 'T5.4',
+      },
+    })}\n`, 'utf8');
+
+    const report = buildExplain({ projectDir, taskId: 'T5.4', reqId: '', gate: '' });
+    expect(report.ok).toBe(true);
+    expect(report.trigger).toEqual({
+      type: 'risk_acknowledgement',
+      recommendation: 'Review the impact report before proceeding.',
+    });
+    expect(report.reason).toBe('HIGH risk for T5.4; 2 direct dependents, 3 indirect dependents.');
+  });
+
+  test('buildExplain links DEC rulings for escalated requests', () => {
+    const projectDir = makeTempProject('whitebox-explain-req-decision-');
+    writeJson(path.join(projectDir, '.claude', 'collab', 'board-state.json'), {
+      columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
+      decisions: [{
+        id: 'req-conflict-REQ-77',
+        title: 'REQ conflict REQ-77',
+        status: 'decision_pending',
+        req_id: 'REQ-77',
+        decision_type: 'agent_conflict',
+        trigger_type: 'agent_conflict',
+        reason: 'Request escalated for mediation.',
+        recommendation: 'Review the escalated request and create or apply a DEC ruling before continuing.',
+        allowed_actions: [],
+      }],
+    });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'requests', 'REQ-77.md'), `---
+id: REQ-77
+status: ESCALATED
+from: frontend-specialist
+---
+
+Escalated contract disagreement.
+`, 'utf8');
+    fs.mkdirSync(path.join(projectDir, '.claude', 'collab', 'decisions'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'decisions', 'DEC-20260309-001.md'), `---
+id: DEC-20260309-001
+ref_req: REQ-77
+from: ChiefArchitect
+to: [BackendSpecialist, FrontendSpecialist]
+status: FINAL
+timestamp: 2026-03-09T00:00:00.000Z
+---
+## Decision Summary
+Use the backend contract and adapt the frontend mapper.
+
+## Context & Conflict
+Negotiation stalled after incompatible schema proposals.
+
+## Required Actions
+- BackendSpecialist: keep the contract stable.
+- FrontendSpecialist: update the mapper before resuming.
+`, 'utf8');
+
+    const report = buildExplain({ projectDir, taskId: '', reqId: 'REQ-77', gate: '' });
+    expect(report.ok).toBe(true);
+    expect(report.reason).toBe('Use the backend contract and adapt the frontend mapper.');
+    expect(report.source).toBe('DEC-20260309-001 (FINAL)');
+    expect(report.remediation).toContain('FrontendSpecialist: update the mapper before resuming.');
+    expect(report.trigger).toEqual({
+      type: 'agent_conflict',
+      recommendation: expect.stringContaining('BackendSpecialist: keep the contract stable.'),
+    });
+    expect(report.linked_decision).toEqual(expect.objectContaining({
+      id: 'DEC-20260309-001',
+      status: 'FINAL',
+      ref_req: 'REQ-77',
+      path: '.claude/collab/decisions/DEC-20260309-001.md',
+    }));
+    expect(report.evidence_paths).toContain(path.join(projectDir, '.claude', 'collab', 'decisions', 'DEC-20260309-001.md'));
   });
 
   test('buildHealth reports healthy subscription CLI state', () => {
@@ -560,7 +699,7 @@ describe('whitebox control plane', () => {
         projectDir,
         stage: 'final_gate',
         approvalPollIntervalMs: 10,
-        approvalWaitMs: 500,
+        approvalWaitMs: 1500,
       }
     );
 
@@ -1247,7 +1386,7 @@ ${JSON.stringify({
     });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Approval Queue (1)');
+    expect(result.stdout).toContain('Intervention Queue (1)');
     expect(result.stdout).toContain('Enter detail');
     expect(result.stdout).toContain('a approve');
     expect(result.stdout).toContain('r reject');
@@ -1321,6 +1460,213 @@ ${JSON.stringify({
         recommendation: 'Review the conflict and choose a side before continuing.',
       }),
     ]));
+  });
+
+  test('board-builder projects hook decisions into intervention cards', () => {
+    const projectDir = makeTempProject('whitebox-board-hook-intervention-');
+    fs.writeFileSync(path.join(projectDir, 'TASKS.md'), '## Phase 8\n### [ ] T8.4: Risky task\n', 'utf8');
+    writeJson(path.join(projectDir, '.claude', 'orchestrate-state.json'), { tasks: [] });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), `${JSON.stringify({
+      schema_version: '1.0',
+      event_id: 'evt-hook-board-1',
+      ts: '2026-03-09T00:00:00.000Z',
+      type: 'hook.decision',
+      producer: 'pre-edit-impact-check',
+      correlation_id: 'T8.4',
+      data: {
+        hook: 'pre-edit-impact-check',
+        decision: 'warn',
+        severity: 'error',
+        risk_level: 'HIGH',
+        summary: 'HIGH risk for T8.4; 1 direct dependent, 4 indirect dependents.',
+        remediation: 'Review the impact report before proceeding.',
+      },
+    })}\n`, 'utf8');
+
+    const result = spawnSync(process.execPath, [boardBuilderScript, `--project-dir=${projectDir}`, '--json'], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+    const board = JSON.parse(result.stdout);
+    expect(board.decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: 'pre-edit-impact-check intervention',
+        task_id: 'T8.4',
+        decision_type: 'risk_acknowledgement',
+        trigger_type: 'risk_acknowledgement',
+        allowed_actions: [],
+        recommendation: 'Review the impact report before proceeding.',
+      }),
+    ]));
+  });
+
+  test('board-show prints inspect guidance for read-only interventions', () => {
+    const projectDir = makeTempProject('whitebox-board-show-hook-intervention-');
+    writeJson(path.join(projectDir, '.claude', 'collab', 'board-state.json'), {
+      columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
+      decisions: [{
+        id: 'hook-pre-edit-impact-check-T8.4',
+        title: 'pre-edit-impact-check intervention',
+        status: 'decision_pending',
+        task_id: 'T8.4',
+        trigger_type: 'risk_acknowledgement',
+        reason: 'HIGH risk for T8.4; 1 direct dependent, 4 indirect dependents.',
+        recommendation: 'Review the impact report before proceeding.',
+        allowed_actions: [],
+      }],
+    });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '', 'utf8');
+
+    const result = spawnSync('bash', [boardShowScript, `--project-dir=${projectDir}`], {
+      encoding: 'utf8',
+      env: { ...process.env, WHITEBOX_TUI_CAPTURE: '0' },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('inspect: node skills/whitebox/scripts/whitebox-explain.js --task-id=T8.4 --project-dir=.');
+    expect(result.stdout).not.toContain('--approve=hook-pre-edit-impact-check-T8.4');
+  });
+
+  test('board-builder projects escalated requests into agent-conflict decisions', () => {
+    const projectDir = makeTempProject('whitebox-board-req-conflict-');
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'requests', 'REQ-77.md'), `---
+id: REQ-77
+status: ESCALATED
+from: frontend-specialist
+---
+
+Escalated contract disagreement.
+`, 'utf8');
+    writeJson(path.join(projectDir, '.claude', 'orchestrate-state.json'), { tasks: [] });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), `${JSON.stringify({
+      schema_version: '1.0',
+      event_id: 'evt-req-conflict-1',
+      ts: '2026-03-09T00:00:00.000Z',
+      type: 'req_escalated',
+      producer: 'task-board-sync',
+      correlation_id: 'REQ-77',
+      data: { req_id: 'REQ-77', status: 'ESCALATED' },
+    })}\n`, 'utf8');
+
+    const result = spawnSync(process.execPath, [boardBuilderScript, `--project-dir=${projectDir}`, '--json'], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+    const board = JSON.parse(result.stdout);
+    expect(board.decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: 'REQ conflict REQ-77',
+        req_id: 'REQ-77',
+        decision_type: 'agent_conflict',
+        trigger_type: 'agent_conflict',
+        allowed_actions: [],
+      }),
+    ]));
+  });
+
+  test('board-builder links DEC rulings onto escalated request decisions', () => {
+    const projectDir = makeTempProject('whitebox-board-req-dec-link-');
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'requests', 'REQ-77.md'), `---
+id: REQ-77
+status: ESCALATED
+from: frontend-specialist
+---
+
+Escalated contract disagreement.
+`, 'utf8');
+    fs.mkdirSync(path.join(projectDir, '.claude', 'collab', 'decisions'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'decisions', 'DEC-20260309-001.md'), `---
+id: DEC-20260309-001
+ref_req: REQ-77
+from: ChiefArchitect
+to: [BackendSpecialist, FrontendSpecialist]
+status: FINAL
+timestamp: 2026-03-09T00:00:00.000Z
+---
+## Decision Summary
+Use the backend contract and adapt the frontend mapper.
+
+## Required Actions
+- BackendSpecialist: keep the contract stable.
+- FrontendSpecialist: update the mapper before resuming.
+`, 'utf8');
+    writeJson(path.join(projectDir, '.claude', 'orchestrate-state.json'), { tasks: [] });
+
+    const result = spawnSync(process.execPath, [boardBuilderScript, `--project-dir=${projectDir}`, '--json'], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+    const board = JSON.parse(result.stdout);
+    expect(board.decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'req-conflict-REQ-77',
+        decision_id: 'DEC-20260309-001',
+        decision_status: 'FINAL',
+        decision_path: '.claude/collab/decisions/DEC-20260309-001.md',
+        reason: 'Linked ruling DEC-20260309-001: Use the backend contract and adapt the frontend mapper.',
+        recommendation: expect.stringContaining('FrontendSpecialist: update the mapper before resuming.'),
+      }),
+    ]));
+  });
+
+  test('board-show prints req inspect guidance for escalated conflicts', () => {
+    const projectDir = makeTempProject('whitebox-board-show-req-conflict-');
+    writeJson(path.join(projectDir, '.claude', 'collab', 'board-state.json'), {
+      columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
+      decisions: [{
+        id: 'req-conflict-REQ-77',
+        title: 'REQ conflict REQ-77',
+        status: 'decision_pending',
+        req_id: 'REQ-77',
+        trigger_type: 'agent_conflict',
+        reason: 'Request escalated for mediation.',
+        recommendation: 'Review the escalated request and create or apply a DEC ruling before continuing.',
+        allowed_actions: [],
+      }],
+    });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '', 'utf8');
+
+    const result = spawnSync('bash', [boardShowScript, `--project-dir=${projectDir}`], {
+      encoding: 'utf8',
+      env: { ...process.env, WHITEBOX_TUI_CAPTURE: '0' },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('inspect: node skills/whitebox/scripts/whitebox-explain.js --req-id=REQ-77 --project-dir=.');
+    expect(result.stdout).not.toContain('--approve=req-conflict-REQ-77');
+  });
+
+  test('board-show prints linked DEC metadata for escalated conflicts', () => {
+    const projectDir = makeTempProject('whitebox-board-show-req-decision-');
+    writeJson(path.join(projectDir, '.claude', 'collab', 'board-state.json'), {
+      columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] },
+      decisions: [{
+        id: 'req-conflict-REQ-77',
+        title: 'REQ conflict REQ-77',
+        status: 'decision_pending',
+        req_id: 'REQ-77',
+        decision_id: 'DEC-20260309-001',
+        decision_status: 'FINAL',
+        decision_path: '.claude/collab/decisions/DEC-20260309-001.md',
+        trigger_type: 'agent_conflict',
+        reason: 'Linked ruling DEC-20260309-001: Use the backend contract and adapt the frontend mapper.',
+        recommendation: 'Apply DEC-20260309-001 and update the request status when the ruling is complete.',
+        allowed_actions: [],
+      }],
+    });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '', 'utf8');
+
+    const result = spawnSync('bash', [boardShowScript, `--project-dir=${projectDir}`], {
+      encoding: 'utf8',
+      env: { ...process.env, WHITEBOX_TUI_CAPTURE: '0' },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('dec: DEC-20260309-001 (FINAL)');
+    expect(result.stdout).toContain('dec_path: .claude/collab/decisions/DEC-20260309-001.md');
   });
 
   test('interactive TUI approve key routes through whitebox control CLI', () => {
@@ -2046,6 +2392,53 @@ ${JSON.stringify({
         artifact: '.claude/collab/board-state.json',
         cleared_by: null,
         reason: 'incremental event task_claimed; rebuild required',
+      }),
+    ]));
+  });
+
+  test('task-board-sync emits decision_written for DEC edits and marks board-state stale', () => {
+    const projectDir = makeTempProject('whitebox-decision-written-');
+    initCollabArtifacts(projectDir);
+    const decisionPath = path.join(projectDir, '.claude', 'collab', 'decisions', 'DEC-20260309-001.md');
+    fs.mkdirSync(path.dirname(decisionPath), { recursive: true });
+    fs.writeFileSync(decisionPath, '---\nid: DEC-20260309-001\nref_req: REQ-77\nstatus: FINAL\n---\n\n## Decision Summary\nUse the backend contract.\n', 'utf8');
+
+    const result = spawnSync(process.execPath, [taskBoardSyncScript], {
+      cwd: projectDir,
+      env: {
+        ...process.env,
+        CLAUDE_PROJECT_DIR: projectDir,
+      },
+      input: JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Write',
+        tool_input: {
+          file_path: '.claude/collab/decisions/DEC-20260309-001.md',
+        },
+      }),
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+
+    const parsed = readEvents({ projectDir, tolerateTrailingPartialLine: false });
+    expect(parsed.events).toHaveLength(1);
+    expect(parsed.events[0]).toMatchObject({
+      type: 'decision_written',
+      correlation_id: 'REQ-77',
+      data: {
+        decision_id: 'DEC-20260309-001',
+        req_id: 'REQ-77',
+        status: 'FINAL',
+      },
+    });
+
+    const markers = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'collab', 'derived-meta.json'), 'utf8'));
+    expect(markers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        artifact: '.claude/collab/board-state.json',
+        cleared_by: null,
+        reason: 'incremental event decision_written; rebuild required',
       }),
     ]));
   });
