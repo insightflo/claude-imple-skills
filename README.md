@@ -21,7 +21,7 @@ cd claude-impl-tools
 TUI-based installer lets you select:
 - Install scope (global / project)
 - Skill categories (Core, Orchestration, Quality, Analysis, Tasks)
-- Project Team (10 agents + 15 hooks)
+- Project Team (registry-driven agent/hook topology)
 - Multi-AI routing (Claude + Gemini + Codex)
 
 ### Option 2: Non-Interactive Install
@@ -153,7 +153,9 @@ Automatic validations that run before/after file edits:
 | **Standard** | Most projects | 7 agents, 4 gates |
 | **Full** | Regulated industries | All agents, all hooks |
 
-See `project-team/docs/MODES.md` for details.
+See `project-team/docs/INSTALLATION.md#hook-modes` for details.
+
+The install closure contract now lives in `project-team/config/capability-manifest.json`. It is the single source of truth for which capabilities are required or advisory in each install mode, which runtime artifact proves the promise, and which command validates the closure (`node project-team/scripts/install-registry.js validate`). Runtime health is checked separately with `node project-team/scripts/install-registry.js runtime-health <mode> <target-base> <global|local>`.
 
 ### What changed in the current `main`
 
@@ -165,6 +167,8 @@ See `project-team/docs/MODES.md` for details.
 - Layer failures now stop the run cleanly, report failed task IDs, and cancel same-layer sibling work instead of silently continuing.
 - Worker CLI routing now defaults in this order: `task.model` -> agent `cli_command` -> project/global `model-routing.yaml` -> heuristics -> Claude fallback, so users do not need to name the executor for common agent roles.
 - Project Team installs now include the hook support libraries required by `policy-gate` and `permission-checker`.
+- Whitebox approval and deny lifecycles now emit derived immutable run reports under `.claude/collab/runs/<run-id>/report.json`.
+- `/recover` now has a canonical-state-first status surface via `node skills/recover/scripts/recover-status.js --json`, preferring auto/orchestrate state over `TASKS.md` heuristics.
 
 ---
 
@@ -218,6 +222,12 @@ These are the flows validated against the current `main` branch:
 | Medium (30-80 tasks) | `/workflow` -> `/governance-setup` -> `project-team/install.sh --mode=standard` -> `/orchestrate-standalone --mode=standard` |
 | Large (80+ tasks) | `/workflow` -> `/governance-setup` -> `project-team/install.sh --mode=standard` -> `/orchestrate-standalone --mode=wave` |
 | Failure-path verification | Installed `--mode=wave` run with deterministic task failure -> fail-fast + blocked downstream tasks |
+
+After install, use these closure checks explicitly:
+
+- `node project-team/scripts/install-registry.js validate`
+- `node project-team/scripts/install-registry.js runtime-health standard ~/.claude global`
+- `node skills/recover/scripts/recover-status.js --json`
 
 ---
 
@@ -313,6 +323,13 @@ Choose a mode:
 
 - Node.js 18+ (for hook execution)
 - Git (for worktree & changelog features)
+
+### Verification Contract (Project-shaped)
+
+- Use one project-root verification entrypoint and keep it executable.
+- Make-based projects: `make verify` with a real `verify:` target.
+- Non-Make projects: `bash scripts/verify_all.sh` (or an explicitly documented equivalent).
+- Do not assume `make verify` universally across all projects.
 
 ---
 

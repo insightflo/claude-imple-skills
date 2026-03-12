@@ -157,7 +157,7 @@ project-team/
 | **Standard** | 일반적인 프로젝트 | 7 에이전트, 4 게이트 |
 | **Full** | 규제 산업 | 전체 에이전트, 전체 훅 |
 
-자세한 내용은 `project-team/docs/MODES.md` 참조.
+자세한 내용은 `project-team/docs/INSTALLATION.md#hook-modes` 참조.
 
 ### 현재 `main`에서 바뀐 점
 
@@ -169,6 +169,8 @@ project-team/
 - layer 실패 시 failed task ID를 출력하고, 같은 layer의 sibling 작업도 취소하며, 조용히 계속 진행하지 않습니다.
 - worker CLI 라우팅 기본 순서는 `task.model` -> agent `cli_command` -> project/global `model-routing.yaml` -> heuristic -> Claude fallback 이며, 일반적인 agent 역할은 사용자가 실행기를 직접 지정하지 않아도 됩니다.
 - Project Team 설치 경로는 이제 `policy-gate`, `permission-checker`가 요구하는 hook support library도 함께 설치합니다.
+- whitebox approval/deny lifecycle은 이제 `.claude/collab/runs/<run-id>/report.json`에 derived immutable run report를 남깁니다.
+- `/recover`는 이제 `node skills/recover/scripts/recover-status.js --json`를 통해 canonical runtime state 우선 복구 상태를 확인할 수 있습니다.
 
 ---
 
@@ -222,6 +224,12 @@ project-team/
 | Medium (30-80 tasks) | `/workflow` -> `/governance-setup` -> `project-team/install.sh --mode=standard` -> `/orchestrate-standalone --mode=standard` |
 | Large (80+ tasks) | `/workflow` -> `/governance-setup` -> `project-team/install.sh --mode=standard` -> `/orchestrate-standalone --mode=wave` |
 | Failure-path verification | installed `--mode=wave` 실행 + deterministic task failure -> fail-fast + downstream block 확인 |
+
+설치 후 closure 검증은 아래 명령을 사용합니다:
+
+- `node project-team/scripts/install-registry.js validate`
+- `node project-team/scripts/install-registry.js runtime-health standard ~/.claude global`
+- `node skills/recover/scripts/recover-status.js --json`
 
 ---
 
