@@ -3,6 +3,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 const AgentAuthService = require('../../services/auth');
@@ -10,8 +11,14 @@ const { buildRuntimeHandoff } = require('../../services/context-injector');
 const { buildModePayload, readRegistry } = require('../../scripts/install-registry');
 
 const PROJECT_TEAM_ROOT = path.resolve(__dirname, '..', '..');
+const REPO_ROOT = path.resolve(PROJECT_TEAM_ROOT, '..');
 const PERMISSION_CHECKER = path.join(PROJECT_TEAM_ROOT, 'hooks', 'permission-checker.js');
 const DOMAIN_BOUNDARY_ENFORCER = path.join(PROJECT_TEAM_ROOT, 'hooks', 'domain-boundary-enforcer.js');
+const INSTALL_REGISTRY = path.join(PROJECT_TEAM_ROOT, 'scripts', 'install-registry.js');
+const DOCTOR_SCRIPT = path.join(PROJECT_TEAM_ROOT, 'scripts', 'doctor.js');
+const LEASE_SCRIPT = path.join(PROJECT_TEAM_ROOT, 'scripts', 'lease.js');
+const GUIDANCE_BUNDLE_SCRIPT = path.join(PROJECT_TEAM_ROOT, 'scripts', 'guidance-bundle.js');
+const TASKS_INIT_GENERATOR = path.join(REPO_ROOT, 'skills', 'tasks-init', 'scripts', 'generate.js');
 const REGISTRY = readRegistry();
 const LEGACY_ALIAS_PATTERN = [
   ['project', 'manager'].join('-'),
@@ -37,6 +44,7 @@ const APPROVED_LEGACY_FILES = new Set([
   'agents/templates/DomainDesigner.md',
   'agents/templates/DomainDeveloper.md',
   'agents/templates/PartLeader.md',
+  'config/capability-manifest.json',
   'config/topology-registry.json',
   'docs/INSTALLATION.md',
   'docs/MAINTENANCE.md',
@@ -49,9 +57,12 @@ const APPROVED_LEGACY_FILES = new Set([
   'examples/saas/risk-areas.yaml',
   'hooks/README.md',
   'hooks/QUALITY_GATE.md',
+  'hooks/__tests__/auto-orchestrator-routing.test.js',
   'hooks/__tests__/deterministic-policy.test.js',
   'hooks/__tests__/permission-checker.test.js',
   'hooks/__tests__/risk-area-warning.test.js',
+  'hooks/__tests__/whitebox-control-plane.test.js',
+  'hooks/__tests__/worker-cli-routing.test.js',
   'hooks/contract-gate.js',
   'hooks/cross-domain-notifier.js',
   'hooks/domain-boundary-enforcer.js',
@@ -91,6 +102,14 @@ function runNodeScript(scriptPath, { cwd, env, input }) {
     cwd,
     env,
     input: input ? JSON.stringify(input) : undefined,
+    encoding: 'utf8'
+  });
+}
+
+function runNodeCommand(args, { cwd, env }) {
+  return spawnSync(process.execPath, args, {
+    cwd,
+    env,
     encoding: 'utf8'
   });
 }
@@ -435,6 +454,487 @@ describe('acceptance harness policy and context coverage', () => {
       });
     } finally {
       fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('acceptance harness closure fixtures', () => {
+  test('lease script acquires and releases canonical artifact leases', () => {
+    const projectDir = makeTempDir('lease-acquire-release-');
+    fs.mkdirSync(path.join(projectDir, '.claude', 'collab', 'locks'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '');
+    fs.writeFileSync(path.join(projectDir, 'TASKS.md'), '## Phase 1\n- [ ] T1.1: Fixture\n', 'utf8');
+
+    try {
+      const acquireResult = runNodeCommand([LEASE_SCRIPT, 'acquire', 'TASKS.md', '--holder=agent:P1-T3', '--ttl=60', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(acquireResult.status).toBe(0);
+      expect(JSON.parse(acquireResult.stdout)).toMatchObject({ ok: true, status: 'active' });
+
+      const statusResult = runNodeCommand([LEASE_SCRIPT, 'status', 'TASKS.md', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(statusResult.status).toBe(0);
+      expect(JSON.parse(statusResult.stdout).leases).toEqual(expect.arrayContaining([
+        expect.objectContaining({ target: 'TASKS.md', status: 'active', lease: expect.objectContaining({ holder: 'agent:P1-T3' }) })
+      ]));
+
+      const releaseResult = runNodeCommand([LEASE_SCRIPT, 'release', 'TASKS.md', '--holder=agent:P1-T3', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(releaseResult.status).toBe(0);
+      expect(JSON.parse(releaseResult.stdout)).toMatchObject({ ok: true, status: 'released' });
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  test('stale lease can be released by human override', () => {
+    const projectDir = makeTempDir('lease-stale-force-');
+    const lockDir = path.join(projectDir, '.claude', 'collab', 'locks');
+    fs.mkdirSync(lockDir, { recursive: true });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '');
+    fs.writeFileSync(path.join(projectDir, 'TASKS.md'), '## Phase 1\n- [ ] T1.1: Fixture\n', 'utf8');
+    const staleLease = {
+      schema_version: 1,
+      target: 'TASKS.md',
+      holder: 'agent:stale-owner',
+      ttl_seconds: 1,
+      acquired_at: '2026-03-01T00:00:00.000Z',
+      updated_at: '2026-03-01T00:00:00.000Z'
+    };
+    const staleLeaseName = `${crypto.createHash('sha1').update('TASKS.md').digest('hex').slice(0, 12)}.lease.json`;
+    fs.writeFileSync(path.join(lockDir, staleLeaseName), JSON.stringify(staleLease, null, 2));
+
+    try {
+      const statusResult = runNodeCommand([LEASE_SCRIPT, 'status', 'TASKS.md', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(statusResult.status).toBe(0);
+      expect(JSON.parse(statusResult.stdout).leases[0]).toMatchObject({ status: 'stale' });
+
+      const releaseResult = runNodeCommand([LEASE_SCRIPT, 'release', 'TASKS.md', '--holder=human:operator', '--force', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(releaseResult.status).toBe(0);
+      expect(JSON.parse(releaseResult.stdout)).toMatchObject({ ok: true, status: 'force_released' });
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  test('active lease cannot be released without holder unless force is used', () => {
+    const projectDir = makeTempDir('lease-owner-guard-');
+    fs.mkdirSync(path.join(projectDir, '.claude', 'collab', 'locks'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '');
+    fs.writeFileSync(path.join(projectDir, 'TASKS.md'), '## Phase 1\n- [ ] T1.1: Fixture\n', 'utf8');
+
+    try {
+      const acquireResult = runNodeCommand([LEASE_SCRIPT, 'acquire', 'TASKS.md', '--holder=agent:P2-T1', '--ttl=60', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(acquireResult.status).toBe(0);
+
+      const releaseResult = runNodeCommand([LEASE_SCRIPT, 'release', 'TASKS.md', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(releaseResult.status).not.toBe(0);
+      expect(releaseResult.stderr).toContain('LEASE_HOLDER_REQUIRED');
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  test('doctor reports healthy project state from canonical checks', () => {
+    const { sandboxRoot, sandboxProjectTeam } = copyProjectTeamFixture();
+    const projectDir = makeTempDir('doctor-healthy-');
+
+    try {
+      fs.mkdirSync(path.join(projectDir, '.claude', 'collab'), { recursive: true });
+      fs.mkdirSync(path.join(projectDir, '.claude', 'orchestrate'), { recursive: true });
+      fs.writeFileSync(path.join(projectDir, 'TASKS.md'), '## Phase 1\n- [ ] T1.1: Fixture\n', 'utf8');
+      fs.writeFileSync(path.join(projectDir, '.claude', 'orchestrate-state.json'), JSON.stringify({ tasks: [] }, null, 2));
+      fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'events.ndjson'), '');
+      fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'control.ndjson'), '');
+      fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'control-state.json'), JSON.stringify({ pending_approvals: [], resolved_approvals: [], command_results: [] }, null, 2));
+      fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'board-state.json'), JSON.stringify({ columns: { Backlog: [], 'In Progress': [], Blocked: [], Done: [] }, decisions: [], derived_from: {} }, null, 2));
+      fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'whitebox-summary.json'), JSON.stringify({ gate_status: 'idle', blocked_count: 0, pending_approval_count: 0, stale_artifact_count: 0, tasks: { done: 0, total: 1 } }, null, 2));
+
+      const homeDir = path.join(sandboxRoot, 'home');
+      fs.mkdirSync(homeDir, { recursive: true });
+      runInstaller({ sandboxProjectTeam, installMode: 'local', mode: 'standard', homeDir });
+
+      const doctorResult = runNodeCommand([DOCTOR_SCRIPT, `--project-dir=${projectDir}`, '--mode=standard', '--install-mode=local', `--target-base=${path.join(sandboxProjectTeam, '.claude')}`, '--json'], {
+        cwd: sandboxProjectTeam,
+        env: { ...process.env }
+      });
+      expect(doctorResult.status).toBe(0);
+      const report = JSON.parse(doctorResult.stdout);
+      expect(report.ok).toBe(true);
+      expect(report.sections.install.status).toBe('pass');
+      expect(report.sections.runtime.status).toBe('pass');
+      expect(report.sections.whitebox.status).toBe('warn');
+      expect(report.sections.recovery.status).toBe('pass');
+    } finally {
+      fs.rmSync(sandboxRoot, { recursive: true, force: true });
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  test('recover-status prefers canonical runtime state over TASKS heuristics in addendum fixture', () => {
+    const projectDir = makeTempDir('doctor-recover-priority-');
+    fs.mkdirSync(path.join(projectDir, '.claude', 'orchestrate'), { recursive: true });
+    fs.mkdirSync(path.join(projectDir, '.claude', 'collab'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, 'TASKS.md'), '## Phase 1\n- [ ] T1.1: heuristic fallback\n', 'utf8');
+    fs.writeFileSync(path.join(projectDir, '.claude', 'orchestrate', 'auto-state.json'), JSON.stringify({
+      session_id: 'run-addendum-recover-acceptance',
+      pending_gate: {
+        gate_id: 'gate-addendum-recover-acceptance',
+        gate_name: 'Acceptance Gate',
+        task_id: 'T3.9',
+        run_id: 'run-addendum-recover-acceptance',
+        correlation_id: 'gate:run-addendum-recover-acceptance:final_gate',
+        choices: ['approve', 'reject'],
+        default_behavior: 'wait_for_operator',
+        timeout_policy: 'wait_60000ms',
+        created_at: '2026-03-11T00:00:00.000Z',
+        trigger_reason: 'Need operator action.',
+        recommendation: 'Inspect and resolve the pending gate.'
+      }
+    }, null, 2));
+    fs.writeFileSync(path.join(projectDir, '.claude', 'collab', 'whitebox-summary.json'), JSON.stringify({ gate_status: 'approval_required', blocked_count: 0, pending_approval_count: 0, stale_artifact_count: 0, tasks: { done: 0, total: 1 } }, null, 2));
+
+    try {
+      const recoverResult = runNodeCommand([path.join(REPO_ROOT, 'skills', 'recover', 'scripts', 'recover-status.js'), `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(recoverResult.status).toBe(0);
+      const report = JSON.parse(recoverResult.stdout);
+      expect(report.authoritative_source).toMatchObject({ kind: 'auto-state' });
+      expect(report.non_authoritative_heuristics[0]).toMatchObject({ kind: 'tasks-md' });
+      expect(report.resume_options[0]).toMatchObject({ id: 'inspect-pending-gate' });
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  test('doctor surfaces runtime failure from canonical checks', () => {
+    const { sandboxRoot, sandboxProjectTeam } = copyProjectTeamFixture();
+    const homeDir = path.join(sandboxRoot, 'home');
+    fs.mkdirSync(homeDir, { recursive: true });
+
+    try {
+      runInstaller({ sandboxProjectTeam, installMode: 'global', mode: 'standard', homeDir });
+      const scopeRoot = path.join(homeDir, '.claude');
+      fs.unlinkSync(path.join(scopeRoot, 'hooks', 'quality-gate.js'));
+
+      const doctorResult = runNodeCommand([DOCTOR_SCRIPT, `--project-dir=${sandboxProjectTeam}`, '--mode=standard', '--install-mode=global', `--target-base=${scopeRoot}`, '--json'], {
+        cwd: sandboxProjectTeam,
+        env: { ...process.env }
+      });
+      expect(doctorResult.status).not.toBe(0);
+      const report = JSON.parse(doctorResult.stdout);
+      expect(report.ok).toBe(false);
+      expect(report.sections.runtime.status).toBe('fail');
+      expect(report.sections.runtime.remediation).toContain('project-team/docs/INSTALLATION.md#hook-modes');
+    } finally {
+      fs.rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ['local', 'lite'],
+    ['local', 'standard'],
+    ['local', 'full']
+  ])('runtime-health passes for %s %s install', (installMode, mode) => {
+    const { sandboxRoot, sandboxProjectTeam } = copyProjectTeamFixture();
+    const homeDir = path.join(sandboxRoot, 'home');
+    fs.mkdirSync(homeDir, { recursive: true });
+
+    try {
+      runInstaller({ sandboxProjectTeam, installMode, mode, homeDir });
+      const scopeRoot = getScopeRoot(sandboxProjectTeam, installMode, homeDir);
+      const healthResult = runNodeCommand([INSTALL_REGISTRY, 'runtime-health', mode, scopeRoot, installMode], {
+        cwd: sandboxProjectTeam,
+        env: { ...process.env }
+      });
+      expect(healthResult.status).toBe(0);
+      expect(JSON.parse(healthResult.stdout)).toMatchObject({ ok: true, mode, installMode });
+    } finally {
+      fs.rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+  });
+
+  test.each(['standard', 'full'])('%s install passes registry validation and runtime health', (mode) => {
+    const { sandboxRoot, sandboxProjectTeam } = copyProjectTeamFixture();
+    const homeDir = path.join(sandboxRoot, 'home');
+    fs.mkdirSync(homeDir, { recursive: true });
+
+    try {
+      runInstaller({ sandboxProjectTeam, installMode: 'global', mode, homeDir });
+      const scopeRoot = path.join(homeDir, '.claude');
+
+      const validateResult = runNodeCommand([INSTALL_REGISTRY, 'validate'], {
+        cwd: sandboxProjectTeam,
+        env: { ...process.env }
+      });
+      expect(validateResult.status).toBe(0);
+
+      const healthResult = runNodeCommand([INSTALL_REGISTRY, 'runtime-health', mode, scopeRoot, 'global'], {
+        cwd: sandboxProjectTeam,
+        env: { ...process.env }
+      });
+      expect(healthResult.status).toBe(0);
+      expect(JSON.parse(healthResult.stdout)).toMatchObject({ ok: true, mode });
+    } finally {
+      fs.rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('lite runtime health keeps full-only gaps non-blocking', () => {
+    const { sandboxRoot, sandboxProjectTeam } = copyProjectTeamFixture();
+    const homeDir = path.join(sandboxRoot, 'home');
+    fs.mkdirSync(homeDir, { recursive: true });
+
+    try {
+      runInstaller({ sandboxProjectTeam, installMode: 'global', mode: 'lite', homeDir });
+      const scopeRoot = path.join(homeDir, '.claude');
+
+      const healthResult = runNodeCommand([INSTALL_REGISTRY, 'runtime-health', 'lite', scopeRoot, 'global'], {
+        cwd: sandboxProjectTeam,
+        env: { ...process.env }
+      });
+
+      expect(healthResult.status).toBe(0);
+      const report = JSON.parse(healthResult.stdout);
+      expect(report.ok).toBe(true);
+      expect(report.mode).toBe('lite');
+      expect(report.required.missing).toEqual([]);
+      expect(report.advisory.checkedCapabilities).toBeGreaterThanOrEqual(1);
+    } finally {
+      fs.rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ['lite', 'permission-checker.js'],
+    ['standard', 'quality-gate.js'],
+    ['full', 'quality-gate.js']
+  ])('runtime-health fails when required %s artifact is missing', (mode, artifactBasename) => {
+    const { sandboxRoot, sandboxProjectTeam } = copyProjectTeamFixture();
+    const homeDir = path.join(sandboxRoot, 'home');
+    fs.mkdirSync(homeDir, { recursive: true });
+
+    try {
+      runInstaller({ sandboxProjectTeam, installMode: 'global', mode, homeDir });
+      const scopeRoot = path.join(homeDir, '.claude');
+      fs.unlinkSync(path.join(scopeRoot, 'hooks', artifactBasename));
+
+      const healthResult = runNodeCommand([INSTALL_REGISTRY, 'runtime-health', mode, scopeRoot, 'global'], {
+        cwd: sandboxProjectTeam,
+        env: { ...process.env }
+      });
+
+      expect(healthResult.status).not.toBe(0);
+      const report = JSON.parse(healthResult.stdout);
+      expect(report.ok).toBe(false);
+      expect(report.required.missing).toEqual(expect.arrayContaining([
+        expect.objectContaining({ artifact: `hooks/${artifactBasename}` })
+      ]));
+    } finally {
+      fs.rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('full mode installs compatibility profile artifacts documented for legacy compatibility', () => {
+    const { sandboxRoot, sandboxProjectTeam } = copyProjectTeamFixture();
+    const homeDir = path.join(sandboxRoot, 'home');
+    fs.mkdirSync(homeDir, { recursive: true });
+
+    try {
+      runInstaller({ sandboxProjectTeam, installMode: 'global', mode: 'full', homeDir });
+      const scopeRoot = path.join(homeDir, '.claude');
+      const fullPayload = buildModePayload(REGISTRY, 'full');
+
+      for (const relPath of fullPayload.artifacts.agents.filter((item) => item.includes('templates/'))) {
+        expect(fs.existsSync(path.join(scopeRoot, relPath))).toBe(true);
+      }
+
+      runInstaller({ sandboxProjectTeam, installMode: 'global', mode: 'lite', homeDir });
+      const litePayload = buildModePayload(REGISTRY, 'lite');
+      const removedProfiles = fullPayload.artifacts.agents.filter((item) => item.includes('templates/') && !litePayload.artifacts.agents.includes(item));
+      for (const relPath of removedProfiles) {
+        expect(fs.existsSync(path.join(scopeRoot, relPath))).toBe(false);
+      }
+    } finally {
+      fs.rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('tasks-init generator emits project-shaped verify contracts and fails without one', () => {
+    const root = makeTempDir('tasks-init-verify-contract-');
+    const makeProject = path.join(root, 'make-project');
+    const nonMakeProject = path.join(root, 'nonmake-project');
+    const missingProject = path.join(root, 'missing-project');
+    fs.mkdirSync(makeProject, { recursive: true });
+    fs.mkdirSync(path.join(nonMakeProject, 'scripts'), { recursive: true });
+    fs.mkdirSync(missingProject, { recursive: true });
+    fs.writeFileSync(path.join(makeProject, 'Makefile'), 'verify:\n\t@echo make verify fixture ok\n', 'utf8');
+    fs.writeFileSync(path.join(nonMakeProject, 'scripts', 'verify_all.sh'), '#!/usr/bin/env bash\necho non-make verify fixture ok\n', 'utf8');
+    fs.chmodSync(path.join(nonMakeProject, 'scripts', 'verify_all.sh'), 0o755);
+
+    try {
+      const makeResult = runNodeCommand([TASKS_INIT_GENERATOR], {
+        cwd: makeProject,
+        env: { ...process.env, PROJECT_NAME: 'make-project', FEATURES: 'auth' }
+      });
+      expect(makeResult.status).toBe(0);
+      expect(makeResult.stdout).toContain('verify_cmd: make verify');
+
+      const nonMakeResult = runNodeCommand([TASKS_INIT_GENERATOR], {
+        cwd: nonMakeProject,
+        env: { ...process.env, PROJECT_NAME: 'nonmake-project', FEATURES: 'auth' }
+      });
+      expect(nonMakeResult.status).toBe(0);
+      expect(nonMakeResult.stdout).toContain('verify_cmd: bash scripts/verify_all.sh');
+
+      const missingResult = runNodeCommand([TASKS_INIT_GENERATOR], {
+        cwd: missingProject,
+        env: { ...process.env, PROJECT_NAME: 'missing-project', FEATURES: 'auth' }
+      });
+      expect(missingResult.status).not.toBe(0);
+      expect(missingResult.stderr).toContain('No executable verification contract found');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('guidance bundle builds from canonical sources and validates cleanly', () => {
+    const projectDir = makeTempDir('guidance-bundle-build-');
+
+    try {
+      const buildResult = runNodeCommand([GUIDANCE_BUNDLE_SCRIPT, 'build', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(buildResult.status).toBe(0);
+      const bundle = JSON.parse(buildResult.stdout);
+      expect(bundle.source_count).toBeGreaterThanOrEqual(4);
+      expect(bundle.sources.map((entry) => entry.path)).toEqual(expect.arrayContaining([
+        'AGENTS.md',
+        'project-team/config/capability-manifest.json',
+        'project-team/config/topology-registry.json',
+        'skills/whitebox/SKILL.md',
+        'skills/recover/SKILL.md',
+      ]));
+
+      const validateResult = runNodeCommand([GUIDANCE_BUNDLE_SCRIPT, 'validate', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(validateResult.status).toBe(0);
+      expect(JSON.parse(validateResult.stdout)).toMatchObject({ ok: true });
+
+      const readResult = runNodeCommand([GUIDANCE_BUNDLE_SCRIPT, 'read', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env: { ...process.env }
+      });
+      expect(readResult.status).toBe(0);
+      expect(JSON.parse(readResult.stdout)).toMatchObject({
+        ok: true,
+        bundle: expect.objectContaining({ source_count: bundle.source_count })
+      });
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  test('guidance bundle validate detects stale sources', () => {
+    const fixtureRoot = makeTempDir('guidance-bundle-stale-source-');
+    const sourceRoot = path.join(fixtureRoot, 'source');
+    const projectDir = path.join(fixtureRoot, 'project');
+    fs.mkdirSync(path.join(sourceRoot, 'project-team', 'config'), { recursive: true });
+    fs.mkdirSync(path.join(sourceRoot, 'skills', 'whitebox'), { recursive: true });
+    fs.mkdirSync(path.join(sourceRoot, 'skills', 'recover'), { recursive: true });
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.writeFileSync(path.join(sourceRoot, 'CLAUDE.md'), 'alpha', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'AGENTS.md'), 'beta', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'project-team', 'config', 'capability-manifest.json'), '{}', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'project-team', 'config', 'topology-registry.json'), '{}', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'skills', 'whitebox', 'SKILL.md'), 'gamma', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'skills', 'recover', 'SKILL.md'), 'delta', 'utf8');
+
+    try {
+      const env = { ...process.env, GUIDANCE_SOURCE_ROOT: sourceRoot };
+      const buildResult = runNodeCommand([GUIDANCE_BUNDLE_SCRIPT, 'build', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env
+      });
+      expect(buildResult.status).toBe(0);
+
+      fs.writeFileSync(path.join(sourceRoot, 'CLAUDE.md'), 'alpha-updated', 'utf8');
+
+      const validateResult = runNodeCommand([GUIDANCE_BUNDLE_SCRIPT, 'validate', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env
+      });
+      expect(validateResult.status).not.toBe(0);
+      const report = JSON.parse(validateResult.stdout);
+      expect(report.ok).toBe(false);
+      expect(report.stale).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: 'CLAUDE.md' })
+      ]));
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('guidance bundle validate detects deleted canonical sources', () => {
+    const fixtureRoot = makeTempDir('guidance-bundle-deleted-source-');
+    const sourceRoot = path.join(fixtureRoot, 'source');
+    const projectDir = path.join(fixtureRoot, 'project');
+    fs.mkdirSync(path.join(sourceRoot, 'project-team', 'config'), { recursive: true });
+    fs.mkdirSync(path.join(sourceRoot, 'skills', 'whitebox'), { recursive: true });
+    fs.mkdirSync(path.join(sourceRoot, 'skills', 'recover'), { recursive: true });
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.writeFileSync(path.join(sourceRoot, 'CLAUDE.md'), 'alpha', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'AGENTS.md'), 'beta', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'project-team', 'config', 'capability-manifest.json'), '{}', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'project-team', 'config', 'topology-registry.json'), '{}', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'skills', 'whitebox', 'SKILL.md'), 'gamma', 'utf8');
+    fs.writeFileSync(path.join(sourceRoot, 'skills', 'recover', 'SKILL.md'), 'delta', 'utf8');
+
+    try {
+      const env = { ...process.env, GUIDANCE_SOURCE_ROOT: sourceRoot };
+      const buildResult = runNodeCommand([GUIDANCE_BUNDLE_SCRIPT, 'build', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env
+      });
+      expect(buildResult.status).toBe(0);
+
+      fs.unlinkSync(path.join(sourceRoot, 'CLAUDE.md'));
+
+      const validateResult = runNodeCommand([GUIDANCE_BUNDLE_SCRIPT, 'validate', `--project-dir=${projectDir}`, '--json'], {
+        cwd: PROJECT_TEAM_ROOT,
+        env
+      });
+      expect(validateResult.status).not.toBe(0);
+      const report = JSON.parse(validateResult.stdout);
+      expect(report.ok).toBe(false);
+      expect(report.stale).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: 'CLAUDE.md', actual: null })
+      ]));
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
   });
 });
