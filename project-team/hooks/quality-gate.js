@@ -207,6 +207,10 @@ const PROJECT_PATTERNS = {
   }
 };
 
+function toStopHookDecision(passed) {
+  return passed ? 'approve' : 'block';
+}
+
 // ---------------------------------------------------------------------------
 // 2. Project Detection
 // ---------------------------------------------------------------------------
@@ -667,8 +671,9 @@ async function main() {
         remediation: 'Add package.json scripts or Python project metadata.',
       });
       process.stdout.write(JSON.stringify({
-        decision: 'deny',
-        reason: 'Could not detect project type (no package.json or pyproject.toml found)'
+        decision: 'block',
+        reason: 'Could not detect project type (no package.json or pyproject.toml found)',
+        stopReason: 'Quality gate blocked because project type could not be detected.'
       }));
       return;
     }
@@ -714,7 +719,8 @@ async function main() {
 
     // Output decision
     process.stdout.write(JSON.stringify({
-      decision: results.passed ? 'allow' : 'deny',
+      decision: toStopHookDecision(results.passed),
+      stopReason: results.passed ? '' : 'Quality gate blocked the stop boundary.',
       report,
       metrics: {
         tests: results.tests,
@@ -732,8 +738,9 @@ async function main() {
       remediation: 'Review hook runtime errors and rerun.',
     });
     process.stdout.write(JSON.stringify({
-      decision: 'deny',
-      reason: `Quality gate error: ${error.message}`
+      decision: 'block',
+      reason: `Quality gate error: ${error.message}`,
+      stopReason: 'Quality gate blocked due to execution error.'
     }));
   }
 }
@@ -763,6 +770,8 @@ if (typeof module !== 'undefined' && module.exports) {
     runTypeCheck,
     parseTypeOutput,
     generateReport,
-    isQualityGatePassed
+    isQualityGatePassed,
+    toStopHookDecision,
+    main
   };
 }

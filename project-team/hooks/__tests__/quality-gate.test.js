@@ -24,8 +24,11 @@ const {
   parseLintOutput,
   parseTypeOutput,
   generateReport,
-  isQualityGatePassed
+  isQualityGatePassed,
+  toStopHookDecision
 } = require('../quality-gate');
+
+const qualityGatePath = require.resolve('../quality-gate');
 
 // ---------------------------------------------------------------------------
 // Test Output Parsing
@@ -307,6 +310,51 @@ describe('isQualityGatePassed', () => {
   });
 });
 
+describe('toStopHookDecision', () => {
+  test('maps pass to approve', () => {
+    expect(toStopHookDecision(true)).toBe('approve');
+  });
+
+  test('maps fail to block', () => {
+    expect(toStopHookDecision(false)).toBe('block');
+  });
+});
+
+describe('manual hook output', () => {
+  test('unknown project type emits stop-compatible block decision', async () => {
+    let originalCwd;
+    let result;
+    const fixtureDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'quality-gate-unknown-'));
+
+    try {
+      originalCwd = process.cwd();
+      process.chdir(fixtureDir);
+      jest.resetModules();
+      const fsModule = require('fs');
+      const writes = [];
+      const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+        writes.push(String(chunk));
+        return true;
+      });
+
+      delete require.cache[qualityGatePath];
+      const freshModule = require('../quality-gate');
+      result = await freshModule.main?.();
+      stdoutSpy.mockRestore();
+
+      const payload = JSON.parse(writes.join(''));
+      expect(payload).toMatchObject({
+        decision: 'block',
+        reason: 'Could not detect project type (no package.json or pyproject.toml found)',
+        stopReason: 'Quality gate blocked because project type could not be detected.'
+      });
+    } finally {
+      if (originalCwd) process.chdir(originalCwd);
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Report Generation
 // ---------------------------------------------------------------------------
@@ -559,4 +607,3 @@ describe('command execution hardening', () => {
 // ---------------------------------------------------------------------------
 // Integration Tests
 // ---------------------------------------------------------------------------
-
