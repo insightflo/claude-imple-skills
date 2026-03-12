@@ -12,8 +12,8 @@
 Claude Project Team is a comprehensive framework for orchestrating AI agents across large-scale projects. It provides:
 
 - **Multi-tier governance**: Project-level controls with domain-level execution
-- **9 specialized AI agents** with clearly defined roles and permissions
-- **10 automated hooks** for standards enforcement, quality gates, and cross-domain notifications
+- **Registry-driven canonical roles and compatibility profiles** with clearly defined permissions
+- **Registry-driven hook topology** for standards enforcement, quality gates, and cross-domain notifications
 - **Interface contracts** for safe multi-domain coordination
 - **AI context management** for consistent decision-making across distributed teams
 
@@ -21,38 +21,32 @@ Designed for projects where multiple AI agents work together while maintaining a
 
 ## Key Features
 
-### Multi-Tier Architecture
+### Registry-Driven Architecture
 
 ```
-Project Level (5 agents)
-  ├── Project Manager      - Overall coordination
-  ├── Chief Architect      - Standards & VETO authority
-  ├── Chief Designer       - Design system & consistency
-  ├── QA Manager           - Quality gates & release approval
-  └── DBA                  - Database schema & standards
+Canonical roles are installed by mode from `config/topology-registry.json`
+  ├── lite     -> lead, builder, reviewer
+  ├── standard -> lite + designer, dba, security-specialist
+  └── full     -> standard + compatibility profiles (part-leader, domain-designer, domain-developer)
 
-Domain Level (per domain: 3 agents)
-  ├── Part Leader          - Domain management & decisions
-  ├── Domain Designer      - Domain-specific design
-  └── Domain Developer     - Implementation
+Active hooks are also mode-driven
+  ├── lite     -> permission-checker, policy-gate, security-scan, task-board-sync
+  ├── standard -> lite + quality-gate, contract-gate, pre-edit-impact-check
+  └── full     -> standard + docs/risk/domain/interface/standards/design/task-sync hooks
 ```
 
 ### Automated Governance
 
-10 hooks enforce standards automatically:
+The active hook set is generated from the registry for the selected install mode:
 
 | Hook | Purpose | Trigger |
 |------|---------|---------|
-| **permission-checker** | Prevents unauthorized access | Every file operation |
-| **standards-validator** | Validates code/architecture standards | Code changes |
-| **design-validator** | Ensures design consistency | Design changes |
-| **quality-gate** | Blocks merge if quality metrics unmet | Phase completion |
-| **interface-validator** | Analyzes cross-domain API impacts | Interface changes |
-| **cross-domain-notifier** | Alerts affected domains of changes | Major changes |
-| **architecture-updater** | Maintains architecture documentation | Structure changes |
-| **changelog-recorder** | Auto-generates changelog entries | Version changes |
-| **pre-edit-impact-check** | Previews change impacts before edit | Pre-edit analysis |
-| **risk-area-warning** | Highlights high-risk code areas | Risk assessment |
+| **permission-checker / policy-gate** | Auth + policy screening | Session start / every file operation |
+| **security-scan / task-board-sync** | Runtime safety + collab state sync | PostToolUse |
+| **pre-edit-impact-check / risk-gate / domain-boundary-enforcer / risk-area-warning** | Edit-time risk, boundary checks, and advisory warnings | PreToolUse |
+| **contract-gate / docs-gate / interface-validator / standards-validator / design-validator / task-sync** | Post-edit contract and standards enforcement | PostToolUse |
+| **quality-gate** | Final quality gate at stop boundary | Stop |
+| **architecture-updater / changelog-recorder / cross-domain-notifier** | Derived updates and coordination support | PostToolUse / runtime support |
 
 ### Domain Coordination
 
@@ -89,15 +83,9 @@ cd /path/to/project-team
 ./install.sh --local
 ```
 
-#### Selective Installation
+#### Maintenance Actions
 
 ```bash
-# Install only hooks
-./install.sh --hooks-only
-
-# Install only skills
-./install.sh --skills-only
-
 # Preview without changes
 ./install.sh --dry-run
 
@@ -107,57 +95,87 @@ cd /path/to/project-team
 
 ### Verification
 
-After installation, verify hooks are loaded:
+After installation, verify the generated topology and installed artifacts:
 
 ```bash
 # View installed hooks
 ls -la ~/.claude/hooks/
 
-# Check Claude Code recognizes hooks
-claude mcp list
+# Verify registry/manifest alignment
+node scripts/install-registry.js validate
 ```
+
+For closure checks, use the registry-backed commands instead of ad hoc inspection:
+
+```bash
+node scripts/install-registry.js validate
+node scripts/install-registry.js runtime-health standard ~/.claude global
+
+# Local project install target
+node scripts/install-registry.js runtime-health standard ./.claude local
+
+# Aggregated diagnostics
+node scripts/doctor.js --project-dir=. --json
+
+# Derived guidance bundle
+node scripts/guidance-bundle.js build --project-dir=. --json
+```
+
+`runtime-health` is fail-closed for missing required capabilities and non-blocking for advisory-only gaps.
+
+For runtime recovery/debugging, prefer the canonical status surfaces:
+
+```bash
+node ../skills/recover/scripts/recover-status.js --json
+node ../skills/whitebox/scripts/whitebox-summary.js --json
+```
+
+Compatibility profiles are full-mode only. If you downgrade from `full` to `lite`, the installer removes those compatibility artifacts and the acceptance harness verifies that removal.
 
 ## Project Structure
 
 ```
 project-team/
-├── agents/                      # 9 AI agent definitions
-│   ├── ProjectManager.md        # Project coordination
-│   ├── ChiefArchitect.md        # Architecture & standards
-│   ├── ChiefDesigner.md         # Design system
-│   ├── QAManager.md             # Quality management
-│   ├── DBA.md                   # Database management
-│   ├── MaintenanceAnalyst.md    # System maintenance
+├── agents/                      # Canonical roles + compatibility profiles
+│   ├── Lead.md                  # Canonical coordination role
+│   ├── Builder.md               # Canonical implementation role
+│   ├── Reviewer.md              # Canonical review role
+│   ├── Designer.md              # Standard/full design role
+│   ├── DBA.md                   # Standard/full data role
+│   ├── SecuritySpecialist.md    # Standard/full security role
 │   └── templates/               # Domain agent templates
 │       ├── PartLeader.md
 │       ├── DomainDesigner.md
 │       └── DomainDeveloper.md
 │
-├── hooks/                       # 10 JavaScript hooks
+├── hooks/                       # Registry-driven runtime hooks
 │   ├── permission-checker.js
+│   ├── policy-gate.js
+│   ├── security-scan.js
+│   ├── task-board-sync.js
+│   ├── quality-gate.js
+│   ├── contract-gate.js
+│   ├── pre-edit-impact-check.js
+│   ├── docs-gate.js
+│   ├── risk-gate.js
+│   ├── domain-boundary-enforcer.js
+│   ├── risk-area-warning.js
+│   ├── cross-domain-notifier.js
+│   ├── interface-validator.js
 │   ├── standards-validator.js
 │   ├── design-validator.js
-│   ├── quality-gate.js
-│   ├── interface-validator.js
-│   ├── cross-domain-notifier.js
+│   ├── task-sync.js
 │   ├── architecture-updater.js
 │   ├── changelog-recorder.js
-│   ├── pre-edit-impact-check.js
-│   ├── risk-area-warning.js
 │   ├── README.md                # Hook documentation
 │   ├── QUALITY_GATE.md          # QA criteria
+│   ├── lib/                     # Hook support utilities
 │   └── __tests__/               # Hook test suite
 │
 ├── templates/                   # Document templates
 │   ├── protocol/                # Collaboration protocols
 │   ├── contracts/               # Interface contracts
 │   └── adr/                     # Architecture Decision Records
-│
-├── skills/                      # 5 maintenance skills
-│   ├── architecture/            # Architecture analysis
-│   ├── changelog/               # Changelog generation
-│   ├── deps/                    # Dependency analysis
-│   └── impact/                  # Impact assessment
 │
 ├── install.sh                   # Installation script (1.0.0)
 ├── package.json                 # Node.js dependencies
@@ -173,10 +191,10 @@ project-team/
 | `AGENT_JWT_SECRET` | JWT token signing key for agent authentication | `default-secret-key-change-in-production` | **Yes (production)** |
 | `CLAUDE_HOOK_SECRET` | Shared secret for hook-to-hook communication | None | No |
 | `PERMISSION_CHECKER_SECRET` | Legacy secret for permission validation | None | No |
-| `CLAUDE_AGENT_ROLE` | Agent role identifier (legacy, for permission checker) | None | No |
+| `CLAUDE_AGENT_TOKEN` | Signed agent identity token for permission checking | None | Required for authenticated hook execution |
 | `PROJECT_TEAM_MODE` | Deployment mode: `lite`, `standard`, or `full` | `standard` | No |
 
-**⚠️ Security Note**: In production, always set `AGENT_JWT_SECRET` to a strong random value:
+**⚠️ Security Note**: In production, always set `AGENT_JWT_SECRET` to a strong random value and issue signed `CLAUDE_AGENT_TOKEN` values for active agents:
 
 ```bash
 export AGENT_JWT_SECRET="$(openssl rand -base64 32)"
@@ -184,7 +202,7 @@ export AGENT_JWT_SECRET="$(openssl rand -base64 32)"
 
 ### Global Configuration
 
-System-wide settings are stored in `~/.claude/settings.json`:
+System-wide settings are stored in `~/.claude/settings.json`, but the installer generates registry-backed hook groups rather than the simplified static structure below.
 
 ```json
 {
@@ -201,10 +219,9 @@ System-wide settings are stored in `~/.claude/settings.json`:
     "risk-area-warning"
   ],
   "permissions": {
-    "project-manager": ["read", "write:management/", "write:contracts/"],
-    "chief-architect": ["read", "veto:architecture"],
-    "chief-designer": ["read", "veto:design"],
-    "qa-manager": ["read", "veto:quality"],
+    "lead": ["read", "write:management/", "write:contracts/"],
+    "reviewer": ["read", "veto:architecture", "veto:quality"],
+    "designer": ["read", "veto:design"],
     "dba": ["read", "write:database/", "veto:schema"]
   }
 }
@@ -212,7 +229,7 @@ System-wide settings are stored in `~/.claude/settings.json`:
 
 ### Per-Project Configuration
 
-Local project settings in `.claude/settings.json`:
+Local project settings in `.claude/settings.json` should be treated as registry-managed output plus project metadata overlays, not a hand-authored team/permissions source of truth:
 
 ```json
 {
@@ -225,9 +242,9 @@ Local project settings in `.claude/settings.json`:
     ],
     "teams": {
       "accounts": {
-        "leader": "domain-lead-accounts",
-        "designer": "domain-designer-accounts",
-        "developer": "domain-dev-accounts"
+        "leader": "lead",
+        "designer": "designer",
+        "developer": "builder"
       }
     }
   }
@@ -236,61 +253,37 @@ Local project settings in `.claude/settings.json`:
 
 ## Usage Guide
 
-### For Project Managers
+### For Canonical Roles
+
+#### Lead
 
 Initialize a new project:
 
 ```bash
-claude @project-manager "Initialize project 'CustomerPlatform' with 3 domains"
+claude @lead "Initialize project 'CustomerPlatform' with 3 domains"
 ```
 
 Coordinate cross-domain tasks:
 
 ```bash
-claude @project-manager "The orders domain needs to request new fields from accounts API"
+claude @lead "The orders domain needs to request new fields from accounts API"
 ```
 
-### For Chief Architect
+#### Reviewer / Designer / DBA / Security Specialist
 
 Define architectural standards:
 
 ```bash
-claude @chief-architect "Review the API design in contracts/interfaces/"
+claude @reviewer "Review the API design in contracts/interfaces/"
 ```
 
 Enforce standards via VETO:
 
 ```bash
-claude @chief-architect "I VETO: This change violates API versioning standards"
+claude @reviewer "Block this change: it violates API versioning standards"
 ```
 
-### For QA Manager
-
-Set up quality gates:
-
-```bash
-claude @qa-manager "Define quality gates for Phase 1 release"
-```
-
-Approve or block release:
-
-```bash
-claude @qa-manager "APPROVE release v1.0.0 - all QA criteria met"
-```
-
-### For Domain Teams
-
-As Part Leader, coordinate your domain:
-
-```bash
-claude @part-leader-accounts "Coordinate sprint planning with design team"
-```
-
-Request changes from other domains:
-
-```bash
-claude @part-leader-accounts "Request: Add user_metadata field to Account API"
-```
+Compatibility profiles are available only in `full` mode when legacy domain-role naming is required.
 
 ## AI Context Management
 
@@ -313,9 +306,9 @@ Real examples of correct agent behavior:
 ### Progressive Context Loading
 
 Agents only receive context relevant to their current task:
-- Project managers see project-wide context
-- Domain developers see only their domain
-- Leads receive cross-domain views
+- Leads see project-wide context
+- Builders see only their scoped implementation/domain context
+- Reviewers receive cross-domain review views
 
 ### Checkpoint Verification
 
@@ -324,7 +317,7 @@ Agents validate decisions at critical points:
 - Before approving critical merges
 - Before releasing to production
 
-See [docs/design/PROJECT-TEAM-AGENTS.md](../docs/design/PROJECT-TEAM-AGENTS.md) for complete context management architecture.
+See [../AGENTS.md](../AGENTS.md) for the current repository-level operating guidance.
 
 ## Hooks Documentation
 
@@ -375,9 +368,9 @@ endpoints:
 
 ### Change Request Process
 
-1. Domain submits spec change in `contracts/change-requests/`
+1. The lead submits spec change in `contracts/change-requests/`
 2. Interface validator analyzes impacts
-3. Chief Architect approves/rejects
+3. Reviewer approves/rejects
 4. Affected domains are notified
 5. Change is coordinated across teams
 
@@ -385,12 +378,12 @@ endpoints:
 
 ### Scenario: New Feature Across Multiple Domains
 
-1. **Project Manager** receives request
-2. **Chief Architect** reviews technical feasibility
-3. **Part Leaders** coordinate their domain contributions
-4. **Domain Designers** ensure UI/UX consistency
-5. **Domain Developers** implement changes
-6. **QA Manager** verifies quality criteria
+1. **Lead** receives request
+2. **Reviewer** reviews technical feasibility
+3. **Compatibility profiles** coordinate domain contributions when full-mode legacy roles are enabled
+4. **Designer** ensures UI/UX consistency
+5. **Builder** implements changes
+6. **Reviewer** verifies quality criteria
 7. **Cross-domain notifier** keeps stakeholders informed
 
 ### Scenario: API Breaking Change
@@ -398,7 +391,7 @@ endpoints:
 1. **Orders Domain** proposes breaking change to Accounts API
 2. **Interface Validator** hook identifies impact
 3. **Cross-Domain Notifier** alerts Accounts team
-4. **Chief Architect** mediates resolution
+4. **Reviewer** mediates resolution
 5. **DBA** validates any schema implications
 6. **All affected domains** coordinate deprecation timeline
 
@@ -425,10 +418,12 @@ npm run update:changelog
 
 ### Monitoring Hook Performance
 
-Hooks track execution metrics in `~/.claude/hook-metrics/`:
+Prefer registry-backed and whitebox-backed health checks:
 
 ```bash
-cat ~/.claude/hook-metrics/quality-gate.json
+node scripts/install-registry.js validate
+node scripts/install-registry.js runtime-health standard ~/.claude global
+node ../skills/whitebox/scripts/whitebox-summary.js --json
 ```
 
 ## Troubleshooting
@@ -436,14 +431,14 @@ cat ~/.claude/hook-metrics/quality-gate.json
 ### Hooks Not Triggering
 
 1. Verify installation: `ls ~/.claude/hooks/`
-2. Check Claude Code recognizes hooks: `claude mcp list`
-3. Review hook logs: `tail -f ~/.claude/logs/hooks.log`
+2. Run closure validation: `node scripts/install-registry.js validate`
+3. Run runtime health: `node scripts/install-registry.js runtime-health standard ~/.claude global`
 
 ### Permission Denied Errors
 
 1. Check agent permissions in `.claude/settings.json`
 2. Verify file paths are in allowed list
-3. Contact Project Manager for access changes
+3. Contact the lead for access changes
 
 ### Interface Validator Warnings
 
@@ -469,7 +464,6 @@ To extend Claude Project Team:
 
 ## Documentation
 
-- [PROJECT-TEAM-AGENTS.md](../docs/design/PROJECT-TEAM-AGENTS.md) - Complete system design
 - [hooks/README.md](hooks/README.md) - Hook reference guide
 - [hooks/QUALITY_GATE.md](hooks/QUALITY_GATE.md) - QA criteria definition
 - [templates/protocol/](templates/protocol/) - Collaboration protocols
@@ -488,9 +482,9 @@ To extend Claude Project Team:
 For issues or questions:
 
 1. Check [hooks/README.md](hooks/README.md) for hook troubleshooting
-2. Review [docs/design/PROJECT-TEAM-AGENTS.md](../docs/design/PROJECT-TEAM-AGENTS.md) for architecture questions
+2. Review [../AGENTS.md](../AGENTS.md) and [hooks/README.md](hooks/README.md) for architecture/runtime questions
 3. Open an issue with detailed reproduction steps
-4. Contact your Project Manager for access/permission issues
+4. Contact the lead for access/permission issues
 
 ## Roadmap
 
@@ -520,23 +514,23 @@ Part of the claude-impl-tools project.
 ### Common Commands
 
 ```bash
-# Initialize a project with Project Manager
-claude @project-manager
+# Initialize a project with the canonical lead role
+claude @lead
 
 # Request architectural review
-claude @chief-architect "Review {file-path}"
+claude @reviewer "Review {file-path}"
 
 # Request design review
-claude @chief-designer "Review UI in {path}"
+claude @designer "Review UI in {path}"
 
 # Check QA readiness for release
-claude @qa-manager "Pre-release checklist for v1.0.0"
+claude @reviewer "Pre-release checklist for v1.0.0"
 
 # Manage domain
-claude @part-leader-{domain} "Status update"
+claude @lead "Status update"
 
 # Get impact analysis
-claude @chief-architect "Impact analysis: changing {component}"
+claude @reviewer "Impact analysis: changing {component}"
 ```
 
 ### Key Files to Know
@@ -551,4 +545,4 @@ claude @chief-architect "Impact analysis: changing {component}"
 
 ---
 
-**Ready to get started?** Run `./install.sh` and initialize your first project with the Project Manager.
+**Ready to get started?** Run `./install.sh`, then verify the installed topology with `node scripts/install-registry.js validate`.

@@ -40,10 +40,7 @@ chmod +x ./install.sh
 
 #### Windows (PowerShell)
 
-```powershell
-cd "C:\path\to\project-team"
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Global
-```
+Automated PowerShell installation is not currently shipped for Project Team. Use Git Bash/WSL to run `./install.sh --global`, or install from macOS/Linux.
 
 **Advantages:**
 - Hooks and skills apply to all projects
@@ -63,45 +60,24 @@ cd /path/to/your-project
 
 #### Windows (PowerShell)
 
-```powershell
-cd "C:\path\to\your-project"
-powershell -ExecutionPolicy Bypass -File "C:\path\to\project-team\scripts\install-windows.ps1" -Local
-```
+Automated PowerShell local installation is not currently shipped for Project Team. Use Git Bash/WSL to run `/path/to/project-team/install.sh --local`, or install from macOS/Linux.
 
 **Advantages:**
 - Project-specific configuration
 - No impact on other projects
 - Easier to manage per-project settings
 
-### Method 3: Selective Installation
+Installs the hook set required by the selected mode. Use the Hook Modes table below and the closure commands later in this document to inspect the exact active set instead of assuming a fixed subset or a fixed hook count.
 
-Install only specific components:
+### Hook Modes
 
-#### Hooks Only
+| Mode | Canonical roles | Required runtime hooks | Advisory-only gaps |
+|------|-----------------|------------------------|--------------------|
+| `lite` | `lead`, `builder`, `reviewer` | `permission-checker`, `policy-gate`, `security-scan`, `task-board-sync` | Everything not marked required in the capability manifest |
+| `standard` | lite + `designer`, `dba`, `security-specialist` | lite + `quality-gate`, `contract-gate`, `pre-edit-impact-check` | Full-only capabilities |
+| `full` | standard + compatibility profiles (`part-leader`, `domain-designer`, `domain-developer`) | standard + `docs-gate`, `risk-gate`, `domain-boundary-enforcer`, `architecture-updater`, `changelog-recorder`, `cross-domain-notifier`, `interface-validator`, `standards-validator`, `design-validator`, `task-sync` | None for documented capabilities |
 
-```bash
-./install.sh --hooks-only --global
-```
-
-Installs 10 JavaScript hooks that enforce standards:
-- `permission-checker.js` - Role-based access control
-- `pre-edit-impact-check.js` - Change impact analysis
-- `risk-area-warning.js` - Security risk detection
-- `standards-validator.js` - Code standard enforcement
-- `design-validator.js` - Design system compliance
-- `interface-validator.js` - Domain contract validation
-- `cross-domain-notifier.js` - Cross-domain change notifications
-- `architecture-updater.js` - Auto-update architecture docs
-- `changelog-recorder.js` - Auto-record change log
-- `quality-gate.js` - Quality gates (2 levels)
-
-#### Skills Only
-
-```bash
-./install.sh --skills-only --global
-```
-
-Installs 4 Claude Code skills:
+Installs the Project Team maintenance skills included in the current package:
 - `/impact` - Change impact analysis skill
 - `/deps` - Dependency graph visualization
 - `/changelog` - Change history query
@@ -145,34 +121,36 @@ Choose your installation mode:
 
 ### Step 3: Configure Environment Variables
 
-Set your agent role for permission checking:
+Set the project root and configure signed-token validation for permission checking:
 
 ```bash
 # Add to your shell profile (~/.bashrc, ~/.zshrc, or ~/.profile)
-export CLAUDE_AGENT_ROLE="project-manager"
 export CLAUDE_PROJECT_DIR="$(pwd)"
+export AGENT_JWT_SECRET="$(openssl rand -base64 32)"
 ```
 
-**Available Roles:**
-- `project-manager` - Full permissions
-- `chief-architect` - Architecture decisions
-- `chief-designer` - Design decisions
-- `dba` - Database changes
-- `qa-manager` - Test and quality
-- `maintenance-analyst` - Maintenance tasks
-- Domain-specific roles: `{domain}-developer`, `{domain}-designer`
+**Canonical Roles:**
+- `lead` - Coordination and approvals
+- `builder` - Primary implementation
+- `reviewer` - Review and approval flows
+- `designer` - Standard/full design review
+- `dba` - Standard/full database changes
+- `security-specialist` - Standard/full security review
+- Compatibility profiles (`part-leader`, `domain-designer`, `domain-developer`) are full-mode only
 
-### Step 4: Initialize Project
+`permission-checker` authenticates agents via signed token (`CLAUDE_AGENT_TOKEN` or `tool_input.agent_token`), not by trusting a role env var alone.
 
-In your Claude Code session, initialize the project:
+### Step 4: Inspect the installed topology
+
+In your Claude Code session, inspect the installed topology and closure state:
 
 ```
-> /project-team init
 > /impact show settings.json
 > /architecture
+> /whitebox health
 ```
 
-If initialization is successful, you'll see confirmation and available skills.
+If installation is successful, the closure checks and whitebox health surface should report the active runtime topology.
 
 ## Post-Installation Verification
 
@@ -189,6 +167,26 @@ ls -la .claude/hooks/ | grep -c "\.js"
 ls -la .claude/agents/
 ls -la .claude/skills/
 ```
+
+### Verify Closure and Runtime Health
+
+```bash
+# Registry/manifest alignment
+node project-team/scripts/install-registry.js validate
+
+# Runtime health for an installed target
+node project-team/scripts/install-registry.js runtime-health standard ~/.claude global
+
+# Runtime health for a local project install
+node project-team/scripts/install-registry.js runtime-health standard ./.claude local
+
+# Canonical recovery status
+node skills/recover/scripts/recover-status.js --json
+```
+
+`runtime-health` exits non-zero when required runtime artifacts are missing and reports them under `required.missing`. Advisory-only gaps are reported under `advisory.missing` without failing the command.
+
+For mode transitions, compatibility profiles are restored only in `full` mode. Reinstalling `lite` after `full` removes those compatibility artifacts; this behavior is covered by the acceptance harness.
 
 ### Verify Hook Permissions
 
@@ -269,7 +267,7 @@ sudo apt-get install jq
 sudo dnf install jq
 ```
 
-If you can't install jq, manually merge hook entries from `.claude/hooks/project-team-hooks.json` into `.claude/settings.json`.
+If you can't install jq, rerun `./install.sh --dry-run` to inspect the registry-backed hook configuration and merge the reported settings manually.
 
 ### Hook Issues
 
@@ -306,14 +304,15 @@ node ~/.claude/hooks/permission-checker.js < /dev/null
 **Problem:** `permission-checker.js` blocks legitimate operations.
 
 **Solution:**
-1. Verify your agent role is set:
+1. Verify your signed agent token is set:
    ```bash
-   echo $CLAUDE_AGENT_ROLE
+   echo $CLAUDE_AGENT_TOKEN
    ```
 
-2. Check role permissions in the hook file:
+2. Confirm the token secret and hook install are present:
    ```bash
-   grep -A 20 "PERMISSION_MATRIX" ~/.claude/hooks/permission-checker.js
+   echo $AGENT_JWT_SECRET
+   ls ~/.claude/hooks/permission-checker.js
    ```
 
 3. If role permissions are too restrictive, update them (requires editing hook file)
@@ -359,9 +358,9 @@ claude --version
 ```
 
 **Solution:**
-1. Reinstall skills:
+1. Re-run the installer in the desired mode:
    ```bash
-   ./install.sh --skills-only --force
+   ./install.sh --global --mode=standard --force
    ```
 
 2. Restart Claude Code
@@ -409,11 +408,7 @@ git pull origin main
 
 #### Windows
 
-```powershell
-cd "C:\path\to\project-team"
-git pull origin main
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Global -Force
-```
+Automated PowerShell upgrade is not currently shipped for Project Team. Use Git Bash/WSL to rerun `./install.sh --global --force` after updating the repository.
 
 ### Major Updates (Breaking Changes)
 
@@ -446,15 +441,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Global -
 
 #### Windows
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Uninstall
-```
+Automated PowerShell uninstall is not currently shipped for Project Team. Use Git Bash/WSL to run `./install.sh --uninstall`, or remove installed artifacts manually.
 
 ### What Gets Removed
 
-- All hook files (10 JavaScript files)
-- All agent definitions (6 main + 3 templates)
-- All skills (4 skills)
+- Registry-owned hook files for the active install mode
+- Canonical roles plus any installed compatibility profiles
+- Project Team templates and managed settings artifacts
 - All templates (ADR, protocols, interface contracts)
 
 **Note:** `settings.json` entries are NOT automatically removed to prevent accidental configuration loss. Manually remove if desired:
@@ -466,13 +459,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Uninstal
 
 ### Partial Removal
 
-To keep some components (e.g., keep global hooks but remove project-local):
-
-```bash
-# Remove only local installation
-cd /path/to/project
-./install.sh --local --uninstall
-```
+If you need local-only cleanup, remove the local `.claude/` artifacts manually and then rerun `node project-team/scripts/install-registry.js runtime-health <mode> ./.claude local` to confirm the remaining state.
 
 ## Configuration After Installation
 
@@ -484,8 +471,8 @@ Set permanent environment variables:
 
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
-export CLAUDE_AGENT_ROLE="project-manager"
 export CLAUDE_PROJECT_DIR="$(pwd)"
+export AGENT_JWT_SECRET="<strong-random-secret>"
 ```
 
 Then reload:
@@ -500,10 +487,10 @@ source ~/.zshrc
 ```powershell
 # Add to $PROFILE
 [System.Environment]::SetEnvironmentVariable(
-    'CLAUDE_AGENT_ROLE',
-    'project-manager',
+    'AGENT_JWT_SECRET',
+    '<strong-random-secret>',
     'User'
-)
+  )
 ```
 
 ### Project-Specific Settings
@@ -541,18 +528,13 @@ riskAreas:
     - src/database/
 ```
 
-## Installation Logs
+## Installation Diagnostics
 
-Installation logs are created in:
+Use registry-backed diagnostics instead of log scraping:
 
-```
-~/.claude/install.log          # Global installation
-./.claude/install.log          # Local installation
-```
-
-View logs:
 ```bash
-tail -f ~/.claude/install.log
+node project-team/scripts/install-registry.js validate
+node project-team/scripts/install-registry.js runtime-health standard ~/.claude global
 ```
 
 ## Offline Installation
@@ -576,9 +558,9 @@ If you need to install without internet:
 
 ## Next Steps After Installation
 
-1. **Set Your Agent Role:**
+1. **Set Your Agent Token:**
    ```bash
-   export CLAUDE_AGENT_ROLE="your-role"
+   export CLAUDE_AGENT_TOKEN="<signed-token-for-your-canonical-role>"
    ```
 
 2. **Read the Usage Guide:**

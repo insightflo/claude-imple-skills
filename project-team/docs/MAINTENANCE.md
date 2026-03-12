@@ -651,7 +651,7 @@ git pull
 
 ### Communication Templates
 
-Maintained in `.claude/templates/protocol/`:
+Maintained from `project-team/templates/protocol/` and emitted through the canonical `.claude/collab/` artifact plane:
 
 - `handoff.md` - Task handoff between agents
 - `request.md` - Request work from another agent
@@ -661,7 +661,7 @@ Copy to use:
 
 ```bash
 # Start a request
-cp .claude/templates/protocol/request.md .claude/requests/design-system-update.md
+cp project-team/templates/protocol/request.md .claude/collab/requests/design-system-update.md
 vim .claude/requests/design-system-update.md
 ```
 
