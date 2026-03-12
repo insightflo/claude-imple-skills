@@ -1,7 +1,7 @@
 ---
 name: statusline
-description: TASKS.md 진행 상황을 Claude Code 상태바 Line 3에 표시합니다.
-version: 1.0.0
+description: TASKS.md 진행 상황을 Claude Code 상태바 Line 3에 실시간 표시합니다. 프로젝트 진행 현황을 한눈에 확인하고 싶을 때, 태스크 추적이 필요할 때 사용하세요. "진행률 보여줘", "상태바 설정", "태스크 현황" 요청 시 안내. /statusline 트리거.
+version: 1.1.0
 ---
 
 # Statusline — TASKS.md Progress

@@ -1,12 +1,14 @@
 ---
 name: multi-ai-run
-description: 에이전트 역할별로 최적의 AI 모델(Claude/Gemini/Codex)을 라우팅하여 실행합니다.
+description: 에이전트 역할별로 최적의 AI 모델(Claude/Gemini/Codex)을 라우팅하여 실행합니다. 코드 작성에 Codex, 디자인에 Gemini, 기획/조율에 Claude를 자동 배정합니다. "Codex로 코드 작성", "Gemini로 디자인", "다른 AI 사용", "모델 라우팅" 요청 시 반드시 사용하세요. /multi-ai-run 트리거.
 triggers:
   - /multi-ai-run
   - 멀티 AI 실행
   - 모델 라우팅
   - AI 분업
-version: 1.1.0
+  - Codex로
+  - Gemini로
+version: 1.2.0
 ---
 
 # Multi-AI Run

@@ -1,12 +1,14 @@
 ---
 name: tasks-init
-description: TASKS.md 스캐폴딩을 생성합니다. Standalone 독립 실행.
+description: TASKS.md 스캐폴딩을 대화형으로 생성합니다. 프로젝트 시작 시, TASKS.md가 없을 때, 태스크 구조화가 필요할 때 반드시 사용하세요. "태스크 만들어줘", "TASKS.md 생성", "프로젝트 시작", "할일 정리" 요청에 즉시 실행. Standalone 독립 실행. /tasks-init 트리거.
 triggers:
   - /tasks-init
   - 태스크 초기화
   - TASKS 만들어줘
   - 태스크 생성
-version: 2.0.0
+  - 프로젝트 시작
+  - 할일 정리
+version: 2.1.0
 ---
 
 # Tasks Init (Standalone)

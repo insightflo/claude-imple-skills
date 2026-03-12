@@ -1,9 +1,9 @@
 ---
 name: context-optimize
-description: 긴 컨텍스트 최적화 - H2O 패턴으로 핵심 정보 추출, 압축, 요약. 컨텍스트 과부하 시 사용.
+description: 긴 컨텍스트 최적화 - H2O 패턴으로 핵심 정보 추출, 압축, 요약. 문서가 너무 길 때, 컨텍스트 윈도우 부족할 때, 여러 파일 종합 시 반드시 사용하세요. "압축해줘", "요약해줘", "문서가 너무 길어", "context overflow", "컨텍스트 정리" 요청에 즉시 실행. /compress 트리거.
 trigger: /compress, /optimize, "컨텍스트 압축", "문서 압축", "긴 문서 요약", "context overflow"
-version: 1.0.0
-updated: 2026-03-03
+version: 1.1.0
+updated: 2026-03-12
 ---
 
 # Context Optimize Skill
