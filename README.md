@@ -159,6 +159,37 @@ Automatic validations that run before/after file edits:
 
 See `project-team/docs/MODES.md` for details.
 
+### Enabling Agent Teams
+
+Agent Teams requires the experimental feature flag. Install with `--mode=team` to auto-configure:
+
+```bash
+cd project-team
+./install.sh --local --mode=team
+```
+
+This adds to your `.claude/settings.json`:
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "hooks": {
+    "TeammateIdle": [...],
+    "TaskCompleted": [...]
+  }
+}
+```
+
+Or manually add the env flag to `.claude/settings.json` or `.claude/settings.local.json`:
+```json
+{
+  "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
+}
+```
+
+Agent definitions (`.claude/agents/team-lead.md`, `architecture-lead.md`, `qa-lead.md`, `design-lead.md`) are included in the repository and activated automatically when the flag is set.
+
 ---
 
 ## Recommended Workflow

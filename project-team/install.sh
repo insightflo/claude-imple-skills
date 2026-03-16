@@ -92,6 +92,7 @@ ${BOLD}Configuration Mode:${NC}
   --mode=lite            Same as above
   --mode standard        Lite + specialists + added gates
   --mode full            Standard + compatibility profile surfaces
+  --mode team            Agent Teams + governance hooks + AGENT_TEAMS env flag
   (no flag)              Interactive install defaults to lite
 
 ${BOLD}Selective Install:${NC}
@@ -108,6 +109,7 @@ ${BOLD}Examples:${NC}
   $(basename "$0") --local --mode lite
   $(basename "$0") --global --mode=standard
   $(basename "$0") --local --mode full --dry-run
+  $(basename "$0") --local --mode=team        # Agent Teams + governance hooks
   $(basename "$0") --global --uninstall
 EOF
 }
@@ -616,7 +618,7 @@ merge_settings_json() {
         original="$(<"$TARGET_SETTINGS")"
     fi
 
-    existing_output="$(TARGET_SETTINGS="$TARGET_SETTINGS" ORIGINAL_JSON="$original" PREVIOUS_MANAGED_COMMANDS_JSON="$PREVIOUS_MANAGED_COMMANDS_JSON" CURRENT_HOOK_CONFIG_JSON="$CURRENT_HOOK_CONFIG_JSON" node - <<'NODE'
+    existing_output="$(TARGET_SETTINGS="$TARGET_SETTINGS" ORIGINAL_JSON="$original" PREVIOUS_MANAGED_COMMANDS_JSON="$PREVIOUS_MANAGED_COMMANDS_JSON" CURRENT_HOOK_CONFIG_JSON="$CURRENT_HOOK_CONFIG_JSON" INSTALL_MODE_NAME="$MODE" node - <<'NODE'
 function parseJson(text, fallback) {
   if (!text) return fallback;
   try {
@@ -665,6 +667,14 @@ if (Object.keys(outputHooks).length > 0) {
   result.hooks = outputHooks;
 } else {
   delete result.hooks;
+}
+
+// Agent Teams 모드일 때 실험적 기능 플래그 추가
+if (process.env.INSTALL_MODE_NAME === 'team') {
+  result.env = { ...(result.env || {}), CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' };
+} else if (result.env && result.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) {
+  delete result.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+  if (Object.keys(result.env).length === 0) delete result.env;
 }
 
 const originalSerialized = `${JSON.stringify(parseJson(process.env.ORIGINAL_JSON, {}), null, 2)}\n`;

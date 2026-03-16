@@ -161,6 +161,37 @@ team-lead (PM 리더)
 
 자세한 내용은 `project-team/docs/MODES.md` 참조.
 
+### Agent Teams 활성화
+
+Agent Teams는 실험적 기능 플래그가 필요합니다. `--mode=team`으로 설치하면 자동 설정됩니다:
+
+```bash
+cd project-team
+./install.sh --local --mode=team
+```
+
+이 명령은 `.claude/settings.json`에 다음을 추가합니다:
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "hooks": {
+    "TeammateIdle": [...],
+    "TaskCompleted": [...]
+  }
+}
+```
+
+또는 `.claude/settings.json`이나 `.claude/settings.local.json`에 직접 추가:
+```json
+{
+  "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
+}
+```
+
+에이전트 정의 파일 (`.claude/agents/team-lead.md`, `architecture-lead.md`, `qa-lead.md`, `design-lead.md`)은 저장소에 포함되어 있으며, 플래그 설정 시 자동 활성화됩니다.
+
 ---
 
 ## 권장 워크플로우
