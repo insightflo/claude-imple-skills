@@ -1,7 +1,6 @@
 ---
 name: governance-setup
-description: 대규모 프로젝트의 거버넌스 팀(PM, Architect, Designer, QA, DBA) 또는 Mini-PRD(소규모)를 지원합니다.
-trigger: /governance-setup, "거버넌스 구성", "프로젝트 팀 셋업"
+description: 대규모 프로젝트의 Agent Teams 거버넌스 (team-lead + architecture/qa/design leads) 또는 Mini-PRD(소규모)를 설정합니다. 프로젝트 시작 시, 팀 구성이 필요할 때, "거버넌스 구성", "프로젝트 팀 셋업", "에이전트 팀 만들어줘" 요청에 반드시 사용하세요.
 version: 1.4.0
 updated: 2026-03-03
 ---

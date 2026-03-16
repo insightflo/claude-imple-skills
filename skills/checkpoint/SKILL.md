@@ -1,7 +1,6 @@
 ---
 name: checkpoint
-description: 태스크/PR 완료 시 즉시 코드 리뷰. Git Diff 자동 감지 + TASKS.md 컨텍스트 + Hook 게이트 + AI 멀티 리뷰.
-trigger: /checkpoint, "체크포인트", "리뷰해줘", "코드 검토"
+description: 태스크/PR 완료 시 즉시 코드 리뷰. Git Diff 자동 감지 + TASKS.md 컨텍스트 + Hook 게이트 + AI 멀티 리뷰. 태스크 완료 후, 커밋 전, "체크포인트", "리뷰해줘", "코드 검토", "변경사항 확인" 요청에 반드시 사용하세요.
 version: 1.0.0
 ---
 

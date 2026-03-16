@@ -1,6 +1,6 @@
 ---
 name: tasks-migrate
-description: 레거시 태스크 파일을 root TASKS.md로 통합
+description: 레거시 태스크 파일(docs/planning/06-tasks.md 등)을 root TASKS.md로 통합합니다. 기존 태스크 파일이 여러 곳에 분산되어 있을 때, "태스크 마이그레이션", "06-tasks를 TASKS로", "태스크 통합" 요청에 반드시 사용하세요.
 triggers:
   - /tasks-migrate
   - 태스크 마이그레이션

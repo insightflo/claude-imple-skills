@@ -1,7 +1,6 @@
 ---
 name: security-review
-description: OWASP TOP 10 기반 보안 취약점 점검. 시크릿 노출, 인젝션, 인증/인가, 공급망(의존성) 위험, 보안 설정/헤더, 로깅/모니터링을 정적 분석으로 점검합니다.
-trigger: /security-review, "보안 검사", "security review", "취약점 점검"
+description: OWASP TOP 10 기반 보안 취약점 점검. 시크릿 노출, 인젝션, 인증/인가, 공급망(의존성) 위험, 보안 설정/헤더, 로깅/모니터링을 정적 분석으로 점검합니다. 배포 전, PR 머지 전, auth/payment/billing 코드 수정 시 반드시 사용하세요. "보안 검사", "취약점 점검", "시크릿 노출 확인" 요청에 즉시 실행.
 version: 1.1.0
 updated: 2026-03-02
 ---
