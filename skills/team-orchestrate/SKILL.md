@@ -145,6 +145,10 @@ Agent(
 
     You coordinate and verify — do NOT implement code directly.
 
+    CONTEXT MANAGEMENT:
+    If a file is over 500 lines, compress before reading:
+      Bash('node ~/.claude/claude-impl-tools/project-team/services/contextOptimizer.js optimize <file> --heavy-count=15')
+
     DECISION RECORDS (mandatory):
     When you make a technical decision (API design, architecture choice,
     technology selection, trade-off resolution), write it to:
@@ -193,6 +197,10 @@ Agent(
        SendMessage(to='architecture-lead', message='Task #N done. Tests: X/X passed.')
     7. Wait for domain-lead verification before checking TaskList for next task
     8. Do NOT call TaskUpdate(status='completed') yourself — domain-lead does it after verification
+
+    CONTEXT MANAGEMENT:
+    If a file is over 500 lines, compress before reading:
+      Bash('node ~/.claude/claude-impl-tools/project-team/services/contextOptimizer.js optimize <file> --heavy-count=15')
 
     RULES:
     - NEVER skip tests. Every task must have passing tests before reporting done.
@@ -259,6 +267,19 @@ SendMessage(to = "design-lead", message = "Tasks assigned. Coordinate frontend-b
 - Receive messages from domain-leads automatically (no polling)
 - Check TaskList periodically
 - Reassign stuck tasks via TaskUpdate
+
+**Context management (auto):**
+When you need to read long files (specs, plans, large source) or your context feels overloaded,
+compress them before reading:
+```bash
+node project-team/services/contextOptimizer.js optimize <file> --heavy-count=15
+```
+Include this hint in teammate spawn prompts so domain-leads and workers also use it:
+```
+CONTEXT MANAGEMENT:
+If a file is over 500 lines, compress before reading:
+  Bash('node ~/.claude/claude-impl-tools/project-team/services/contextOptimizer.js optimize <file> --heavy-count=15')
+```
 
 **When mediating cross-domain conflicts:**
 1. Collect positions from both domain-leads via SendMessage
