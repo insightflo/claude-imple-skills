@@ -1,93 +1,93 @@
 # Impact Analyzer - Output Formats
 
-> 이 파일은 `/impact` 스킬의 출력 형식 상세 정의입니다.
+> This file defines the detailed output formats for the `/impact` skill.
 
 ---
 
-## 표준 리포트
+## Standard Report
 
 ```
 ===========================================================
-  Impact Analysis: <파일명>
+  Impact Analysis: <filename>
 ===========================================================
 
   Risk Level: <CRITICAL|HIGH|MEDIUM|LOW>
-  <위험도 설명>
+  <risk level description>
 
 -----------------------------------------------------------
-  Direct Dependents (이 파일을 import하는 곳)
+  Direct Dependents (files that import this file)
 -----------------------------------------------------------
-  - <파일경로>:<라인번호>
-  - <파일경로>:<라인번호>
-  (없으면: None found)
+  - <file-path>:<line-number>
+  - <file-path>:<line-number>
+  (if none: None found)
 
 -----------------------------------------------------------
-  Indirect Dependents (API 호출 관계)
+  Indirect Dependents (API call relationships)
 -----------------------------------------------------------
-  - [<METHOD> <경로>] <호출하는 파일>
-  (없으면: None found)
+  - [<METHOD> <path>] <calling file>
+  (if none: None found)
 
 -----------------------------------------------------------
   Affected Domains
 -----------------------------------------------------------
-  - <도메인명> (직접)
-  - <도메인명> (간접 - API 호출)
+  - <domain-name> (direct)
+  - <domain-name> (indirect - via API call)
 
 -----------------------------------------------------------
   Related Tests
 -----------------------------------------------------------
-  - <테스트 파일 경로>
-  (없으면: None found - 테스트 작성을 권장합니다!)
+  - <test file path>
+  (if none: None found - writing tests is strongly recommended!)
 
 -----------------------------------------------------------
   Recommended Actions
 -----------------------------------------------------------
-  1. 테스트 실행: <테스트 명령어>
-  2. 리뷰어: <권장 검토자>
-  3. <추가 권장 사항>
+  1. Run tests: <test command>
+  2. Reviewer: <recommended reviewer>
+  3. <additional recommendations>
 
 ===========================================================
 ```
 
 ---
 
-## CRITICAL/HIGH 위험도 추가 출력
+## Additional Output for CRITICAL/HIGH Risk
 
 ```
 -----------------------------------------------------------
   [WARNING] CRITICAL Risk Area
 -----------------------------------------------------------
-  금융/보안 핵심 영역입니다.
+  This is a core financial/security area.
 
-  필수 확인 사항:
-  [ ] 변경 사유가 명확한가?
-  [ ] 영향 범위를 모두 파악했는가?
-  [ ] 테스트 케이스가 준비되었는가?
-  [ ] 롤백 계획이 있는가?
+  Required checks:
+  [ ] Is the reason for the change clearly defined?
+  [ ] Has the full scope of impact been identified?
+  [ ] Are test cases prepared?
+  [ ] Is a rollback plan in place?
 
-  필수 리뷰어: QA Manager, Chief Architect
+  Required reviewers: QA Manager, Chief Architect
 ```
 
 ---
 
-## 위험도 기준표
+## Risk Level Reference Table
 
-| 위험도 | 패턴 | 설명 | 필수 조치 |
-|--------|------|------|-----------|
-| **CRITICAL** | `payment`, `billing`, `auth`, `security`, `encryption`, `crypto`, `jwt`, `oauth`, `password`, `credential`, `session_manager`, `token_manager` | 금융/보안 핵심 영역 | 전체 테스트 + 커버리지 + 리뷰 필수 |
-| **HIGH** | `services/*.(py|js|ts)`, `core/`, `middleware/`, `shared/`, `infrastructure/`, `base_(service|model|repository)` | 핵심 비즈니스 로직 | 관련 테스트 스위트 실행 |
-| **MEDIUM** | `api/`, `routes/`, `models/`, `schemas/`, `controllers/`, `repositories/`, `migrations/`, `entities/`, `domain/`, `database/` | 인터페이스/데이터 모델 | 계약 호환성 확인 |
-| **LOW** | `tests/`, `utils/`, `config/`, `docs/`, `fixtures/` 등 | 유틸리티/테스트 | 표준 리뷰 |
+| Risk Level   | Patterns | Description | Required Actions |
+|--------------|----------|-------------|------------------|
+| **CRITICAL** | `payment`, `billing`, `auth`, `security`, `encryption`, `crypto`, `jwt`, `oauth`, `password`, `credential`, `session_manager`, `token_manager` | Core financial/security area | Full tests + coverage + review mandatory |
+| **HIGH** | `services/*.(py|js|ts)`, `core/`, `middleware/`, `shared/`, `infrastructure/`, `base_(service|model|repository)` | Core business logic | Run related test suites |
+| **MEDIUM** | `api/`, `routes/`, `models/`, `schemas/`, `controllers/`, `repositories/`, `migrations/`, `entities/`, `domain/`, `database/` | Interface/data model | Verify contract compatibility |
+| **LOW** | `tests/`, `utils/`, `config/`, `docs/`, `fixtures/`, etc. | Utilities/tests | Standard review |
 
 ---
 
-## 권장 검토자 결정
+## Recommended Reviewer Determination
 
-| 위험도 | 권장 검토자 |
-|--------|-------------|
+| Risk Level   | Recommended Reviewer |
+|--------------|----------------------|
 | **CRITICAL** | QA Manager + Chief Architect |
-| **HIGH** | Part Leader (해당 도메인) |
-| **MEDIUM** | Domain Developer (해당 도메인) |
-| **LOW** | 일반 코드 리뷰 |
+| **HIGH** | Part Leader (of the affected domain) |
+| **MEDIUM** | Domain Developer (of the affected domain) |
+| **LOW** | Standard code review |
 
-**교차 도메인 영향 시**: 영향 받는 모든 도메인의 Part Leader를 추가합니다.
+**When cross-domain impact is detected**: Add the Part Leader of every affected domain.

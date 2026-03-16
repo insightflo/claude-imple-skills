@@ -1,10 +1,10 @@
 # Changelog Viewer - Usage Examples
 
-> 이 파일은 `/changelog` 스킬의 사용 예시입니다.
+> This file contains usage examples for the `/changelog` skill.
 
 ---
 
-## 예시 1: 기본 조회
+## Example 1: Basic Query
 
 ```
 > /changelog
@@ -14,10 +14,10 @@
 ===========================================================
 
   Period: 2026-02-01 ~ 2026-02-07
-  Total: 15건
+  Total: 15 entries
 
 -----------------------------------------------------------
-  2026-02-07 (3건)
+  2026-02-07 (3 entries)
 -----------------------------------------------------------
   [Feature] Create discount_service in order
      domain: order
@@ -34,14 +34,14 @@
      files:  order/services/order_service.py
      impact: none
 
-  ... (12건 더)
+  ... (12 more)
 
 ===========================================================
 ```
 
 ---
 
-## 예시 2: 도메인 + 기간 필터
+## Example 2: Domain + Date Range Filter
 
 ```
 > /changelog --domain order --last 7d
@@ -51,10 +51,10 @@
 ===========================================================
 
   Period: 2026-02-01 ~ 2026-02-07
-  Total: 5건 (order domain)
+  Total: 5 entries (order domain)
 
 -----------------------------------------------------------
-  2026-02-07 (2건)
+  2026-02-07 (2 entries)
 -----------------------------------------------------------
   [Feature] Create discount_service in order
      files:  order/services/discount_service.py
@@ -66,7 +66,7 @@
      impact: none
 
 -----------------------------------------------------------
-  2026-02-05 (3건)
+  2026-02-05 (3 entries)
 -----------------------------------------------------------
   [Feature] Add new functionality to order_api in order
      files:  order/api/router.py
@@ -85,7 +85,7 @@
 
 ---
 
-## 예시 3: 버그 수정 이력만 조회
+## Example 3: Bug Fix History Only
 
 ```
 > /changelog --type fix
@@ -95,7 +95,7 @@
 ===========================================================
 
   Period: 2026-02-01 ~ 2026-02-07
-  Total: 6건 (type: fix)
+  Total: 6 entries (type: fix)
 
 -----------------------------------------------------------
   2026-02-07
@@ -118,14 +118,14 @@
      files:  src/middleware/auth_middleware.py
      impact: API endpoint modification
 
-  ... (3건 더)
+  ... (3 more)
 
 ===========================================================
 ```
 
 ---
 
-## 예시 4: 변경 통계
+## Example 4: Change Statistics
 
 ```
 > /changelog --stats
@@ -135,36 +135,36 @@
 ===========================================================
 
   Period: 2026-02-01 ~ 2026-02-07
-  Total changes: 24건
+  Total changes: 24 entries
 
 -----------------------------------------------------------
   By Domain
 -----------------------------------------------------------
-  order       ############ 12건 (50.0%)
-  payment     ######       6건 (25.0%)
-  auth        ###          3건 (12.5%)
-  root        ##           2건 ( 8.3%)
-  member      #            1건 ( 4.2%)
+  order       ############ 12 entries (50.0%)
+  payment     ######        6 entries (25.0%)
+  auth        ###           3 entries (12.5%)
+  root        ##            2 entries ( 8.3%)
+  member      #             1 entry   ( 4.2%)
 
 -----------------------------------------------------------
   By Type
 -----------------------------------------------------------
-  feature     ############ 12건 (50.0%)
-  fix         ######       6건 (25.0%)
-  refactor    ###          3건 (12.5%)
-  test        ##           2건 ( 8.3%)
-  docs        #            1건 ( 4.2%)
+  feature     ############ 12 entries (50.0%)
+  fix         ######        6 entries (25.0%)
+  refactor    ###           3 entries (12.5%)
+  test        ##            2 entries ( 8.3%)
+  docs        #             1 entry   ( 4.2%)
 
 -----------------------------------------------------------
   By Day
 -----------------------------------------------------------
-  02-07       ########     8건
-  02-06       #####        5건
-  02-05       ####         4건
-  02-04       ###          3건
-  02-03       ##           2건
-  02-02       #            1건
-  02-01       #            1건
+  02-07       ########     8 entries
+  02-06       #####        5 entries
+  02-05       ####         4 entries
+  02-04       ###          3 entries
+  02-03       ##           2 entries
+  02-02       #            1 entry
+  02-01       #            1 entry
 
 -----------------------------------------------------------
   Most Changed Files (Top 5)
@@ -180,7 +180,7 @@
 
 ---
 
-## 예시 5: 도메인별 통계
+## Example 5: Per-Domain Statistics
 
 ```
 > /changelog --domain payment --stats
@@ -190,22 +190,22 @@
 ===========================================================
 
   Period: 2026-02-01 ~ 2026-02-07
-  Total changes: 6건 (payment domain)
+  Total changes: 6 entries (payment domain)
 
 -----------------------------------------------------------
   By Type
 -----------------------------------------------------------
-  fix         ###          3건 (50.0%)
-  feature     ##           2건 (33.3%)
-  refactor    #            1건 (16.7%)
+  fix         ###          3 entries (50.0%)
+  feature     ##           2 entries (33.3%)
+  refactor    #            1 entry   (16.7%)
 
 -----------------------------------------------------------
   By Day
 -----------------------------------------------------------
-  02-07       ##           2건
-  02-06       ##           2건
-  02-05       #            1건
-  02-03       #            1건
+  02-07       ##           2 entries
+  02-06       ##           2 entries
+  02-05       #            1 entry
+  02-03       #            1 entry
 
 -----------------------------------------------------------
   Most Changed Files (Top 3)
@@ -219,7 +219,7 @@
 
 ---
 
-## 예시 6: 특정 파일의 변경 이력
+## Example 6: Change History for a Specific File
 
 ```
 > /changelog --file discount_service.py
@@ -229,7 +229,7 @@
 ===========================================================
 
   Period: all available
-  Total: 4건 (file: discount_service.py)
+  Total: 4 entries (file: discount_service.py)
 
 -----------------------------------------------------------
   Change History

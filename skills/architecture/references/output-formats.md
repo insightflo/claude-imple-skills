@@ -1,17 +1,17 @@
 # Architecture Map - Output Formats
 
-> 이 파일은 `/architecture` 스킬의 출력 형식 상세 정의입니다.
+> This file defines the detailed output formats for the `/architecture` skill.
 
 ---
 
-## 전체 아키텍처 개요 (`/architecture`)
+## Full Architecture Overview (`/architecture`)
 
 ```
 ===========================================================
   Architecture Overview
 ===========================================================
 
-  Project: <프로젝트명>
+  Project: <project-name>
   Generated: <YYYY-MM-DD HH:MM>
 
 -----------------------------------------------------------
@@ -74,7 +74,7 @@
 
 ---
 
-## 도메인 구조 (`/architecture domains`)
+## Domain Structure (`/architecture domains`)
 
 ```
 ===========================================================
@@ -120,7 +120,7 @@
 
 ---
 
-## API 카탈로그 (`/architecture api`)
+## API Catalog (`/architecture api`)
 
 ```
 ===========================================================
@@ -149,7 +149,7 @@
 
 ---
 
-## 레이어 구조 (`/architecture layers`)
+## Layer Structure (`/architecture layers`)
 
 ```
 ===========================================================
@@ -191,7 +191,7 @@
 
   | Severity | File                          | Violation                     |
   |----------|-------------------------------|-------------------------------|
-  | HIGH     | models/order.py:L15           | imports from services/         |
+  | HIGH     | models/order.py:L15           | imports from services/        |
 
   Clean Architecture Compliance: 97%
 
@@ -200,7 +200,7 @@
 
 ---
 
-## 기술 스택 (`/architecture tech`)
+## Technology Stack (`/architecture tech`)
 
 ```
 ===========================================================
@@ -244,15 +244,15 @@
 
 ---
 
-## 특정 도메인 상세 (`/architecture <도메인>`)
+## Specific Domain Detail (`/architecture <domain>`)
 
 ```
 ===========================================================
-  Domain Detail: <도메인명>
+  Domain Detail: <domain-name>
 ===========================================================
 
-  Domain: <도메인명>
-  Path: <도메인 경로>
+  Domain: <domain-name>
+  Path: <domain-path>
   Files: <N>
   APIs: <N>
 
@@ -260,7 +260,7 @@
   Directory Structure
 -----------------------------------------------------------
 
-  <도메인명>/
+  <domain-name>/
   +-- api/
   |   +-- router.py            (route, 6 endpoints)
   +-- services/

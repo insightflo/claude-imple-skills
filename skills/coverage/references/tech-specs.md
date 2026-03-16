@@ -1,12 +1,12 @@
 # Coverage Tech Specs
 
-> 언어별 테스트 러너 설정 및 명령어
+> Test runner configuration and commands by language
 
 ## Python (pytest-cov)
 
-### 설정 파일
+### Configuration File
 
-**`pytest.ini` 또는 `pyproject.toml`:**
+**`pytest.ini` or `pyproject.toml`:**
 
 ```ini
 [tool:pytest]
@@ -14,19 +14,19 @@ addopts = --cov=app --cov-report=html --cov-report=term-missing
 testpaths = tests
 ```
 
-### 명령어
+### Commands
 
 ```bash
-# 기본 커버리지
+# Basic coverage
 pytest --cov=app
 
-# JSON 리포트 생성
+# Generate JSON report
 pytest --cov=app --cov-report=json
 
-# HTML 리포트
+# HTML report
 pytest --cov=app --cov-report=html
 
-# 캐시 초기화 후 실행
+# Run after clearing cache
 pytest --cov=app --cov-erase
 ```
 
@@ -34,7 +34,7 @@ pytest --cov=app --cov-erase
 
 ## Node.js (Vitest)
 
-### 설정 파일
+### Configuration File
 
 **`vitest.config.ts`:**
 
@@ -52,13 +52,13 @@ export default defineConfig({
 });
 ```
 
-### 명령어
+### Commands
 
 ```bash
-# 커버리지 리포트
+# Coverage report
 npm run test -- --coverage
 
-# JSON 리포트
+# JSON report
 npm run test -- --coverage --coverage.reporter=json
 ```
 
@@ -66,7 +66,7 @@ npm run test -- --coverage --coverage.reporter=json
 
 ## Node.js (Jest)
 
-### 설정 파일
+### Configuration File
 
 **`jest.config.js`:**
 
@@ -78,7 +78,7 @@ module.exports = {
 };
 ```
 
-### 명령어
+### Commands
 
 ```bash
 npm test -- --coverage
@@ -88,19 +88,19 @@ npm test -- --coverage
 
 ## Rust (cargo-tarpaulin)
 
-### 설치
+### Installation
 
 ```bash
 cargo install cargo-tarpaulin
 ```
 
-### 명령어
+### Commands
 
 ```bash
-# JSON 리포트
+# JSON report
 cargo tarpaulin --out Json --output-dir coverage
 
-# 텍스트 리포트
+# Text report
 cargo tarpaulin --out Stdout
 ```
 
@@ -108,41 +108,41 @@ cargo tarpaulin --out Stdout
 
 ## Go
 
-### 도구
+### Tool
 
 `go test` + `go-cover`
 
-### 명령어
+### Commands
 
 ```bash
-# 커버리지 프로필 생성
+# Generate coverage profile
 go test -coverprofile=coverage.out ./...
 
-# 텍스트 리포트
+# Text report
 go tool cover -func=coverage.out
 
-# HTML 리포트
+# HTML report
 go tool cover -html=coverage.out
 ```
 
 ---
 
-## 저장 구조
+## Storage Structure
 
-커버리지 데이터 저장 위치:
+Location where coverage data is stored:
 
 ```
 project-root/
 ├── .claude/
 │   ├── coverage/
-│   │   ├── coverage.json         # 현재 커버리지 데이터
-│   │   ├── coverage-history.json # 커버리지 변화 이력
-│   │   └── coverage-report.md    # 이전 분석 리포트
+│   │   ├── coverage.json         # Current coverage data
+│   │   ├── coverage-history.json # Coverage change history
+│   │   └── coverage-report.md    # Previous analysis report
 │   │
 │   └── cache/
-│       └── coverage-cache/       # 계산 캐시
+│       └── coverage-cache/       # Calculation cache
 │
-├── coverage/                      # 도구별 생성 디렉토리
+├── coverage/                      # Tool-generated directories
 │   ├── .coverage               # Python
 │   ├── htmlcov/               # Python HTML
 │   ├── lcov-report/           # JavaScript HTML
@@ -153,45 +153,45 @@ project-root/
 
 ---
 
-## 주의사항
+## Caveats
 
-### 캐싱 문제
+### Caching Issues
 
-커버리지는 이전 실행 결과를 캐시할 수 있습니다.
+Coverage may cache results from previous runs.
 
 ```bash
-# 캐시 초기화 후 실행
+# Run after clearing cache
 pytest --cov=app --cov-erase
 ```
 
-### 제외 규칙 확인
+### Exclusion Rules
 
-설정에서 제외된 파일/디렉토리는 커버리지에서 빠집니다.
+Files and directories excluded in configuration will be omitted from coverage.
 
 ```bash
-# 설정 파일 확인
+# Check configuration file
 grep -E "omit|exclude" pytest.ini pyproject.toml package.json
 ```
 
-### 병렬 테스트
+### Parallel Tests
 
-병렬 실행 시 커버리지 결과가 부정확할 수 있습니다.
+Coverage results may be inaccurate when running tests in parallel.
 
 ```bash
-# 순차 실행 권장
+# Sequential execution is recommended
 pytest --cov=app -n 0
 ```
 
-### 생성된 코드
+### Generated Code
 
-자동 생성된 코드(migrations, 프로토콜 버퍼 등)는 일반적으로 제외됩니다.
+Auto-generated code (migrations, protocol buffers, etc.) is typically excluded.
 
 ---
 
-## 참고 자료
+## References
 
-| 도구 | 문서 |
-|------|------|
+| Tool | Documentation |
+|------|---------------|
 | pytest-cov | https://pytest-cov.readthedocs.io/ |
 | Vitest coverage | https://vitest.dev/coverage.html |
 | Jest coverage | https://jestjs.io/docs/coverage |

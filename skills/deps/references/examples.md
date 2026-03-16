@@ -1,10 +1,10 @@
 # Dependency Graph - Usage Examples
 
-> 이 파일은 `/deps` 스킬의 사용 예시입니다.
+> This file contains usage examples for the `/deps` skill.
 
 ---
 
-## 예시 1: 전체 도메인 의존성 분석
+## Example 1: Full Project Dependency Analysis
 
 ```
 > /deps
@@ -13,10 +13,10 @@
   Dependency Graph: Full Project
 ===========================================================
 
-  Scope: 전체 프로젝트
-  Domains Found: 5개 (order, member, product, payment, auth)
-  Total Cross-Domain Dependencies: 8개
-  Circular Dependencies: 없음
+  Scope: Full project
+  Domains Found: 5 (order, member, product, payment, auth)
+  Total Cross-Domain Dependencies: 8
+  Circular Dependencies: None
 
 -----------------------------------------------------------
   Mermaid Diagram
@@ -45,23 +45,23 @@
   Domain Summary
 -----------------------------------------------------------
 
-  | Domain   | Ca | Ce | I    | Grade    | Assessment           |
-  |----------|----|----|------|----------|----------------------|
-  | auth     | 3  | 0  | 0.00 | Loose    | 가장 안정적 (기반 모듈) |
-  | product  | 2  | 0  | 0.00 | Loose    | 안정적 (순수 도메인)    |
-  | member   | 2  | 1  | 0.33 | Loose    | 안정적                 |
-  | payment  | 1  | 2  | 0.67 | Moderate | 보통 (의존성 관리 필요)  |
-  | order    | 1  | 3  | 0.75 | Moderate | 높은 의존성 (핵심 도메인) |
+  | Domain   | Ca | Ce | I    | Grade    | Assessment                      |
+  |----------|----|----|------|----------|---------------------------------|
+  | auth     | 3  | 0  | 0.00 | Loose    | Most stable (foundational module)|
+  | product  | 2  | 0  | 0.00 | Loose    | Stable (pure domain)            |
+  | member   | 2  | 1  | 0.33 | Loose    | Stable                          |
+  | payment  | 1  | 2  | 0.67 | Moderate | Moderate (dependency mgmt needed)|
+  | order    | 1  | 3  | 0.75 | Moderate | High coupling (core domain)      |
 
   [Architecture Health: GOOD]
-  순환 의존성 없음. 결합도가 관리 가능한 수준입니다.
+  No circular dependencies. Coupling is at a manageable level.
 
 ===========================================================
 ```
 
 ---
 
-## 예시 2: 특정 도메인 의존성 (`/deps show order`)
+## Example 2: Specific Domain Dependencies (`/deps show order`)
 
 ```
 > /deps show order
@@ -70,25 +70,25 @@
   Dependency Graph: Order Domain
 ===========================================================
 
-  Order 도메인 의존성:
+  Order domain dependencies:
 
 -----------------------------------------------------------
-  [의존하는 것] (Order가 사용하는 외부 의존성)
+  [Outgoing] (External dependencies used by Order)
 -----------------------------------------------------------
-  +-- member (API 2개)
-  |   +-- GET /members/{id} - 회원 정보 조회
-  |   +-- GET /members/{id}/grade - 등급 조회
-  +-- product (API 2개)
-  |   +-- GET /products/{id} - 상품 정보 조회
-  |   +-- PATCH /products/{id}/stock - 재고 차감
-  +-- auth (import 1개)
-      +-- auth.utils.token.verify_token - 토큰 검증
+  +-- member (2 APIs)
+  |   +-- GET /members/{id} - Fetch member info
+  |   +-- GET /members/{id}/grade - Fetch grade
+  +-- product (2 APIs)
+  |   +-- GET /products/{id} - Fetch product info
+  |   +-- PATCH /products/{id}/stock - Deduct stock
+  +-- auth (1 import)
+      +-- auth.utils.token.verify_token - Token verification
 
 -----------------------------------------------------------
-  [의존받는 것] (Order를 사용하는 외부 의존성)
+  [Incoming] (External dependencies that use Order)
 -----------------------------------------------------------
-  +-- payment (API 1개)
-      +-- GET /orders/{id} - 주문 확인
+  +-- payment (1 API)
+      +-- GET /orders/{id} - Confirm order
 
 -----------------------------------------------------------
   Metrics
@@ -103,7 +103,7 @@
 
 ---
 
-## 예시 3: 순환 의존성 감지
+## Example 3: Circular Dependency Detection
 
 ```
 > /deps --cycles
@@ -114,15 +114,15 @@
 
   Total Cycles Found: 0
 
-  순환 의존성이 발견되지 않았습니다.
-  아키텍처가 건전한 상태입니다.
+  No circular dependencies detected.
+  The architecture is in a healthy state.
 
 ===========================================================
 ```
 
 ---
 
-## 예시 4: 파일 의존성 트리
+## Example 4: File Dependency Tree
 
 ```
 > /deps src/services/order_service.py --tree
@@ -131,18 +131,18 @@
   Dependency Tree: order_service.py
 ===========================================================
 
-  [이 파일이 의존하는 것] (Outgoing)
+  [Outgoing] (What this file depends on)
   order_service.py
   +-- member.services.member_service (member)
   |   +-- member.models.member (member)
   |   +-- auth.utils.token (auth)
   +-- product.services.product_service (product)
   |   +-- product.models.product (product)
-  +-- order.models.order (order - 내부)
+  +-- order.models.order (order - internal)
 
-  [이 파일에 의존하는 것] (Incoming)
+  [Incoming] (What depends on this file)
   order_service.py
-  +-- order.api.routes.order_router (order - 내부)
+  +-- order.api.routes.order_router (order - internal)
   +-- payment.services.checkout_service (payment)
 
   Tree Depth: 2 levels
@@ -154,7 +154,7 @@
 
 ---
 
-## 예시 5: 도메인 간 매트릭스
+## Example 5: Cross-Domain Dependency Matrix
 
 ```
 > /deps --matrix
@@ -172,12 +172,12 @@
   | auth     |   0   |   0    |    0    |    0    |  -   |
 
   Hotspots:
-  1. order -> member (2): 가장 높은 결합도
-  2. order -> product (2): 동일 수준
+  1. order -> member (2): Highest coupling
+  2. order -> product (2): Same level
 
   Isolated:
-  - product: 외부 의존성 없음 (Ce=0)
-  - auth: 외부 의존성 없음 (Ce=0)
+  - product: No external dependencies (Ce=0)
+  - auth: No external dependencies (Ce=0)
 
 ===========================================================
 ```

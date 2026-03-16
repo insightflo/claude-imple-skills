@@ -6,62 +6,62 @@
 
 ---
 
-## 변경 요청
+## Change Request
 
-| 항목 | 내용 |
-|------|------|
-| **요청자** | {{USER_REQUEST}} |
-| **변경 유형** | Bug Fix / Feature Change / Config Update / Refactor |
-| **ITIL 분류** | Standard / Normal / Emergency |
-| **위험도** | CRITICAL / HIGH / MEDIUM / LOW |
+| Field | Details |
+|-------|---------|
+| **Requestor** | {{USER_REQUEST}} |
+| **Change Type** | Bug Fix / Feature Change / Config Update / Refactor |
+| **ITIL Classification** | Standard / Normal / Emergency |
+| **Risk Level** | CRITICAL / HIGH / MEDIUM / LOW |
 
-## 영향도 분석
+## Impact Analysis
 
-### 직접 영향
+### Direct Impact
 
-| 파일 | 의존 파일 수 | 위험도 |
-|------|------------|--------|
+| File | Dependent File Count | Risk Level |
+|------|----------------------|------------|
 | {{file}} | {{dependents}} | {{risk}} |
 
-### 간접 영향
+### Indirect Impact
 
-- **영향받는 도메인**: {{domains}}
-- **영향받는 API**: {{apis}}
-- **순환 참조**: {{cycles}}
+- **Affected Domains**: {{domains}}
+- **Affected APIs**: {{apis}}
+- **Circular References**: {{cycles}}
 
-## 구현
+## Implementation
 
-| 항목 | 결과 |
-|------|------|
-| **브랜치** | `maintenance/{{type}}-{{description}}` |
-| **수정 파일** | {{file_count}}개 |
+| Field | Result |
+|-------|--------|
+| **Branch** | `maintenance/{{type}}-{{description}}` |
+| **Modified Files** | {{file_count}} files |
 | **Lint** | Pass / Fail |
 | **Type Check** | Pass / Fail |
-| **빌드** | Pass / Fail |
+| **Build** | Pass / Fail |
 
-## 검증
+## Verification
 
-| 항목 | 결과 |
-|------|------|
-| **테스트** | {{passed}}/{{total}} 통과 |
-| **커버리지** | {{before}}% → {{after}}% ({{delta}}) |
-| **보안 검사** | {{findings}}건 (CRITICAL {{critical}}건) |
+| Field | Result |
+|-------|--------|
+| **Tests** | {{passed}}/{{total}} passed |
+| **Coverage** | {{before}}% -> {{after}}% ({{delta}}) |
+| **Security Scan** | {{findings}} findings (CRITICAL: {{critical}}) |
 
-## 롤백 계획
+## Rollback Plan
 
 ```bash
 git revert {{commit-hash}}
 ```
 
-## 승인 체크리스트
+## Approval Checklist
 
-- [ ] 영향도 분석 확인됨
-- [ ] 변경 사항 검증됨
-- [ ] 테스트 통과
-- [ ] 보안 클린
-- [ ] 롤백 계획 확인됨
+- [ ] Impact analysis reviewed
+- [ ] Changes verified
+- [ ] Tests passing
+- [ ] Security clean
+- [ ] Rollback plan confirmed
 
-## 사후 검토 (PIR)
+## Post-Implementation Review (PIR)
 
-- **실제 영향 vs 예측**: {{comparison}}
-- **교훈**: {{lessons}}
+- **Actual vs. Predicted Impact**: {{comparison}}
+- **Lessons Learned**: {{lessons}}

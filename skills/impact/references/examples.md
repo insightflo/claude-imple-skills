@@ -1,10 +1,10 @@
 # Impact Analyzer - Usage Examples
 
-> 이 파일은 `/impact` 스킬의 사용 예시입니다.
+> This file contains usage examples for the `/impact` skill.
 
 ---
 
-## 예시 1: 서비스 파일 분석
+## Example 1: Service File Analysis
 
 ```
 > /impact src/services/user_service.py
@@ -18,14 +18,14 @@
   may affect multiple consumers. Run related test suites.
 
 -----------------------------------------------------------
-  Direct Dependents (이 파일을 import하는 곳)
+  Direct Dependents (files that import this file)
 -----------------------------------------------------------
   - src/api/routes/user.py:L5
   - src/api/routes/admin.py:L8
   - src/services/order_service.py:L12
 
 -----------------------------------------------------------
-  Indirect Dependents (API 호출 관계)
+  Indirect Dependents (API call relationships)
 -----------------------------------------------------------
   - [GET /api/users/{id}] frontend/pages/profile.tsx
   - [POST /api/users] frontend/pages/register.tsx
@@ -33,8 +33,8 @@
 -----------------------------------------------------------
   Affected Domains
 -----------------------------------------------------------
-  - user (직접)
-  - order (간접 - order_service가 user_service를 import)
+  - user (direct)
+  - order (indirect - order_service imports user_service)
 
 -----------------------------------------------------------
   Related Tests
@@ -45,10 +45,10 @@
 -----------------------------------------------------------
   Recommended Actions
 -----------------------------------------------------------
-  1. 테스트 실행:
+  1. Run tests:
      $ pytest tests/services/test_user_service.py tests/api/test_user_routes.py -v --cov=src/services
-  2. 리뷰어: user Part Leader
-  3. order 도메인에 변경 사항 공유 권장 (교차 의존성)
+  2. Reviewer: user Part Leader
+  3. Notify the order domain of changes (cross-domain dependency)
 
   [CAUTION] HIGH risk area.
   Run full test suite for affected modules before proceeding.
@@ -58,7 +58,7 @@
 
 ---
 
-## 예시 2: 결제 관련 파일 분석 (CRITICAL)
+## Example 2: Payment-Related File Analysis (CRITICAL)
 
 ```
 > /impact src/api/routes/payment.py
@@ -72,12 +72,12 @@
   impact. Requires thorough review and full test coverage.
 
 -----------------------------------------------------------
-  Direct Dependents (이 파일을 import하는 곳)
+  Direct Dependents (files that import this file)
 -----------------------------------------------------------
   - src/main.py:L22 (router include)
 
 -----------------------------------------------------------
-  Indirect Dependents (API 호출 관계)
+  Indirect Dependents (API call relationships)
 -----------------------------------------------------------
   - [POST /api/payments] frontend/pages/checkout.tsx
   - [POST /api/payments] mobile/screens/PaymentScreen.tsx
@@ -86,8 +86,8 @@
 -----------------------------------------------------------
   Affected Domains
 -----------------------------------------------------------
-  - payment (직접)
-  - order (간접 - checkout 플로우 연관)
+  - payment (direct)
+  - order (indirect - related to checkout flow)
 
 -----------------------------------------------------------
   Related Tests
@@ -98,30 +98,30 @@
 -----------------------------------------------------------
   Recommended Actions
 -----------------------------------------------------------
-  1. 테스트 실행:
+  1. Run tests:
      $ pytest tests/api/test_payment.py tests/integration/test_payment_flow.py -v --cov=src/api/routes
-  2. 리뷰어: QA Manager, Chief Architect
-  3. 결제 관련 수정은 통합 테스트까지 반드시 실행
+  2. Reviewer: QA Manager, Chief Architect
+  3. Integration tests are mandatory for payment-related changes
 
 -----------------------------------------------------------
   [WARNING] CRITICAL Risk Area
 -----------------------------------------------------------
-  금융/보안 핵심 영역입니다.
+  This is a core financial/security area.
 
-  필수 확인 사항:
-  [ ] 변경 사유가 명확한가?
-  [ ] 영향 범위를 모두 파악했는가?
-  [ ] 테스트 케이스가 준비되었는가?
-  [ ] 롤백 계획이 있는가?
+  Required checks:
+  [ ] Is the reason for the change clearly defined?
+  [ ] Has the full scope of impact been identified?
+  [ ] Are test cases prepared?
+  [ ] Is a rollback plan in place?
 
-  필수 리뷰어: QA Manager, Chief Architect
+  Required reviewers: QA Manager, Chief Architect
 
 ===========================================================
 ```
 
 ---
 
-## 예시 3: 테스트 파일 분석 (LOW)
+## Example 3: Test File Analysis (LOW)
 
 ```
 > /impact tests/services/test_user_service.py
@@ -135,32 +135,32 @@
   Standard review applies.
 
 -----------------------------------------------------------
-  Direct Dependents (이 파일을 import하는 곳)
+  Direct Dependents (files that import this file)
 -----------------------------------------------------------
   None found
 
 -----------------------------------------------------------
-  Indirect Dependents (API 호출 관계)
+  Indirect Dependents (API call relationships)
 -----------------------------------------------------------
   None found
 
 -----------------------------------------------------------
   Affected Domains
 -----------------------------------------------------------
-  - user (테스트)
+  - user (test)
 
 -----------------------------------------------------------
   Related Tests
 -----------------------------------------------------------
-  (이 파일 자체가 테스트 파일입니다)
+  (This file itself is a test file)
 
 -----------------------------------------------------------
   Recommended Actions
 -----------------------------------------------------------
-  1. 테스트 실행:
+  1. Run tests:
      $ pytest tests/services/test_user_service.py -v
-  2. 리뷰어: 일반 코드 리뷰
-  3. 테스트 수정 시 대상 소스 파일의 동작이 변경되지 않았는지 확인
+  2. Reviewer: Standard code review
+  3. When modifying tests, verify that the behavior of the target source file has not changed
 
 ===========================================================
 ```
