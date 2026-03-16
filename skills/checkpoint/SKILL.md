@@ -1,273 +1,272 @@
 ---
 name: checkpoint
-description: 태스크/PR 완료 시 즉시 코드 리뷰. Git Diff 자동 감지 + TASKS.md 컨텍스트 + Hook 게이트 + AI 멀티 리뷰. 태스크 완료 후, 커밋 전, "체크포인트", "리뷰해줘", "코드 검토", "변경사항 확인" 요청에 반드시 사용하세요.
+description: Immediate code review at task/PR completion. Auto-detects Git Diff, extracts TASKS.md context, runs Hook gates, and optionally invokes AI multi-review. Use this after completing a task, before committing, or whenever someone says "checkpoint", "review my code", "code review", or "check changes". Always trigger on task completion.
 version: 1.0.0
 ---
 
-# 🔍 Checkpoint (태스크 완료 시점 코드 리뷰)
+# Checkpoint (Code Review at Task Completion)
 
-> **목적**: 태스크/PR 완료 시 즉시 코드 리뷰를 수행하여 이슈를 조기에 발견하고 수정합니다.
+> **Purpose**: Perform an immediate code review at task/PR completion to catch and fix issues early.
 >
-> **핵심 기능**:
-> - Git Diff 자동 감지
-> - TASKS.md 자동 컨텍스트 추출
-> - `/security-review` 자동 호출
-> - Hook 게이트 + 수정 가이드
+> **Core features**:
+> - Auto-detect Git Diff
+> - Auto-extract TASKS.md context
+> - Auto-invoke `/security-review`
+> - Hook gate + fix guide
 
 ---
 
-## ⚡ 핵심 기능
+## Core Features
 
-### Git Diff 자동 감지
+### Git Diff Auto-Detection
+
+### Our `/checkpoint`
 ```
-
-### 우리 `/checkpoint`
-```
-자동 감지: Git Diff (latest commit)
-자동 추출: TASKS.md → 관련 태스크 매칭
-Hook 연동: policy-gate, standards-validator
-강화 보안: /security-review 자동 호출
-AI 멀티: /multi-ai-review 선택적 호출
-결과: Pass/Warning/Fail + 구체적 수정 가이드
-```
-
----
-
-## 🔄 실행 흐름
-
-```
-/checkpoint 실행
-    ↓
-┌─────────────────────────────────────────┐
-│ 1단계: Git Diff 자동 감지              │
-│   • git diff HEAD~1 HEAD 자동 실행    │
-│   • 변경 파일 목록 추출               │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 2단계: TASKS.md 컨텍스트 추출          │
-│   • 변경 파일 ↔ 태스크 매칭           │
-│   • 관련 요구사항 자동 식별           │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 3단계: 2단계 리뷰                       │
-│   • Stage 1: Spec Compliance          │
-│   • Stage 2: Code Quality              │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 4단계: 강화 분석 (연동)                │
-│   • /impact (영향도)                  │
-│   • /deps (의존성)                    │
-│   • /security-review (보안)             │
-│   • /multi-ai-review (선택적 AI)       │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 5단계: Hook 게이트                      │
-│   • policy-gate (권한 + 표준)         │
-│   • standards-validator (규칙)        │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 결과: Pass / Warning / Fail             │
-│   • 수정 가이드 생성                   │
-│   • /recover 경로 제공                  │
-└─────────────────────────────────────────┘
+Auto-detect:  Git Diff (latest commit)
+Auto-extract: TASKS.md → match related tasks
+Hook integration: policy-gate, standards-validator
+Enhanced security: /security-review auto-invoked
+AI multi-review: /multi-ai-review optional invocation
+Result: Pass/Warning/Fail + concrete fix guide
 ```
 
 ---
 
-## 🎯 2단계 리뷰 상세
+## Execution Flow
 
-### Stage 1: Spec Compliance (명세 준수)
+```
+/checkpoint
+    ↓
+┌─────────────────────────────────────────┐
+│ Step 1: Auto-detect Git Diff            │
+│   • git diff HEAD~1 HEAD auto-run       │
+│   • Extract list of changed files       │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Step 2: Extract TASKS.md context        │
+│   • Match changed files ↔ tasks         │
+│   • Auto-identify related requirements  │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Step 3: 2-Stage Review                  │
+│   • Stage 1: Spec Compliance            │
+│   • Stage 2: Code Quality               │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Step 4: Enhanced Analysis (integrations)│
+│   • /impact (change impact)             │
+│   • /deps (dependencies)                │
+│   • /security-review (security)         │
+│   • /multi-ai-review (optional AI)      │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Step 5: Hook Gate                       │
+│   • policy-gate (permissions + standards│
+│   • standards-validator (rules)         │
+└─────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────┐
+│ Result: Pass / Warning / Fail           │
+│   • Generate fix guide                  │
+│   • Provide /recover path               │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## 2-Stage Review Detail
+
+### Stage 1: Spec Compliance
 
 ```yaml
-체크리스트:
-  요구사항 일치:
-    - 변경 파일의 기능이 TASKS.md에 정의되어 있는가?
-    - Mini-PRD / Socrates 요구사항과 일치하는가?
+Checklist:
+  Requirements match:
+    - Does the changed file's functionality match what is defined in TASKS.md?
+    - Does it match the Mini-PRD / Socrates requirements?
 
-  누락 확인:
-    - 명세된 예외 처리가 구현되었는가?
-    - 엣지 케이스가 처리되는가?
+  Missing checks:
+    - Has the specified error handling been implemented?
+    - Are edge cases handled?
 
-  YAGNI 위반:
-    - 명세되지 않은 불필요한 기능이 있는가?
-    - Over-engineering 여부
+  YAGNI violations:
+    - Are there unnecessary features not in the spec?
+    - Is there over-engineering?
 ```
 
-### Stage 2: Code Quality (코드 품질)
+### Stage 2: Code Quality
 
 ```yaml
-체크리스트:
-  아키텍처:
-    - SOLID 원칙
-    - 관심사 분리
-    - 의존성 주입
+Checklist:
+  Architecture:
+    - SOLID principles
+    - Separation of concerns
+    - Dependency injection
 
-  코드 품질:
-    - 명확한 네이밍
-    - 복잡도 (Cyclomatic, Cognitive)
-    - 코드 중복 (DRY)
-    - 매직 넘버/스트링 제거
+  Code quality:
+    - Clear naming
+    - Complexity (Cyclomatic, Cognitive)
+    - Code duplication (DRY)
+    - Magic numbers/strings removed
 
-  에러 처리:
-    - 모든 에러 케이스 처리
-    - 의미 있는 에러 메시지
-    - 적절한 로깅
+  Error handling:
+    - All error cases handled
+    - Meaningful error messages
+    - Appropriate logging
 
-  테스트:
-    - 충분한 커버리지
-    - 엣지 케이스 테스트
-    - Mock 아닌 실제 동작 테스트
+  Testing:
+    - Sufficient coverage
+    - Edge case tests
+    - Tests against real behavior, not just mocks
 ```
 
 ---
 
-## 📊 심각도 분류
+## Severity Classification
 
-| 등급 | 조건 | 조치 |
-|------|------|------|
-| **🔴 Fail** | Critical 이슈 1개 이상 또는 Important 3개 이상 | 즉시 수정 필요 |
-| **🟡 Warning** | Important 1~2개 또는 Minor 다수 | 확인 후 진행 가능 |
-| **🟢 Pass** | 이슈 없음 또는 Minor만 | 다음 단계 진행 |
+| Grade | Condition | Action |
+|-------|-----------|--------|
+| **Fail** | 1+ Critical issue OR 3+ Important issues | Immediate fix required |
+| **Warning** | 1–2 Important issues OR many Minor issues | Review before proceeding |
+| **Pass** | No issues OR Minor only | Proceed to next step |
 
 ---
 
-## 🔗 에코시스템 통합
+## Ecosystem Integration
 
-### /agile 연동
-
-```yaml
-/agile (태스크 완료)
-    ↓
-/checkpoint 자동 호출
-    ↓
-결과에 따라:
-  - Pass → 다음 태스크
-  - Warning → 사용자 확인 후 진행
-  - Fail → 수정 후 재체크포인트
-```
-
-### /team-orchestrate 연동
+### /agile Integration
 
 ```yaml
-/team-orchestrate (태스크 완료)
+/agile (task complete)
     ↓
-/checkpoint 자동 호출 (post-task 게이트)
+/checkpoint auto-invoked
     ↓
-Hook 게이트 통과 후 다음 태스크
+Based on result:
+  - Pass → next task
+  - Warning → user confirmation then proceed
+  - Fail → fix then re-checkpoint
 ```
 
-### PR/Merge 연동
+### /team-orchestrate Integration
+
+```yaml
+/team-orchestrate (task complete)
+    ↓
+/checkpoint auto-invoked (post-task gate)
+    ↓
+Proceed to next task after Hook gate passes
+```
+
+### PR/Merge Integration
 
 ```bash
-# Git Hook에서 자동 호출
-pre-commit:  /checkpoint --mode=quick       # 빠른 체크
-pre-push:    /checkpoint --mode=full        # 전체 체크
+# Auto-invoked from Git Hook
+pre-commit:  /checkpoint --mode=quick       # Quick check
+pre-push:    /checkpoint --mode=full        # Full check
 ```
 
 ---
 
-## 🛡️ 보안 연동
+## Security Integration
 
-### /security-review 자동 호출
+### /security-review Auto-Invocation
 
 ```yaml
-/security-review 호출 조건:
-  - auth, payment, user 관련 파일 변경
-  - .env, config 파일 변경
-  - API 라우팅 변경
+/security-review invocation conditions:
+  - Changes to auth, payment, or user-related files
+  - Changes to .env or config files
+  - API routing changes
 
-결과에 따라:
-  - 취약점 발견 → Fail + 수정 가이드
-  - 없음 → Stage 진행
+Based on result:
+  - Vulnerability found → Fail + fix guide
+  - None → Continue to next stage
 ```
 
 ---
 
-## 🤖 AI 멀티 리뷰 (선택적)
+## AI Multi-Review (Optional)
 
-### /multi-ai-review 연동
+### /multi-ai-review Integration
 
 ```yaml
-사용자 선택: "AI 리뷰도 함께 할까요?"
+User prompt: "Would you like to include an AI review?"
 
-선택 시:
+If selected:
   /multi-ai-review
-    ├── Gemini: 코드 가독성, 개선 제안
-    └── Codex: SOLID, 패턴 분석
+    ├── Gemini: code readability, improvement suggestions
+    └── Codex: SOLID, pattern analysis
 
-결과를 checkpoint 리포트에 통합
+Results integrated into checkpoint report
 ```
 
 ---
 
-## 📋 출력 형식
+## Output Format
 
 ```markdown
 ## Checkpoint Report
 
-### 개요
-- **Task**: T1.2 - 사용자 인증 API 구현
+### Overview
+- **Task**: T1.2 - User authentication API implementation
 - **Date**: 2026-03-03 15:30
 - **Commit**: abc123d
 
-### 변경 범위
-- **변경 파일**: 3개
+### Change Scope
+- **Changed files**: 3
   - `src/domains/auth/auth.service.ts` (+45, -12)
   - `src/api/auth.routes.ts` (+23, -5)
   - `src/middleware/auth.middleware.ts` (+18)
 
 ### Stage 1: Spec Compliance ✅
-- 요구사항 일치: ✅
-- 누락 기능: ✅
-- YAGNI 위반: ✅
+- Requirements match: ✅
+- Missing features: ✅
+- YAGNI violations: ✅
 
 ### Stage 2: Code Quality ⚠️
-- 아키텍처: ⚠️ Warning
-  - auth.service.ts: 단일 책임 과대 (Single Responsibility)
-- 코드 품질: ✅
-- 테스트: ⚠️ Warning
-  - 엣지 케이스 커버리지 부족
+- Architecture: ⚠️ Warning
+  - auth.service.ts: Single Responsibility over-scoped
+- Code quality: ✅
+- Testing: ⚠️ Warning
+  - Insufficient edge case coverage
 
-### 연동 분석
-- **/impact**: 중간 위험도 (인증 관련)
-- **/deps**: 순환 의존성 없음
-- **/security-review**: ✅ 통과
+### Integration Analysis
+- **/impact**: Medium risk (auth-related)
+- **/deps**: No circular dependencies
+- **/security-review**: ✅ Passed
 
-### 최종 판정
-- **결과**: 🟡 Warning
-- **조치**: 확인 후 진행 가능
+### Final Verdict
+- **Result**: Warning
+- **Action**: Review then proceed
 
-### 수정 가이드
-1. auth.service.ts를 Service + Repository로 분리
-2. 엣지 케이스 테스트 추가
+### Fix Guide
+1. Split auth.service.ts into Service + Repository
+2. Add edge case tests
 ```
 
 ---
 
-## 🚀 사용 예시
+## Usage Examples
 
 ```bash
-# 기본 사용
+# Basic usage
 /checkpoint
 
-# 특정 커밋 범위 지정
+# Specify file scope
 /checkpoint --files src/auth/*.ts
 
-# AI 멀티 리뷰 포함
+# Include AI multi-review
 /checkpoint --ai-review
 
-# 빠른 모드 (Spec만)
+# Quick mode (Spec only)
 /checkpoint --mode=spec
 
-# 전체 모드
+# Full mode
 /checkpoint --mode=full
 ```
 
 ---
 
-**Last Updated**: 2026-03-03 (v1.1.0 - Standalone 독립 완료)
+**Last Updated**: 2026-03-03 (v1.1.0 - Standalone independent mode complete)

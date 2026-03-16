@@ -1,6 +1,6 @@
 ---
 name: tasks-init
-description: TASKS.md 스캐폴딩을 대화형으로 생성합니다. 프로젝트 시작 시, TASKS.md가 없을 때, 태스크 구조화가 필요할 때 반드시 사용하세요. "태스크 만들어줘", "TASKS.md 생성", "프로젝트 시작", "할일 정리" 요청에 즉시 실행. Standalone 독립 실행. /tasks-init 트리거.
+description: Interactively scaffolds a TASKS.md file from scratch. Use this at project start, whenever TASKS.md is missing, or whenever task structure is needed. Invoke immediately on "create tasks", "generate TASKS.md", "start project", or "organize to-dos" requests. Runs standalone. Triggered by /tasks-init.
 triggers:
   - /tasks-init
   - 태스크 초기화
@@ -13,70 +13,70 @@ version: 2.1.0
 
 # Tasks Init (Standalone)
 
-> TASKS.md 파일을 대화형으로 생성하는 경량 스킬입니다.
-> Standalone으로 완전히 독립 실행 가능합니다.
+> A lightweight skill that interactively creates a TASKS.md file.
+> Fully standalone — runs independently with no external dependencies.
 
-## 역할
+## Role
 
-- 프로젝트 정보를 대화형으로 수집
-- **Specialist 컨텍스트 주입**으로 상세 태스크 생성
-- 자동 의존성 감지 및 메타데이터 추가
-- Domain-guarded TASKS.md 생성 (백엔드/프론트엔드 분리)
+- Collects project information interactively
+- Generates detailed tasks via **Specialist context injection**
+- Auto-detects dependencies and adds metadata
+- Produces a domain-guarded TASKS.md (backend/frontend separated)
 
-**v2.0.0 업데이트**: Dependency-aware, Domain-guarded, Specialist 통합
+**v2.0.0 update**: Dependency-aware, Domain-guarded, Specialist integration
 
-## 실행 흐름
+## Execution Flow
 
 ```
-/tasks-init 실행
+/tasks-init
      ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 1단계: 프로젝트 정보 수집 (AskUserQuestion)                  │
-│   • 프로젝트 이름                                            │
-│   • 주요 기능 (3-5개)                                        │
-│   • 기술 스택 (자동 감지)                                     │
+│ Stage 1: Collect project info (AskUserQuestion)             │
+│   • Project name                                            │
+│   • Key features (3–5)                                      │
+│   • Tech stack (auto-detected)                              │
 └─────────────────────────────────────────────────────────────┘
      ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 2단계: 기존 코드 분석 (자동)                                 │
-│   • package.json / pyproject.toml 파싱                      │
-│   • 디렉토리 구조 스캔 (도메인 감지)                           │
-│   • import/require 의존성 분석                                 │
-│   • 기존 TODO 마커 수집                                      │
+│ Stage 2: Analyze existing code (automatic)                  │
+│   • Parse package.json / pyproject.toml                     │
+│   • Scan directory structure (domain detection)             │
+│   • Analyze import/require dependencies                     │
+│   • Collect existing TODO markers                           │
 └─────────────────────────────────────────────────────────────┘
      ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 3단계: **Specialist 컨텍스트 주입** (v2.0 NEW)            │
-│   • Backend Specialist → 백엔드 태스크 상세화                │
-│   • Frontend Specialist → 프론트엔드 태스크 상세화              │
-│   • Security Specialist → 보안 관련 태스크 추가                  │
+│ Stage 3: Specialist context injection (v2.0 NEW)            │
+│   • Backend Specialist → detail backend tasks               │
+│   • Frontend Specialist → detail frontend tasks             │
+│   • Security Specialist → add security-related tasks        │
 └─────────────────────────────────────────────────────────────┘
      ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4단계: TASKS.md 생성 (Dependency-aware)                       │
-│   • 자동 의존성 계산 (deps 필드)                              │
-│   • 도메인 분리 (domain 필드)                                  │
-│   • 위험도 자동 분류 (risk 필드)                               │
-│   • 파일 충돌 감지 (files 필드)                               │
+│ Stage 4: Generate TASKS.md (Dependency-aware)               │
+│   • Auto-calculate dependencies (deps field)                │
+│   • Separate by domain (domain field)                       │
+│   • Auto-classify risk (risk field)                         │
+│   • Detect file conflicts (files field)                     │
 └─────────────────────────────────────────────────────────────┘
      ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 5단계: 사용자 확인 + 다음 단계 안내                          │
-│   → owner 기반 자동 라우팅 확인 + /agile auto 또는            │
-│     /team-orchestrate 실행 권장                              │
+│ Stage 5: User confirmation + next-step guidance             │
+│   → Confirm owner-based auto-routing + recommend            │
+│     /agile auto or /team-orchestrate                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 1단계: 프로젝트 정보 수집
+## Stage 1: Collect Project Info
 
 ```json
 {
   "questions": [
     {
-      "question": "프로젝트의 주요 기능을 알려주세요 (예: 사용자 인증, 상품 목록, 결제)",
-      "header": "주요 기능",
+      "question": "What are the main features of your project? (e.g., user auth, product catalog, payments)",
+      "header": "Key Features",
       "options": [
-        {"label": "직접 입력", "description": "기능 목록을 직접 작성"}
+        {"label": "Type manually", "description": "Write the feature list yourself"}
       ],
       "multiSelect": false
     }
@@ -84,71 +84,71 @@ version: 2.1.0
 }
 ```
 
-## 2단계: 코드 분석
+## Stage 2: Code Analysis
 
 ```bash
-# 기술 스택 감지
+# Detect tech stack
 ls package.json pyproject.toml requirements.txt Cargo.toml go.mod 2>/dev/null
 
-# 디렉토리 구조
+# Directory structure
 ls -d */ 2>/dev/null | head -10
 
-# 기존 TODO 수집
+# Collect existing TODOs
 grep -rn "TODO\|FIXME\|XXX" --include="*.ts" --include="*.tsx" --include="*.py" 2>/dev/null | head -20
 ```
 
-## 3단계: TASKS.md 템플릿
+## Stage 3: TASKS.md Template
 
 ```markdown
 # TASKS.md
 
-> 생성일: {date}
-> 프로젝트: {project_name}
+> Created: {date}
+> Project: {project_name}
 
 ---
 
-## T0 - Skeleton (구조)
+## T0 - Skeleton (Structure)
 
-- [ ] T0.1: 프로젝트 초기 설정
-- [ ] T0.2: 디렉토리 구조 생성
-- [ ] T0.3: 라우팅/네비게이션 설정
-- [ ] T0.4: 더미 데이터 구조 정의
+- [ ] T0.1: Initial project setup
+- [ ] T0.2: Create directory structure
+- [ ] T0.3: Configure routing/navigation
+- [ ] T0.4: Define dummy data structures
 
-## T1 - Muscles (핵심 기능)
+## T1 - Muscles (Core Features)
 
-{기능별 태스크 자동 생성}
+{Auto-generated tasks per feature}
 
-- [ ] T1.1: {기능1} 백엔드 구현
-- [ ] T1.2: {기능1} 프론트엔드 구현
-- [ ] T1.3: {기능2} 백엔드 구현
-- [ ] T1.4: {기능2} 프론트엔드 구현
+- [ ] T1.1: {feature1} backend implementation
+- [ ] T1.2: {feature1} frontend implementation
+- [ ] T1.3: {feature2} backend implementation
+- [ ] T1.4: {feature2} frontend implementation
 
-## T2 - Muscles Advanced (고급 기능)
+## T2 - Muscles Advanced (Advanced Features)
 
-- [ ] T2.1: 에러 핸들링
-- [ ] T2.2: 로딩 상태 관리
-- [ ] T2.3: 캐싱 레이어
+- [ ] T2.1: Error handling
+- [ ] T2.2: Loading state management
+- [ ] T2.3: Caching layer
 
-## T3 - Skin (마무리)
+## T3 - Skin (Polish)
 
-- [ ] T3.1: 디자인 시스템 적용
-- [ ] T3.2: 반응형 레이아웃
-- [ ] T3.3: 애니메이션/전환 효과
-- [ ] T3.4: 접근성 검토
+- [ ] T3.1: Apply design system
+- [ ] T3.2: Responsive layout
+- [ ] T3.3: Animations/transitions
+- [ ] T3.4: Accessibility review
 ```
 
-## 4단계: 다음 단계 안내
+## Stage 4: Next-Step Guidance
 
 ```json
 {
   "questions": [
     {
-      "question": "TASKS.md가 생성되었습니다. 다음 단계를 선택하세요:",
-      "header": "다음 단계",
+      "question": "TASKS.md has been created. What would you like to do next?",
+      "header": "Next Step",
       "options": [
-        {"label": "구현 시작 (/agile auto)", "description": "30개 이하 태스크용 레이어별 자동 구현"},
-        {"label": "병렬 오케스트레이션 (/team-orchestrate)", "description": "30~80개 태스크용 의존성 기반 병렬 실행"},
-        {"label": "수동 진행", "description": "직접 태스크 수정 후 진행"}
+        {"label": "Start implementation (/agile auto)", "description": "Layer-by-layer auto implementation for ≤30 tasks"},
+        {"label": "Parallel orchestration (/team-orchestrate)", "description": "Dependency-based parallel execution for 30–80 tasks"},
+        {"label": "Manual", "description": "Edit tasks manually and proceed at your own pace"}
       ],
       "multiSelect": false
     }
@@ -156,55 +156,55 @@ grep -rn "TODO\|FIXME\|XXX" --include="*.ts" --include="*.tsx" --include="*.py" 
 }
 ```
 
-생성된 TASKS.md에서는 `owner`가 기본 실행기를 결정하고, `model`은 owner/model-routing 자동 라우팅을 덮어야 할 때만 넣습니다.
+In the generated TASKS.md, `owner` determines the default executor. Set `model` only when you need to override the owner/model-routing auto-routing.
 
-## 관련 스킬
+## Related Skills
 
-| 스킬 | 관계 |
-|------|------|
-| `/tasks-migrate` | 기존 레거시 파일 통합 |
-| `/agile auto` | 생성된 TASKS.md 실행 (≤30 태스크) |
-| `/team-orchestrate` | 병렬 오케스트레이션 (30~80 태스크) |
-| `/governance-setup` | 대규모 프로젝트 기획 |
+| Skill | Relationship |
+|-------|-------------|
+| `/tasks-migrate` | Consolidate existing legacy files |
+| `/agile auto` | Execute the generated TASKS.md (≤30 tasks) |
+| `/team-orchestrate` | Parallel orchestration (30–80 tasks) |
+| `/governance-setup` | Planning for large-scale projects |
 
 ---
 
 **Last Updated**: 2026-03-03 (v2.0.0)
 
-## 파일 구조
+## File Structure
 
 ```
 skills/tasks-init/
-├── SKILL.md                    # 스킬 정의
+├── SKILL.md                    # Skill definition
 ├── scripts/
-│   ├── analyze.js              # 코드 분석 (기술 스택, 의존성, TODO)
-│   ├── generate.js             # 태스크 생성 (Specialist 컨텍스트 주입)
-│   └── tasks-init.sh           # 메인 진입점
+│   ├── analyze.js              # Code analysis (tech stack, dependencies, TODOs)
+│   ├── generate.js             # Task generation (Specialist context injection)
+│   └── tasks-init.sh           # Main entry point
 └── templates/
-    ├── task-metadata.yaml      # 메타데이터 포맷 설명
-    └── TASKS.md                # 생성될 TASKS.md 템플릿
+    ├── task-metadata.yaml      # Metadata format description
+    └── TASKS.md                # Template for the generated TASKS.md
 ```
 
-## 사용법
+## Usage
 
-### CLI 직접 실행
+### Run directly via CLI
 
 ```bash
-# 기본 사용 (현재 디렉토리에 TASKS.md 생성)
+# Default usage (creates TASKS.md in the current directory)
 cd skills/tasks-init/scripts
 ./tasks-init.sh
 
-# 출력 파일 지정
+# Specify output file
 ./tasks-init.sh --output ../TASKS.md
 
-# 기능 목록 지정
+# Specify feature list
 ./tasks-init.sh --features "user-auth,product-catalog,payment"
 ```
 
-### 스킬로 실행
+### Run as a skill
 
 ```bash
 /tasks-init
 ```
 
-Claude가 대화형으로 프로젝트 정보를 수집한 후 TASKS.md를 생성합니다.
+Claude will interactively collect project information and then generate TASKS.md.

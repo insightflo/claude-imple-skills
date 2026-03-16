@@ -1,6 +1,6 @@
 ---
 name: team-orchestrate
-description: Claude Code 네이티브 Agent Teams를 활용한 계층적 에이전트 오케스트레이션. TASKS.md를 분석하여 PM Lead + Architecture/QA/Design 팀원으로 구성된 에이전트 팀을 자동 형성하고, Plan Approval + 거버넌스 hooks로 품질을 보장하며 병렬 실행합니다.
+description: Hierarchical agent orchestration using Claude Code native Agent Teams. Analyzes TASKS.md, automatically forms an agent team (PM Lead + Architecture/QA/Design teammates), and runs them in parallel with Plan Approval and governance hooks for quality assurance.
 triggers:
   - /team-orchestrate
   - 에이전트 팀 실행
@@ -11,124 +11,123 @@ updated: 2026-03-16
 
 # Agent Teams Orchestration
 
-> **목표**: Agent Teams 네이티브 기능으로 계층적 에이전트 팀 실행
+> **Goal**: Hierarchical agent team execution using Claude Code native Agent Teams
 >
-> **핵심 차별점**: Claude Code 네이티브 Agent Teams (메일박스 통신, 공유 작업 목록, hooks)를 활용하여
-> 계층적 에이전트 협업과 Plan Approval 기반 거버넌스를 제공합니다.
+> **Key differentiator**: Leverages Claude Code native Agent Teams (mailbox communication, shared task list, hooks) to provide hierarchical agent collaboration with Plan Approval-based governance.
 
 ---
 
-## 아키텍처
+## Architecture
 
 ```
-Level 0 — Agent Team (네이티브)
-  team-lead (PM 리더)
+Level 0 — Agent Team (Native)
+  team-lead (PM Leader)
   ├── architecture-lead (Teammate) → Task(builder) / Task(reviewer)
   ├── qa-lead (Teammate)           → Task(reviewer) / Task(test-specialist)
   └── design-lead (Teammate)       → Task(designer) / Task(builder)
 
-통신: Lead ↔ Teammates = 메일박스 (양방향)
-위임: Teammate → Subagents = Task tool (단방향)
-거버넌스: TeammateIdle hook + TaskCompleted hook
-모니터링: whitebox dashboard + 사용자 직접 메시지
+Communication: Lead ↔ Teammates = mailbox (bidirectional)
+Delegation:    Teammate → Subagents = Task tool (unidirectional)
+Governance:    TeammateIdle hook + TaskCompleted hook
+Monitoring:    whitebox dashboard + direct user messages
 ```
 
 ---
 
-## 선행 조건 확인 (스킬 시작 시 자동 실행)
+## Prerequisite Checks (run automatically on skill activation)
 
-스킬이 트리거되면 구현을 시작하기 전에 아래를 순서대로 확인한다.
-하나라도 실패하면 해당 안내를 출력하고 중단한다.
+When the skill is triggered, verify the following in order before starting any implementation.
+If any check fails, output the corresponding message and stop.
 
-1. **TASKS.md 존재**: 프로젝트 루트에 `TASKS.md`가 있어야 한다.
-   - 없으면: "TASKS.md가 없습니다. `/tasks-init`으로 먼저 생성하세요."
+1. **TASKS.md exists**: `TASKS.md` must be present at the project root.
+   - If missing: "TASKS.md not found. Create one first with `/tasks-init`."
 
-2. **TASKS.md 포맷**: `deps:` 및 `domain:` 필드가 포함된 표준 포맷이어야 한다.
-   - 없으면: "`/tasks-migrate`로 TASKS.md 포맷을 변환하세요."
+2. **TASKS.md format**: Must use the standard format including `deps:` and `domain:` fields.
+   - If missing: "Convert TASKS.md format with `/tasks-migrate`."
 
-3. **Agent Teams 설치**: 아래 세 가지를 모두 확인한다.
-   - `.claude/agents/team-lead.md` 존재
-   - `.claude/settings.json`에 `AGENT_TEAMS` 환경 변수 등록
-   - `project-team` hooks (`TeammateIdle`, `TaskCompleted`) 등록
-   - 하나라도 없으면: "Agent Teams 리더가 설치되지 않았습니다. `project-team/install.sh --local --mode=team`을 실행하세요."
+3. **Agent Teams installed**: All three of the following must be confirmed:
+   - `.claude/agents/team-lead.md` exists
+   - `AGENT_TEAMS` environment variable registered in `.claude/settings.json`
+   - `project-team` hooks (`TeammateIdle`, `TaskCompleted`) registered
+   - If any is missing: "Agent Teams leader is not installed. Run `project-team/install.sh --local --mode=team`."
 
 ---
 
-## 실행 흐름
+## Execution Flow
 
-### Step 1: 도메인 분석
+### Step 1: Domain Analysis
 
-스킬이 호출되면 `domain-analyzer.js`로 TASKS.md를 분석합니다:
+When the skill is invoked, analyze TASKS.md with `domain-analyzer.js`:
 
 ```bash
 node skills/team-orchestrate/scripts/domain-analyzer.js --tasks-file TASKS.md
 ```
 
-출력: 도메인별 작업 배정 JSON
+Output: JSON with task assignments per domain.
 
-### Step 2: 팀 형성
+### Step 2: Team Formation
 
-domain-analyzer의 출력을 바탕으로 Agent Team을 구성합니다:
+Using the domain-analyzer output, assemble the Agent Team:
 
-1. **team-lead** 에이전트를 리더로 지정
-2. 도메인 분석 결과에 따라 필요한 팀원을 활성화:
-   - 백엔드/API/아키텍처 작업 → `architecture-lead`
-   - 테스트/품질/보안 작업 → `qa-lead`
-   - UI/디자인/프론트엔드 작업 → `design-lead`
-3. 불필요한 팀원은 비활성화 (예: 프론트엔드 없으면 design-lead 제외)
+1. Designate **team-lead** agent as the leader
+2. Activate required teammates based on domain analysis results:
+   - Backend/API/architecture tasks → `architecture-lead`
+   - Testing/quality/security tasks → `qa-lead`
+   - UI/design/frontend tasks → `design-lead`
+3. Deactivate unnecessary teammates (e.g., exclude design-lead if no frontend work)
 
 ### Step 3: Plan Approval
 
-모든 팀원은 구현 전 team-lead에게 계획을 제출합니다:
+All teammates must submit a plan to team-lead before implementing:
 
 ```
-Teammate → Plan 제출 → team-lead 검토 → Approved/Rejected
+Teammate → Submit Plan → team-lead Reviews → Approved/Rejected
 ```
 
-승인 기준:
-- 작업 범위가 배정된 도메인 내
-- 다른 팀원 작업과 충돌 없음
-- 기술 표준 준수
-- 위험도 적절히 평가됨
+Approval criteria:
+- Task scope is within the assigned domain
+- No conflicts with other teammates' work
+- Follows technical standards
+- Risk is assessed appropriately
 
-### Step 4: 병렬 실행
+### Step 4: Parallel Execution
 
-승인된 계획에 따라 팀원이 병렬 실행합니다:
-- 각 팀원은 자신의 도메인 작업을 Task tool로 서브에이전트에게 위임
-- 서브에이전트 (builder, reviewer, designer, test-specialist)가 실제 구현
-- 팀원 간 충돌 발생 시 team-lead가 중재
+Teammates execute in parallel according to approved plans:
+- Each teammate delegates their domain tasks to subagents via the Task tool
+- Subagents (builder, reviewer, designer, test-specialist) do the actual implementation
+- team-lead mediates when conflicts arise between teammates
 
-### Step 5: 거버넌스 검증
+### Step 5: Governance Verification
 
-자동 hooks가 거버넌스를 강제합니다:
-- **TeammateIdle hook**: 팀원 유휴 시 미완료 작업/에스컬레이션 체크
-- **TaskCompleted hook**: 작업 완료 시 경량 품질 게이트
+Automated hooks enforce governance:
+- **TeammateIdle hook**: Checks for incomplete tasks/escalations when a teammate goes idle
+- **TaskCompleted hook**: Lightweight quality gate on task completion
 
-### Step 6: 완료
+### Step 6: Completion
 
-모든 작업 완료 후:
-1. qa-lead가 최종 품질 게이트 실행
-2. team-lead가 완료 보고서 작성
-3. 사용자에게 결과 보고
+When all tasks are done:
+1. qa-lead runs the final quality gate
+2. team-lead writes the completion report
+3. Report results to the user
 
 ---
 
-## 필수 입력
+## Required Inputs
 
 ### TASKS.md
 
-표준 TASKS.md 포맷을 사용합니다:
+Uses the standard TASKS.md format:
 
 ```yaml
 ## T1 - User Resource
 
-- [ ] T1.1: User API 설계
+- [ ] T1.1: User API design
   - deps: []
   - domain: backend
   - risk: low
   - owner: architecture-lead
 
-- [ ] T1.2: User API 구현
+- [ ] T1.2: User API implementation
   - deps: [T1.1]
   - domain: backend
   - risk: medium
@@ -136,10 +135,10 @@ Teammate → Plan 제출 → team-lead 검토 → Approved/Rejected
   - owner: architecture-lead
 ```
 
-### 도메인 매핑
+### Domain Mapping
 
-| 도메인 | 팀원 | 서브에이전트 |
-|--------|------|------------|
+| Domain | Teammate | Subagents |
+|--------|----------|-----------|
 | backend | architecture-lead | builder, reviewer |
 | frontend | design-lead | designer, builder |
 | api | architecture-lead | builder, reviewer |
@@ -150,35 +149,35 @@ Teammate → Plan 제출 → team-lead 검토 → Approved/Rejected
 
 ---
 
-## 설정
+## Configuration
 
 ### team-topology.json
 
-`skills/team-orchestrate/config/team-topology.json`에서 도메인→팀원 매핑을 커스터마이즈할 수 있습니다.
+Customize the domain-to-teammate mapping in `skills/team-orchestrate/config/team-topology.json`.
 
-### 거버넌스 hooks
+### Governance Hooks
 
-`.claude/settings.local.json`에 자동 등록됩니다:
+Automatically registered in `.claude/settings.local.json`:
 - `TeammateIdle` → `project-team/hooks/teammate-idle-gate.js`
 - `TaskCompleted` → `project-team/hooks/task-completed-gate.js`
 
 ---
 
-## 사용 예시
+## Usage Examples
 
-### 기본 실행
+### Basic run
 
 ```bash
 /team-orchestrate
 ```
 
-### TASKS.md 지정
+### Specify TASKS.md path
 
 ```bash
 /team-orchestrate --tasks-file path/to/TASKS.md
 ```
 
-### 특정 팀원만 활성화
+### Activate specific teammates only
 
 ```bash
 /team-orchestrate --teammates architecture-lead,qa-lead
@@ -186,10 +185,10 @@ Teammate → Plan 제출 → team-lead 검토 → Approved/Rejected
 
 ---
 
-## 관련 스킬
+## Related Skills
 
-| 스킬 | 관계 |
-|------|------|
-| `/whitebox` | 실행 모니터링 + 컨트롤 플레인 |
-| `/evaluation` | Phase 완료 후 품질 게이트 |
-| `/auto-revision` | 자율 개선 루프 |
+| Skill | Relationship |
+|-------|-------------|
+| `/whitebox` | Execution monitoring + control plane |
+| `/evaluation` | Quality gate after phase completion |
+| `/auto-revision` | Autonomous improvement loop |

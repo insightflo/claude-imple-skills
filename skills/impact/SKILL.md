@@ -1,154 +1,154 @@
 ---
 name: impact
-description: 파일 변경 전 영향도/위험도를 분석합니다. 프로덕션 코드 수정 전, 리팩토링 전, 핵심 로직 변경 시 반드시 이 스킬을 사용하세요. 특히 payment, auth, billing, security 경로의 파일을 수정할 때는 필수입니다. /impact, "영향도 분석", "이 파일 수정하면 어디에 영향 가?" 트리거.
+description: Analyzes the blast radius and risk level before modifying any file. Run this skill before touching production code, before refactoring, and before changing core logic. It is mandatory for files under payment, auth, billing, and security paths. Triggers on /impact, "impact analysis", or "what does changing this file affect?"
 version: 1.1.0
 updated: 2026-02-11
 ---
 
-# Impact Analyzer (변경 영향도 분석)
+# Impact Analyzer
 
-> **파일 수정 전에 영향 범위, 위험도, 관련 테스트를 분석하여 안전한 변경을 지원합니다.**
-
----
-
-## 스킬 발동 조건
-
-- `/impact <파일경로>`
-- `/impact analyze <파일경로>`
-- "이 파일 수정하면 어디에 영향 가?"
-- "변경 영향도 분석해줘"
+> **Analyzes impact scope, risk level, and related tests before modifying a file to support safe changes.**
 
 ---
 
-## 절대 금지 사항
+## Trigger Conditions
 
-1. **코드를 직접 수정하지 마세요** - 이 스킬은 분석 전용입니다.
-2. **추측으로 의존성을 판단하지 마세요** - 반드시 실제 import/require 구문을 파싱하세요.
-3. **분석 없이 위험도를 단정하지 마세요** - 파일 경로 패턴과 실제 의존성을 모두 확인하세요.
+- `/impact <file-path>`
+- `/impact analyze <file-path>`
+- "What does changing this file affect?"
+- "Run an impact analysis"
 
 ---
 
-## 실행 단계
+## Absolute Prohibitions
+
+1. **Do not modify code directly** — this skill is analysis-only.
+2. **Do not guess dependencies** — always parse actual import/require statements.
+3. **Do not assert risk level without analysis** — verify both file path patterns and actual dependencies.
+
+---
+
+## Execution Steps
 
 ```
-/impact <파일경로> 수신
+Receive /impact <file-path>
     |
     v
-[1] 대상 파일 유효성 확인
+[1] Validate target file
     |
     v
-[2] 위험도 분류 (Risk Classification)
+[2] Risk classification
     |
     v
-[3] 직접 의존성 분석 (Direct Dependents)
+[3] Direct dependents analysis
     |
     v
-[4] 간접 의존성 분석 (Indirect Dependents)
+[4] Indirect dependents analysis
     |
     v
-[5] 영향 받는 도메인 식별
+[5] Identify affected domains
     |
     v
-[6] 관련 테스트 탐색
+[6] Locate related tests
     |
     v
-[7] 권장 검토자 결정
+[7] Determine recommended reviewers
     |
     v
-[8] 영향도 리포트 출력
+[8] Output impact report
 ```
 
 ---
 
-### 1단계: 대상 파일 유효성 확인
+### Step 1: Validate Target File
 
-파일 존재 여부와 타입 확인 (지원: `.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.vue`, `.svelte`)
+Confirm file existence and type (supported: `.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.vue`, `.svelte`)
 
-### 2단계: 위험도 분류
+### Step 2: Risk Classification
 
-파일 경로 패턴 기반으로 위험도를 분류합니다.
+Classify risk based on file path patterns.
 
-| 위험도 | 패턴 | 필수 조치 |
-|--------|------|-----------|
-| **CRITICAL** | `payment`, `billing`, `auth`, `security`, `crypto`, `jwt`, `password` | 전체 테스트 + 리뷰 필수 |
-| **HIGH** | `services/*`, `core/`, `middleware/`, `shared/` | 관련 테스트 스위트 실행 |
-| **MEDIUM** | `api/`, `routes/`, `models/`, `schemas/` | 계약 호환성 확인 |
-| **LOW** | `tests/`, `utils/`, `config/`, `docs/` | 표준 리뷰 |
+| Risk Level | Pattern | Required Action |
+|------------|---------|-----------------|
+| **CRITICAL** | `payment`, `billing`, `auth`, `security`, `crypto`, `jwt`, `password` | Full test suite + mandatory review |
+| **HIGH** | `services/*`, `core/`, `middleware/`, `shared/` | Run related test suite |
+| **MEDIUM** | `api/`, `routes/`, `models/`, `schemas/` | Verify contract compatibility |
+| **LOW** | `tests/`, `utils/`, `config/`, `docs/` | Standard review |
 
-**커스텀 설정**: `.claude/risk-areas.yaml`이 있으면 해당 설정을 우선 적용합니다.
+**Custom configuration**: If `.claude/risk-areas.yaml` exists, it takes priority.
 
-### 3단계: 직접 의존성 분석
+### Step 3: Direct Dependents Analysis
 
-대상 파일을 **import하거나 require하는** 모든 파일을 탐색합니다.
+Find all files that **import or require** the target file.
 
 ```bash
 # Python
-grep -rn "from.*<모듈명>|import.*<모듈명>" --include="*.py" .
+grep -rn "from.*<module-name>|import.*<module-name>" --include="*.py" .
 
 # JS/TS
-grep -rn "from.*<모듈명>|require.*<모듈명>" --include="*.ts" --include="*.js" .
+grep -rn "from.*<module-name>|require.*<module-name>" --include="*.ts" --include="*.js" .
 ```
 
-### 4단계: 간접 의존성 분석
+### Step 4: Indirect Dependents Analysis
 
-대상 파일이 **API 엔드포인트를 정의**하는 경우, 해당 API를 호출하는 파일을 탐색합니다.
+If the target file **defines API endpoints**, find files that call those APIs.
 
-| 유형 | 설명 | 탐색 방법 |
-|------|------|-----------|
-| API 호출 | 엔드포인트를 호출하는 클라이언트 | API 경로 문자열 grep |
-| 이벤트 구독 | 이벤트를 발행/구독하는 파일 | 이벤트명 grep |
+| Type | Description | Discovery Method |
+|------|-------------|-----------------|
+| API calls | Clients calling the endpoint | grep for API path strings |
+| Event subscriptions | Files publishing/subscribing to events | grep for event names |
 
-### 5단계: 영향 받는 도메인 식별
+### Step 5: Identify Affected Domains
 
-의존성 분석 결과를 기반으로 영향 받는 도메인을 식별합니다.
-- 디렉토리 구조 기반: `domains/<도메인명>/`, `src/<도메인명>/`
-- `.claude/project-team.yaml`의 도메인 정의가 있으면 우선 적용
+Identify affected domains from dependency analysis results.
+- Based on directory structure: `domains/<domain-name>/`, `src/<domain-name>/`
+- Domain definitions in `.claude/project-team.yaml` take priority if present
 
-### 6단계: 관련 테스트 탐색
+### Step 6: Locate Related Tests
 
-| 원본 파일 | 탐색 대상 |
-|-----------|-----------|
+| Source File | Search Targets |
+|-------------|----------------|
 | `user_service.py` | `test_user_service.py`, `user_service_test.py` |
 | `userService.ts` | `userService.test.ts`, `userService.spec.ts` |
 
-### 7단계: 권장 검토자 결정
+### Step 7: Determine Recommended Reviewers
 
-| 위험도 | 권장 검토자 |
-|--------|-------------|
+| Risk Level | Recommended Reviewer |
+|------------|----------------------|
 | **CRITICAL** | QA Manager + Chief Architect |
-| **HIGH** | Part Leader (해당 도메인) |
+| **HIGH** | Part Leader (relevant domain) |
 | **MEDIUM** | Domain Developer |
-| **LOW** | 일반 코드 리뷰 |
+| **LOW** | Standard code review |
 
-**교차 도메인 영향 시**: 영향 받는 모든 도메인의 Part Leader를 추가합니다.
+**Cross-domain impact**: Add the Part Leader of every affected domain.
 
-### 8단계: 영향도 리포트 출력
+### Step 8: Output Impact Report
 
-상세 출력 형식은 `references/output-formats.md`를 참조하세요.
-
----
-
-## Hook 연동
-
-| 구분 | Hook (`pre-edit-impact-check.js`) | Skill (`/impact`) |
-|------|-----------------------------------|-------------------|
-| 시점 | Edit 시 자동 실행 | 사용자 요청 시 |
-| 범위 | 단일 파일 요약 | 상세 분석 + 권장 사항 |
-| 용도 | 실시간 경고 | 사전 계획 수립 |
+See `references/output-formats.md` for detailed output format.
 
 ---
 
-## 관련 스킬 연동
+## Hook Integration
 
-| 스킬 | 연동 시점 | 용도 |
-|------|-----------|------|
-| `/deps <domain>` | 교차 도메인 영향 발견 시 | 도메인 의존성 시각화 |
-| `/coverage <file>` | 관련 테스트 확인 후 | 테스트 커버리지 상세 확인 |
-| `/changelog <domain>` | 수정 완료 후 | 변경 이력 기록 확인 |
+| | Hook (`pre-edit-impact-check.js`) | Skill (`/impact`) |
+|--|-----------------------------------|-------------------|
+| Timing | Auto-runs on Edit | On user request |
+| Scope | Single file summary | Detailed analysis + recommendations |
+| Purpose | Real-time warning | Pre-change planning |
 
 ---
 
-## 참조 문서
+## Related Skill Integration
 
-- `references/output-formats.md` - 출력 형식 상세
-- `references/examples.md` - 사용 예시
+| Skill | When to Use | Purpose |
+|-------|-------------|---------|
+| `/deps <domain>` | When cross-domain impact is found | Visualize domain dependencies |
+| `/coverage <file>` | After reviewing related tests | Detailed test coverage check |
+| `/changelog <domain>` | After change is complete | Review change history record |
+
+---
+
+## Reference Documents
+
+- `references/output-formats.md` — detailed output format
+- `references/examples.md` — usage examples
