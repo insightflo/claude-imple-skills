@@ -131,9 +131,58 @@ function validateFileScope(taskId, changedFiles, projectDir) {
 }
 
 /**
- * [목적] 작업 완료에 대한 경량 품질 체크
- * [입력] taskId, teammate, projectDir
- * [출력] { passed: boolean, issues: string[] }
+ * [Purpose] Auto-sync TASKS.md when a task is completed.
+ * Finds the task by ID or subject and marks it [x].
+ * [Input] taskId — task identifier or subject, projectDir — project root
+ * [Output] { synced: boolean, file: string|null }
+ */
+function syncTasksMd(taskId, taskSubject, projectDir) {
+  const tasksPath = path.join(projectDir, 'TASKS.md');
+  if (!fs.existsSync(tasksPath)) {
+    return { synced: false, file: null };
+  }
+
+  try {
+    let content = fs.readFileSync(tasksPath, 'utf8');
+    let synced = false;
+
+    // Try matching by task ID (e.g., P0-T0.1, T1.2)
+    const candidates = [taskId, taskSubject].filter(Boolean);
+
+    for (const candidate of candidates) {
+      if (!candidate || candidate === 'unknown') continue;
+
+      // Extract task ID pattern from candidate (e.g., "P0-T0.1" from "P0-T0.1: Setup monorepo")
+      const idMatch = candidate.match(/^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*(?:\.\d+)*)/);
+      if (!idMatch) continue;
+
+      const id = idMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Match "- [ ] P0-T0.1:" or "### [ ] P0-T0.1:" patterns
+      const pattern = new RegExp(`(- \\[)[ /](\\]\\s+${id}:)`, 'g');
+      const newContent = content.replace(pattern, '$1x$2');
+
+      if (newContent !== content) {
+        content = newContent;
+        synced = true;
+      }
+    }
+
+    if (synced) {
+      fs.writeFileSync(tasksPath, content, 'utf8');
+      return { synced: true, file: 'TASKS.md' };
+    }
+
+    return { synced: false, file: null };
+  } catch {
+    return { synced: false, file: null };
+  }
+}
+
+/**
+ * [Purpose] Lightweight quality check on task completion.
+ * [Input] taskId, teammate, projectDir
+ * [Output] { passed: boolean, issues: string[] }
  */
 function runLightweightQualityCheck(taskId, _teammate, projectDir) {
   const issues = [];
@@ -174,11 +223,15 @@ async function main() {
   }
 
   const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const taskId = input.tool_input?.task_id || input.task_id || 'unknown';
-  const teammate = input.tool_input?.teammate || input.teammate || 'unknown';
+  const taskId = input.tool_input?.task_id || input.task_id || input.task_subject || 'unknown';
+  const taskSubject = input.tool_input?.task_subject || input.task_subject || '';
+  const teammate = input.tool_input?.teammate || input.teammate_name || input.teammate || 'unknown';
   const changedFiles = input.tool_input?.changed_files || input.changed_files || [];
 
-  // 경량 품질 체크 실행
+  // Auto-sync TASKS.md — mark completed task as [x]
+  const syncResult = syncTasksMd(taskId, taskSubject, projectDir);
+
+  // Lightweight quality check
   const qualityResult = runLightweightQualityCheck(taskId, teammate, projectDir);
 
   // 파일 scope 체크
@@ -224,6 +277,7 @@ async function main() {
     reason,
     taskId,
     teammate,
+    tasksMdSynced: syncResult.synced,
     checks: {
       quality: qualityResult,
       fileScope: scopeResult,
