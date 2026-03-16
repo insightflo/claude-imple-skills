@@ -21,12 +21,11 @@ const EXPECTED_MODE_ROLE_MAP = {
   full: ['lead', 'builder', 'reviewer', 'designer', 'dba', 'security-specialist']
 };
 const EXPECTED_MODE_HOOK_MAP = {
-  lite: ['permission-checker', 'policy-gate', 'security-scan', 'task-board-sync'],
+  lite: ['permission-checker', 'policy-gate', 'security-scan'],
   standard: [
     'permission-checker',
     'policy-gate',
     'security-scan',
-    'task-board-sync',
     'quality-gate',
     'contract-gate',
     'pre-edit-impact-check'
@@ -35,7 +34,6 @@ const EXPECTED_MODE_HOOK_MAP = {
     'permission-checker',
     'policy-gate',
     'security-scan',
-    'task-board-sync',
     'quality-gate',
     'contract-gate',
     'pre-edit-impact-check',

@@ -13,7 +13,7 @@ Claude Project Team is a comprehensive framework for orchestrating AI agents acr
 
 - **Multi-tier governance**: Agent Teams leads coordinate native Claude subagents with domain-level execution
 - **8 agents total**: 4 core worker agents + 4 Agent Teams leads with clearly defined roles and permissions
-- **20 automated hooks** for standards enforcement, quality gates, and cross-domain notifications
+- **19 automated hooks** for standards enforcement, quality gates, and cross-domain notifications
 - **Interface contracts** for safe multi-domain coordination
 - **AI context management** for consistent decision-making across distributed teams
 
@@ -39,7 +39,7 @@ Worker Agents (project-team/agents/)         ← Executed as subagents
 
 ### Automated Governance
 
-20 hooks enforce standards automatically:
+19 hooks enforce standards automatically:
 
 | Hook | Purpose | Trigger |
 |------|---------|---------|
@@ -59,7 +59,6 @@ Worker Agents (project-team/agents/)         ← Executed as subagents
 | **policy-gate** | Validates policy compliance | Policy-sensitive paths |
 | **risk-gate** | Gates high-risk operations | Risk assessment |
 | **security-scan** | Scans for security vulnerabilities | Security-sensitive code |
-| **task-board-sync** | Syncs task state to board | Task status changes |
 | **task-sync** | Synchronizes task metadata | Task updates |
 | **teammate-idle-gate** | Prevents idle subagent handoffs | Agent Teams tasks |
 | **task-completed-gate** | Validates task completion criteria | Task completion |
@@ -219,7 +218,6 @@ System-wide settings are stored in `~/.claude/settings.json`:
     "policy-gate",
     "risk-gate",
     "security-scan",
-    "task-board-sync",
     "task-sync",
     "teammate-idle-gate",
     "task-completed-gate"

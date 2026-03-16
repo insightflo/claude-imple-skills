@@ -86,7 +86,7 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 
 ---
 
-## 📊 Standalone 스킬 카탈로그 (20개)
+## 📊 Standalone 스킬 카탈로그 (19개)
 
 | 스킬 | 트리거 | 역할 |
 |------|--------|------|
@@ -107,7 +107,6 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 | **`/coverage`** | `/coverage` | 테스트 커버리지 |
 | **`/architecture`** | `/architecture` | 아키텍처 맵 |
 | **`/compress`** | "컨텍스트 압축" | Long Context 최적화 |
-| **`/task-board`** | "칸반 보드" | 에이전트 태스크 시각화 |
 | **`/statusline`** | 자동 활성화 | 진행률 상태바 표시 |
 | **`/changelog`** | `/changelog` | 변경 이력 조회 |
 
@@ -139,7 +138,7 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 "대규모 프로젝트야"             → /governance-setup
 "스프린트로 실행해줘"           → /team-orchestrate --mode=sprint
 "자율 실행해줘"                 → /team-orchestrate --mode=auto
-"칸반 보드 보여줘"              → /task-board show
+"칸반 보드 보여줘"              → /whitebox status
 "컨텍스트 압축해줘"             → /compress
 ```
 

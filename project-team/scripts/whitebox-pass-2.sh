@@ -29,7 +29,6 @@ exit 0
 EOF
 chmod +x "$FIXTURE_DIR/bin/claude" "$FIXTURE_DIR/bin/codex" "$FIXTURE_DIR/bin/gemini"
 
-node "$ROOT_DIR/skills/task-board/scripts/board-builder.js" --project-dir="$FIXTURE_DIR" > /dev/null
 node "$ROOT_DIR/project-team/scripts/collab-init.js" --project-dir="$FIXTURE_DIR" 2>&1 | tee "$EVIDENCE_DIR/pass-2-collab.txt"
 node "$ROOT_DIR/project-team/scripts/collab-init.js" --check --project-dir="$FIXTURE_DIR" 2>&1 | tee -a "$EVIDENCE_DIR/pass-2-collab.txt"
 node "$ROOT_DIR/skills/whitebox/scripts/whitebox-control-state.js" --project-dir="$FIXTURE_DIR" > /dev/null

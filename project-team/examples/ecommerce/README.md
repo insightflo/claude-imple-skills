@@ -110,7 +110,7 @@ ecommerce/
 
 ```yaml
 # 결제 도메인의 모든 변경은 다음을 만족해야 함:
-required_approvals: ["chief-architect", "qa-manager"]
+required_approvals: ["architecture-lead", "qa-lead"]
 required_tests: ["unit", "integration", "e2e"]
 security_checks:
   - encryption (AES-256)

@@ -92,7 +92,7 @@ select_skill_categories() {
 
     CATEGORIES=$(gum choose --no-limit --cursor.foreground 212 --selected.foreground 212 \
         --header "설치할 카테고리를 선택하세요 (Space로 선택, Enter로 확인):" \
-        "Core - multi-ai-run, multi-ai-review, team-orchestrate, task-board, whitebox, statusline runtime (필수 추천)" \
+        "Core - multi-ai-run, multi-ai-review, team-orchestrate, whitebox, statusline runtime (필수 추천)" \
         "Orchestration - agile, governance-setup, workflow-guide" \
         "Quality - checkpoint, quality-auditor, security-review" \
         "Analysis - architecture, deps, impact, changelog, coverage" \
@@ -227,7 +227,7 @@ install_skills() {
 
     # Core skills
     if [[ "$INSTALL_ALL" == true ]] || [[ "$CATEGORIES" == *"Core"* ]]; then
-        for skill in multi-ai-run multi-ai-review team-orchestrate task-board whitebox statusline; do
+        for skill in multi-ai-run multi-ai-review team-orchestrate whitebox statusline; do
             if [[ -d "$SCRIPT_DIR/skills/$skill" ]]; then
                 mkdir -p "$TARGET_DIR/skills/$skill"
                 gum spin --spinner dot --title "$skill 설치 중..." -- \
@@ -500,7 +500,7 @@ show_completion() {
         "   > /team-orchestrate" \
         "" \
         "4. 진행 상황 UI:" \
-        "   > /task-board show" \
+        "   > /whitebox status" \
         "" \
         "5. 멀티 AI 리뷰:" \
         "   > /multi-ai-review"

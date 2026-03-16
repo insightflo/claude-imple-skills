@@ -91,12 +91,6 @@
         "matcher": "Edit|Write",
         "installType": "active"
       },
-      "task-board-sync": {
-        "artifact": "hooks/task-board-sync.js",
-        "event": "PostToolUse",
-        "matcher": "Edit|Write|TaskUpdate",
-        "installType": "active"
-      },
       "quality-gate": {
         "artifact": "hooks/quality-gate.js",
         "event": "Stop",
@@ -212,8 +206,7 @@
       "hookNames": [
         "permission-checker",
         "policy-gate",
-        "security-scan",
-        "task-board-sync"
+        "security-scan"
       ],
       "compatibilityProfiles": []
     },
@@ -229,7 +222,6 @@
         "permission-checker",
         "policy-gate",
         "security-scan",
-        "task-board-sync",
         "quality-gate",
         "contract-gate",
         "pre-edit-impact-check"
@@ -248,7 +240,6 @@
         "permission-checker",
         "policy-gate",
         "security-scan",
-        "task-board-sync",
         "quality-gate",
         "contract-gate",
         "pre-edit-impact-check",

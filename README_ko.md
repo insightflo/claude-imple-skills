@@ -46,10 +46,10 @@ cd claude-impl-tools/project-team
 
 | 구성요소 | 개수 | 용도 |
 |----------|------|------|
-| **스킬** | 20개 | 작업 실행, 분석, 자동화 |
+| **스킬** | 19개 | 작업 실행, 분석, 자동화 |
 | **Agent Teams 리더** | 4개 | team-lead, architecture-lead, qa-lead, design-lead |
 | **코어 워커 에이전트** | 4개 | builder, reviewer, designer, maintenance-analyst |
-| **훅** | 20개 | 자동 검증, 게이트, 동기화, 거버넌스 |
+| **훅** | 19개 | 자동 검증, 게이트, 동기화, 거버넌스 |
 | **템플릿** | 11개 | Project Team 프로토콜, ADR, 계약, 표준 |
 
 ---
@@ -100,7 +100,6 @@ cd claude-impl-tools/project-team
 | `/architecture` | 프로젝트 구조 & 도메인 맵 |
 | `/compress` | Long Context 최적화 (H2O 패턴) |
 | `/statusline` | Claude Code 상태바에 TASKS.md 진행 상황 표시 |
-| `/task-board` | 브라우저 surfacing 불가 시 whitebox fallback 칸반/개입 렌더러 |
 
 ---
 
@@ -137,7 +136,7 @@ team-lead (PM 리더)
 | **Designer** | 디자인 전문가 |
 | **Maintenance Analyst** | 프로덕션 영향도 분석 |
 
-### 훅 (20개)
+### 훅 (19개)
 
 파일 수정 전후 자동 실행되는 검증:
 
@@ -147,7 +146,7 @@ team-lead (PM 리더)
 | **안전** | `pre-edit-impact-check`, `risk-area-warning`, `security-scan` |
 | **품질** | `standards-validator`, `design-validator`, `interface-validator`, `quality-gate` |
 | **게이트** | `policy-gate`, `contract-gate`, `risk-gate`, `docs-gate` |
-| **동기화** | `architecture-updater`, `changelog-recorder`, `cross-domain-notifier`, `task-sync`, `task-board-sync` |
+| **동기화** | `architecture-updater`, `changelog-recorder`, `cross-domain-notifier`, `task-sync` |
 | **Agent Teams** | `teammate-idle-gate`, `task-completed-gate` |
 
 ### 배포 모드
@@ -235,7 +234,7 @@ cd project-team
 
 ```
 claude-impl-tools/
-├── skills/                    # 20개 스킬
+├── skills/                    # 19개 스킬
 │   ├── workflow-guide/        # 메타 허브
 │   ├── governance-setup/      # Phase 0 설정
 │   ├── agile/                 # 레이어별 스프린트
@@ -254,8 +253,7 @@ claude-impl-tools/
 │   ├── coverage/              # 테스트 커버리지
 │   ├── architecture/          # 아키텍처 맵
 │   ├── whitebox/              # 실행 상태 점검
-│   ├── statusline/            # 상태바 진행 표시
-│   └── task-board/            # 칸반 시각화
+│   └── statusline/            # 상태바 진행 표시
 │
 ├── project-team/              # 에이전트 팀 시스템
 │   ├── install.sh             # 설치 스크립트

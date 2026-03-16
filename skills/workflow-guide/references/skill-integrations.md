@@ -88,9 +88,9 @@
 "문서가 너무 길어"              → /compress optimize
 "스프린트로 실행해줘"           → /team-orchestrate --mode=sprint
 "자율 실행해줘"                 → /team-orchestrate --mode=auto
-"칸반 보드 보여줘"              → /task-board show
-"보드 보여줘"                   → /task-board show
-"blocked 태스크 확인"           → /task-board health
+"칸반 보드 보여줘"              → /whitebox status
+"보드 보여줘"                   → /whitebox status
+"blocked 태스크 확인"           → /whitebox status
 ```
 
 ---

@@ -42,7 +42,7 @@ updated: 2026-03-07
 - `/whitebox` is the only product boundary.
 - TUI는 `/whitebox`의 interactive renderer/operator shell 이다.
 - CLI는 `/whitebox`의 internal mutation API 이자 headless/scriptable surface 이다.
-- `/task-board`는 별도 제품이 아니라 whitebox renderer 이다.
+- TUI renderer 는 `/whitebox` 전용 interactive shell 이다.
 
 ## Control Contract (MVP freeze)
 
@@ -86,9 +86,9 @@ updated: 2026-03-07
   - JSON (`--json`): `{ ok, run_id, blocked_count, gate_status, pending_approval_count, pending_decision_count, stale_artifacts }`
 - Side effects:
   - stale derived artifact 가 있으면 authoritative projector 로 자동 rebuild 시도
-  - TTY에서는 `/task-board` operator shell 로 진입해 approval shell 을 렌더링할 수 있음
+  - TTY에서는 whitebox TUI operator shell 로 진입해 approval shell 을 렌더링할 수 있음
 
-**관계**: 보드 렌더링은 `/task-board show`를 재사용할 수 있다. `/whitebox status`는 "화이트박스" 관점의 요약/헤더/경고(derived stale 등)를 추가로 노출한다.
+**관계**: `/whitebox status`는 "화이트박스" 관점의 요약/헤더/경고(derived stale 등)를 노출한다.
 
 ### `/whitebox explain` — 왜 막혔는지 + 어떤 선택이 가능한지 설명
 
@@ -127,7 +127,7 @@ updated: 2026-03-07
 - `list/show`: 없음 (`control-state.json` query only)
   - `approve/reject`: shared mutation path 를 통해 `control.ndjson` append + audit event 기록
 
-`list`/`show` 결과의 pending approval 은 위 trigger metadata 를 포함할 수 있으며, read-only decision 은 `/whitebox explain` 과 `/task-board`에서 inspect 중심으로 surfacing 됩니다. `approve/reject`는 mutable approval gate 에만 적용됩니다.
+`list`/`show` 결과의 pending approval 은 위 trigger metadata 를 포함할 수 있으며, read-only decision 은 `/whitebox explain` 에서 inspect 중심으로 surfacing 됩니다. `approve/reject`는 mutable approval gate 에만 적용됩니다.
 
 ### `/whitebox health` — 환경/아티팩트 건전성 점검
 
@@ -149,7 +149,7 @@ updated: 2026-03-07
 4. `/whitebox approvals list|show` 로 mutable pending gate 를 확인한다.
 5. `/whitebox approvals approve|reject --gate-id=...` 로 canonical control command 를 기록한다.
 6. architecture-lead 가 `FINAL` DEC 를 기록하면 matching `ESCALATED` REQ 는 canonical hook/event 경로에서 자동 `RESOLVED` 된다.
-7. `/whitebox status` 또는 `/task-board show` 로 resumed/blocked 상태를 다시 확인한다.
+7. `/whitebox status` 로 resumed/blocked 상태를 다시 확인한다.
 
 **규칙**:
 

@@ -1,13 +1,13 @@
 # Multi-AI Review Council Configuration
-# CLI 기반 멀티-AI 리뷰 설정
-# 참조: https://github.com/team-attention/agent-council
+# 범용 합의 엔진 — 도메인 자동 라우팅, Score Card, Quality Gate 포함
+# v4.0.0
 
 council:
-    # Council members configuration
+    # Council 멤버 설정
     members:
         - name: gemini
-          # NOTE: gemini CLI는 prompt를 positional로 받지 않고 -p/--prompt가 필요합니다.
-          # council-job-worker가 -p를 자동 보정하지만, config에도 명시해두면 더 안전합니다.
+          # NOTE: gemini CLI는 -p/--prompt 플래그가 필요합니다.
+          # council-job-worker가 자동 보정하지만, config에도 명시합니다.
           command: "gemini --model gemini-3-flash-preview --output-format text -p"
           emoji: "💎"
           color: "GREEN"
@@ -17,12 +17,69 @@ council:
           emoji: "🤖"
           color: "BLUE"
 
-    # Chairman configuration (Claude가 의장 역할)
+    # Chairman 설정 (Claude가 의장 역할)
     chairman:
         role: "auto"
-        description: "모든 의견을 종합하여 최종 추천을 제시합니다"
+        description: "모든 의견을 종합하여 최종 판정을 제시합니다"
 
-    # Execution settings
+    # 실행 설정
     settings:
         timeout: 180
         exclude_chairman_from_members: true
+
+    # 도메인 자동 라우팅 (자연어 키워드 → 프리셋)
+    # Chairman이 사용자 요청에서 키워드를 감지하여 presets/ 하위 파일을 선택합니다.
+    routing:
+        code-review:
+            keywords: ["리뷰", "review", "PR", "코드 검토", "merge", "코드 품질", "pull request"]
+        market-regime:
+            keywords: ["시장", "시황", "레짐", "주식", "매크로", "금리", "환율", "채권", "bull", "bear"]
+        investment:
+            keywords: ["투자", "심사", "밸류에이션", "IR", "딜", "인수", "M&A", "funding"]
+        risk-assessment:
+            keywords: ["리스크", "위험", "risk", "보안 평가", "취약점", "compliance"]
+        product-review:
+            keywords: ["기획", "PRD", "기능 명세", "스펙", "요구사항 평가", "feature spec", "product spec"]
+        architecture-review:
+            keywords: ["아키텍처", "설계", "시스템 구조", "architecture", "인프라", "마이크로서비스", "모놀리스"]
+        business-plan:
+            keywords: ["사업 계획", "비즈니스 플랜", "사업성", "창업", "신사업", "피치덱", "business plan", "BM"]
+        campaign-review:
+            keywords: ["캠페인", "마케팅", "광고", "프로모션", "campaign", "크리에이티브", "카피", "퍼포먼스"]
+        portfolio-rebalance:
+            keywords: ["포트폴리오", "리밸런싱", "자산배분", "asset allocation", "rebalance", "섹터 배분"]
+        paper-review:
+            keywords: ["논문", "연구", "paper", "학술", "방법론", "peer review", "저널", "학회"]
+        contract-review:
+            keywords: ["계약", "contract", "NDA", "SLA", "약관", "조항", "법무", "MOU"]
+        project-gate:
+            keywords: ["프로젝트 점검", "Go/No-Go", "게이트", "중간 점검", "milestone", "진행 상황 판단"]
+        ml-model-review:
+            keywords: ["모델 평가", "ML", "AI 모델", "편향", "fairness", "배포 판단", "model review"]
+        crisis-response:
+            keywords: ["위기 대응", "비상 계획", "BCP", "DR", "disaster recovery", "crisis", "비상"]
+        default:
+            fallback: true
+
+    # 스코어링 시스템 (차원별 점수는 각 프리셋 YAML에 정의)
+    scoring:
+        grades:
+            A: 90
+            B: 80
+            C: 70
+            D: 60
+            F: 0
+        severity:
+            critical: "🔴 즉시 대응 필요"
+            high: "🟡 우선 해결 권장"
+            medium: "🟢 개선 권장"
+            low: "💡 참고"
+
+    # CI Quality Gate (--mode ci 플래그 사용 시에만 활성화)
+    quality_gate:
+        enabled: false
+        rules:
+            critical_max: 0
+            high_max: 3
+            min_score: 70
+        on_fail: "block"

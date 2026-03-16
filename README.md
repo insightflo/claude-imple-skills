@@ -44,10 +44,10 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Skills** | 20 | Task execution, analysis, automation |
+| **Skills** | 19 | Task execution, analysis, automation |
 | **Agent Teams Leads** | 4 | team-lead, architecture-lead, qa-lead, design-lead |
 | **Core Worker Agents** | 4 | builder, reviewer, designer, maintenance-analyst |
-| **Hooks** | 20 | Auto-validation, gates, sync, governance |
+| **Hooks** | 19 | Auto-validation, gates, sync, governance |
 | **Templates** | 11 | Project Team protocols, ADR, contracts, standards |
 
 ---
@@ -98,7 +98,6 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 | `/architecture` | Map project structure & domains |
 | `/compress` | Long Context optimization (H2O pattern) |
 | `/statusline` | Display TASKS.md progress in Claude Code status bar |
-| `/task-board` | Whitebox fallback surface for Kanban/task intervention rendering when browser surfacing is unavailable |
 
 ---
 
@@ -135,7 +134,7 @@ Governance:    TeammateIdle hook + TaskCompleted hook
 | **Designer** | Design specialist |
 | **Maintenance Analyst** | Production impact analysis |
 
-### Hooks (20)
+### Hooks (19)
 
 Automatic validations that run before/after file edits:
 
@@ -145,7 +144,7 @@ Automatic validations that run before/after file edits:
 | **Safety** | `pre-edit-impact-check`, `risk-area-warning`, `security-scan` |
 | **Quality** | `standards-validator`, `design-validator`, `interface-validator`, `quality-gate` |
 | **Gates** | `policy-gate`, `contract-gate`, `risk-gate`, `docs-gate` |
-| **Sync** | `architecture-updater`, `changelog-recorder`, `cross-domain-notifier`, `task-sync`, `task-board-sync` |
+| **Sync** | `architecture-updater`, `changelog-recorder`, `cross-domain-notifier`, `task-sync` |
 | **Agent Teams** | `teammate-idle-gate`, `task-completed-gate` |
 
 ### Deployment Modes
@@ -233,7 +232,7 @@ Start
 
 ```
 claude-impl-tools/
-├── skills/                    # 20 skills
+├── skills/                    # 19 skills
 │   ├── workflow-guide/        # Meta hub
 │   ├── governance-setup/      # Phase 0 setup
 │   ├── agile/                 # Layered sprints
@@ -252,8 +251,7 @@ claude-impl-tools/
 │   ├── coverage/              # Test coverage
 │   ├── architecture/          # Architecture map
 │   ├── whitebox/              # Execution state inspection
-│   ├── statusline/            # TASKS.md progress in status bar
-│   └── task-board/            # Kanban visualization
+│   └── statusline/            # TASKS.md progress in status bar
 │
 ├── project-team/              # Agent team system
 │   ├── install.sh             # Installation script

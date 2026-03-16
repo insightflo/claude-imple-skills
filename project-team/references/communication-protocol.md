@@ -57,7 +57,7 @@ ESCALATED → RESOLVED (architecture-lead creates FINAL DEC file, ruling enforce
 - **Negotiation Limit**: `max_negotiation: 2` (default). If `negotiation_count` reaches this limit, status must transition to `ESCALATED`.
 - **Thread Management**: Use the same `thread_id` for related follow-ups. Prevents duplicate REQs for the same issue.
 - **Escalation Trigger**: When a REQ reaches `ESCALATED`, architecture-lead takes ownership and creates a corresponding DEC file. All agents must comply with the DEC ruling.
-- **FINAL DEC Auto-Resolution**: Writing a `DEC-*.md` with `status: FINAL` for an `ESCALATED` REQ auto-updates the matching REQ to `RESOLVED`, appends the canonical `req_resolved` event, and marks task-board derived artifacts stale for rebuild.
+- **FINAL DEC Auto-Resolution**: Writing a `DEC-*.md` with `status: FINAL` for an `ESCALATED` REQ auto-updates the matching REQ to `RESOLVED`, appends the canonical `req_resolved` event, and marks derived artifacts stale for rebuild.
 - **Context Limit**: Change Summary must be ≤500 characters. Include only what the receiving agent needs to decide.
 - **Wave Archive**: At wave completion, all RESOLVED/REJECTED REQs move to `.claude/collab/archive/wave-N/`.
 
@@ -133,9 +133,9 @@ To request a cross-domain change, create a REQ file instead.
 7. **Auto-resolve**: Once that DEC is `FINAL`, the matching `ESCALATED` REQ is rewritten to `RESOLVED` via the canonical hook/event path.
 8. **Archive**: After wave completion, REQ and DEC move to `.claude/collab/archive/wave-N/`.
 
-## 10. Kanban Board Status Mapping
+## 10. Board Status Mapping
 
-The task board (`/task-board`) unifies two status systems into four visual columns:
+The whitebox surface unifies two status systems into four visual columns:
 
 | Board Column | orchestrate-state status | REQ/DEC status |
 |-------------|--------------------------|----------------|
@@ -144,7 +144,7 @@ The task board (`/task-board`) unifies two status systems into four visual colum
 | **Blocked** | `failed`, `timeout` | `ESCALATED` |
 | **Done** | `completed` | `RESOLVED`, `REJECTED` |
 
-### Board Event Types (emitted by `task-board-sync.js`)
+### Event Types (emitted to `events.ndjson`)
 
 | Event | Trigger | Board Effect |
 |-------|---------|--------------|
@@ -165,8 +165,8 @@ The task board (`/task-board`) unifies two status systems into four visual colum
 ```
 
 **Single Source of Truth**: `TASKS.md` + `.claude/orchestrate-state.json` are canonical.
-`board-state.json` is always derivable via `node skills/task-board/scripts/board-builder.js`.
-Escalated REQ cards may also surface linked `DEC-*` metadata (`decision_id`, `decision_status`, `decision_path`) so whitebox/task-board/TUI can show the final ruling context without manual file inspection.
+`board-state.json` is always derivable from these canonical sources.
+Escalated REQ cards may also surface linked `DEC-*` metadata (`decision_id`, `decision_status`, `decision_path`) so whitebox/TUI can show the final ruling context without manual file inspection.
 
 ## 11. Wave Integration
 

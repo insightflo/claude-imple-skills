@@ -1,2 +1,0 @@
-{"ts":"2026-03-08T12:00:00Z","type":"approval_required","producer":"policy-gate","correlation_id":"T1.2","data":{"gate_id":"gate-approval-required","gate_name":"policy-gate","task_id":"T1.2","preview":"Approval required before execution can continue."}}
-{"ts":"2026-03-08T12:00:01Z","type":"execution_paused","producer":"policy-gate","correlation_id":"T1.2","data":{"gate_id":"gate-approval-required","gate_name":"policy-gate","task_id":"T1.2"}}
