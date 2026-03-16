@@ -1,0 +1,18 @@
+# 코드 리뷰 프리셋
+# 트리거 키워드: 리뷰, review, PR, 코드 검토, merge, 코드 품질, pull request
+
+name: code-review
+display: "코드 리뷰"
+
+# 평가 차원 및 가중치 (합계 = 1.0)
+dimensions:
+  security:       { weight: 0.25, label: "보안" }
+  performance:    { weight: 0.20, label: "성능" }
+  maintainability: { weight: 0.25, label: "유지보수성" }
+  correctness:    { weight: 0.20, label: "정확성" }
+  style:          { weight: 0.10, label: "스타일" }
+
+# 멤버별 역할 정의
+roles:
+  gemini: "Creative & Architecture Reviewer — 아키텍처, UX, 혁신적 대안 중심"
+  codex:  "Technical & Pattern Reviewer — SOLID, 보안, 성능 패턴 분석"

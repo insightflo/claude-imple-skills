@@ -1,2 +1,4 @@
 experiment	hypothesis	stale	tests	dead	docs	composite	result
 0	baseline	3	100.0	1	100	68.0	baseline
+1	remove 3 stale refs (task-board, ChiefArchitect in 3 files)	0	100.0	1	100	98.0	keep
+2	remove dead agent (docs-specialist) + unused childProcess import	0	100.0	0	100	100.0	keep

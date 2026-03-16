@@ -1,0 +1,23 @@
+# 투자 심사 프리셋
+# 트리거 키워드: 투자, 심사, 밸류에이션, IR, 딜, 인수, M&A, funding
+
+name: investment
+display: "투자 심사"
+
+# 평가 차원 및 가중치 (합계 = 1.0)
+dimensions:
+  market:     { weight: 0.25, label: "시장성" }
+  financials: { weight: 0.25, label: "재무 건전성" }
+  team:       { weight: 0.20, label: "팀/실행력" }
+  risk:       { weight: 0.15, label: "리스크" }
+  timing:     { weight: 0.15, label: "타이밍" }
+
+# 멤버별 역할 정의
+roles:
+  gemini: "시장/전략 심사역 — 시장 규모, 경쟁 구도, 성장 가능성 분석"
+  codex:  "재무/리스크 심사역 — 재무제표, 수익성, 리스크 팩터 분석"
+
+# 판정 출력 설정
+output:
+  verdict_options: ["Strong Buy", "Buy", "Hold", "Pass", "Strong Pass"]
+  verdict_label: "투자 판정"

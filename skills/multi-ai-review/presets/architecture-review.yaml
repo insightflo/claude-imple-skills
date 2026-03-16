@@ -1,0 +1,14 @@
+name: architecture-review
+display: "아키텍처 설계 심사"
+dimensions:
+  scalability: { weight: 0.25, label: "확장성" }
+  reliability: { weight: 0.25, label: "안정성/장애 대응" }
+  simplicity: { weight: 0.20, label: "단순성/유지보수" }
+  security: { weight: 0.15, label: "보안" }
+  cost_efficiency: { weight: 0.15, label: "비용 효율" }
+roles:
+  gemini: "솔루션 아키텍트 — 업계 트렌드, 대안 아키텍처, 미래 확장 시나리오, 벤더 전략 평가"
+  codex: "시스템 엔지니어 — 장애 모드 분석, 병목 지점, 운영 복잡도, 인프라 비용 산출"
+output:
+  verdict_options: ["Approved", "Approved with Conditions", "Needs Redesign", "Major Concerns", "Rejected"]
+  verdict_label: "설계 판정"

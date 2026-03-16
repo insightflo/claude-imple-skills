@@ -1,0 +1,14 @@
+name: contract-review
+display: "계약 검토"
+dimensions:
+  legal_risk: { weight: 0.25, label: "법적 리스크" }
+  commercial_fairness: { weight: 0.25, label: "상업적 공정성" }
+  obligation_clarity: { weight: 0.20, label: "의무/권리 명확성" }
+  termination_protection: { weight: 0.15, label: "해지/분쟁 보호" }
+  compliance: { weight: 0.15, label: "규제 준수" }
+roles:
+  gemini: "비즈니스 협상가 — 상업적 이익 균형, 협상 레버리지, 시장 관행 대비 조건 평가"
+  codex: "법무 리스크 분석가 — 법적 허점, 책임 한도, 지적재산 조항, 분쟁 해결 절차 분석"
+output:
+  verdict_options: ["Sign", "Sign with Amendments", "Negotiate", "Major Red Flags", "Walk Away"]
+  verdict_label: "계약 판정"

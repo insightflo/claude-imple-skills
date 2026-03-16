@@ -1,0 +1,14 @@
+name: paper-review
+display: "논문/연구 리뷰"
+dimensions:
+  novelty: { weight: 0.25, label: "신규성" }
+  methodology: { weight: 0.25, label: "방법론 타당성" }
+  significance: { weight: 0.20, label: "학문적 기여도" }
+  reproducibility: { weight: 0.15, label: "재현 가능성" }
+  clarity: { weight: 0.15, label: "논문 명확성" }
+roles:
+  gemini: "학술 비평가 — 연구 질문의 중요성, 관련 연구 위치, 학문적 임팩트, 논리 흐름 평가"
+  codex: "방법론 검증가 — 실험 설계, 통계 분석, 데이터 품질, 재현 조건, 한계점 분석"
+output:
+  verdict_options: ["Accept", "Accept with Minor Revision", "Major Revision", "Resubmit", "Reject"]
+  verdict_label: "심사 판정"

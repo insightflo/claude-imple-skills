@@ -1,0 +1,14 @@
+name: portfolio-rebalance
+display: "포트폴리오 리밸런싱"
+dimensions:
+  risk_adjusted_return: { weight: 0.25, label: "위험 조정 수익" }
+  diversification: { weight: 0.25, label: "분산 효과" }
+  macro_alignment: { weight: 0.20, label: "매크로 정합성" }
+  cost_impact: { weight: 0.15, label: "거래 비용/세금" }
+  timing: { weight: 0.15, label: "타이밍 적절성" }
+roles:
+  gemini: "매크로 전략가 — 경기 사이클, 금리 방향, 섹터 로테이션, 글로벌 자금 흐름 분석"
+  codex: "퀀트 포트폴리오 매니저 — 샤프비율, 상관계수, 드로다운 시뮬레이션, 리밸런싱 비용 산출"
+output:
+  verdict_options: ["Rebalance Now", "Partial Rebalance", "Hold Current", "Minor Trim", "No Action"]
+  verdict_label: "리밸런싱 판정"
