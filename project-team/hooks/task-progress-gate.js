@@ -145,7 +145,7 @@ if (require.main === module) {
     main();
   } catch {
     // Hook must never crash the session
-    process.stdout.write(JSON.stringify({ decision: 'allow', reason: '' }));
+    process.stdout.write(JSON.stringify({ decision: 'approve', reason: '' }));
   }
 }
 

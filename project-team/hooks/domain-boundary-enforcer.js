@@ -8,7 +8,7 @@
  *
  * Claude Code Hook Protocol (PreToolUse):
  *   - stdin: JSON { hook_event_name, tool_name, tool_input: { file_path, content } }
- *   - stdout: JSON { decision: 'allow'|'block', reason?, suggestion? }
+ *   - stdout: JSON { decision: 'approve'|'block', reason?, suggestion? }
  *
  * Agent role detection: process.env.CLAUDE_AGENT_ROLE
  * Cross-domain changes: create REQ file in .claude/collab/requests/
@@ -211,7 +211,7 @@ async function main() {
   // Allowed: no output needed (implicit allow)
 }
 
-main().catch(() => {});
+main().catch((err) => { console.error('[domain-boundary-enforcer] Unhandled error:', err.message); });
 
 // ---------------------------------------------------------------------------
 // Exports for testing

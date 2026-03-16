@@ -254,7 +254,7 @@ async function main() {
     decision = 'warn';
     reason = qualityResult.issues.join('; ');
   } else {
-    decision = 'allow';
+    decision = 'approve';
     reason = '';
   }
 
@@ -263,7 +263,7 @@ async function main() {
     hook: 'task-completed-gate',
     decision,
     severity: decision === 'warn' ? 'warning' : 'info',
-    summary: decision === 'allow'
+    summary: decision === 'approve'
       ? `Task ${taskId} completed by ${teammate} — quality checks passed`
       : `Task ${taskId} completed by ${teammate} with issues: ${reason}`,
     remediation: decision === 'warn'
@@ -286,9 +286,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(() => {
-    // Hook은 세션을 중단시키지 않아야 함
-  });
+  main().catch((err) => { console.error('[task-completed-gate] Unhandled error:', err.message); });
 }
 
 // ---------------------------------------------------------------------------

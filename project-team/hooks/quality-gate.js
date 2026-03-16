@@ -836,9 +836,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(() => {
-    // Silent exit - hooks must never break the session
-  });
+  main().catch((err) => { console.error('[quality-gate] Unhandled error:', err.message); });
 }
 
 // ---------------------------------------------------------------------------

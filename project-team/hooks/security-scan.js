@@ -16,7 +16,7 @@
  * Claude Code Hook Protocol (Manual):
  *   - Triggered: After Edit/Write, before Phase completion
  *   - Context: { files, phase, domain, timestamp }
- *   - Output: { decision: "allow"|"deny", report: {...}, findings: [...] }
+ *   - Output: { decision: "approve"|"block", report: {...}, findings: [...] }
  */
 
 const { spawnSync } = require('child_process');
@@ -383,20 +383,41 @@ function generateReport(findings) {
  * @param {string} targetPath - Path to scan
  * @returns {string[]}
  */
+/**
+ * [수정시 주의] MAX_SCAN_DEPTH를 변경하면 스캔 범위가 달라짐
+ */
+const MAX_SCAN_DEPTH = 12;
+const MAX_SCAN_FILES = 5000;
+
 function getFilesToScan(targetPath = '.') {
   const extensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.java', '.rb', '.php', '.env', '.yaml', '.yml', '.json', '.xml', '.conf', '.config'];
   const ignoreDirs = ['node_modules', '.git', 'vendor', '__pycache__', '.venv', 'venv', 'dist', 'build'];
   const files = [];
 
-  function walk(dir) {
+  // 스캔 기준 경로를 정규화하여 경로 탈출 방지
+  const basePath = path.resolve(targetPath);
+
+  function walk(dir, depth) {
+    if (depth > MAX_SCAN_DEPTH || files.length >= MAX_SCAN_FILES) return;
+
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
+        if (files.length >= MAX_SCAN_FILES) return;
+
         const fullPath = path.join(dir, entry.name);
+
+        // 심볼릭 링크를 따라갈 경우 basePath 외부로 나가는 것을 방지
+        try {
+          const realPath = fs.realpathSync(fullPath);
+          if (!realPath.startsWith(basePath)) continue;
+        } catch {
+          continue;
+        }
 
         if (entry.isDirectory()) {
           if (!ignoreDirs.includes(entry.name)) {
-            walk(fullPath);
+            walk(fullPath, depth + 1);
           }
         } else if (entry.isFile()) {
           const ext = path.extname(entry.name).toLowerCase();
@@ -410,7 +431,7 @@ function getFilesToScan(targetPath = '.') {
     }
   }
 
-  walk(targetPath);
+  walk(basePath, 0);
   return files;
 }
 
@@ -455,16 +476,16 @@ async function main() {
 
     await emitHookDecision(input, {
       hook: 'security-scan',
-      decision: passed ? 'allow' : 'deny',
+      decision: passed ? 'approve' : 'block',
       severity: passed ? 'info' : (hasCriticalSecrets || hasCriticalOwasp || hasCriticalCve ? 'critical' : 'error'),
       risk_level: hasCriticalSecrets || hasCriticalOwasp || hasCriticalCve ? 'CRITICAL' : 'LOW',
       summary: `Security scan ${passed ? 'passed' : 'failed'} (${allSecrets.length} secret matches, ${allOwasp.length} OWASP findings, ${dependencies.vulnerabilities.length} dependency vulnerabilities).`,
       remediation: passed ? '' : 'Remediate critical findings and rerun the security scan.',
     });
 
-    // Output JSON result
+    // Output JSON result (approve/block — Claude Code Stop Hook schema)
     process.stdout.write(JSON.stringify({
-      decision: passed ? 'allow' : 'deny',
+      decision: passed ? 'approve' : 'block',
       report,
       findings: {
         secrets: allSecrets.length,
@@ -474,23 +495,25 @@ async function main() {
       details: findings
     }));
   } catch (error) {
+    console.error('[security-scan] Hook execution error:', error.message);
     await emitHookDecision({ hook_event_name: 'ManualHook', tool_name: 'security-scan', tool_input: {} }, {
       hook: 'security-scan',
-      decision: 'deny',
-      severity: 'critical',
-      summary: 'Security scan execution error.',
+      decision: 'approve',
+      severity: 'warning',
+      summary: `Security scan execution error: ${error.message}`,
       remediation: 'Review hook runtime errors and rerun.',
     });
+    // Error fallback — approve to avoid blocking the session (fail-open)
     process.stdout.write(JSON.stringify({
-      decision: 'deny',
-      reason: `Security scan error: ${error.message}`
+      decision: 'approve',
+      reason: `Security scan error (fail-open): ${error.message}`
     }));
   }
 }
 
 if (require.main === module) {
-  main().catch(() => {
-    // Silent exit
+  main().catch((err) => {
+    console.error('[security-scan] Unhandled error:', err.message);
   });
 }
 

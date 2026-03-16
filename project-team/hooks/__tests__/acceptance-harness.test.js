@@ -309,7 +309,7 @@ describe('acceptance harness policy and context coverage', () => {
         }
       });
       expect(denied.status).toBe(0);
-      expect(JSON.parse(denied.stdout)).toMatchObject({ decision: 'deny' });
+      expect(JSON.parse(denied.stdout)).toMatchObject({ decision: 'block' });
 
       const builderToken = auth.issueToken('builder-1', 'builder', 'backend', 3600000, {
         allowedPaths: ['src/backend/billing/**']

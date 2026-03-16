@@ -328,7 +328,7 @@ async function main() {
   }));
 }
 
-main().catch(() => {});
+main().catch((err) => { console.error('[risk-gate] Unhandled error:', err.message); });
 
 // ---------------------------------------------------------------------------
 // Exports for testing

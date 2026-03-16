@@ -918,7 +918,7 @@ function readStdin() {
  */
 function outputDeny(reason) {
   process.stdout.write(JSON.stringify({
-    decision: 'deny',
+    decision: 'block',
     reason: reason
   }));
 }
@@ -1047,9 +1047,7 @@ async function main() {
   }
 }
 
-main().catch(() => {
-  // Silent exit - hooks must never break the session
-});
+main().catch((err) => { console.error('[permission-checker] Unhandled error:', err.message); });
 
 // ---------------------------------------------------------------------------
 // Exports for testing

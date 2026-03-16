@@ -663,8 +663,8 @@ async function main() {
   }
 }
 
-main().catch(() => {
-  // Silent exit - hooks must never break the session
+main().catch((err) => {
+  console.error('[risk-area-warning] Unhandled error:', err.message);
 });
 
 // ---------------------------------------------------------------------------

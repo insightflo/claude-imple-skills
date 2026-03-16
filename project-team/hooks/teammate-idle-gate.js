@@ -18,6 +18,15 @@ const fs = require('fs');
 const path = require('path');
 const { emitHookDecision } = require('./lib/hook-decision-event');
 
+/**
+ * RegExp 특수문자를 이스케이프하여 ReDoS 방지
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -56,8 +65,8 @@ function checkPendingTasks(teammate, projectDir) {
       pending.push({ id: match[1], description: match[2].trim() });
     }
 
-    // Filter by owner if teammate info available
-    const ownerPattern = new RegExp(`owner:\\s*${teammate}`, 'i');
+    // Filter by owner if teammate info available (escape to prevent ReDoS)
+    const ownerPattern = new RegExp(`owner:\\s*${escapeRegExp(teammate)}`, 'i');
     const teammateTasks = pending.filter((task) => {
       const taskSection = content.slice(
         content.indexOf(task.id),
@@ -94,9 +103,10 @@ function checkEscalatedRequests(teammate, projectDir) {
     for (const file of files) {
       const content = fs.readFileSync(path.join(requestsDir, file), 'utf8');
       const isEscalated = /status:\s*ESCALATED/i.test(content);
+      const escaped = escapeRegExp(teammate);
       const involvesTeammate =
-        new RegExp(`from:\\s*${teammate}`, 'i').test(content) ||
-        new RegExp(`to:\\s*${teammate}`, 'i').test(content);
+        new RegExp(`from:\\s*${escaped}`, 'i').test(content) ||
+        new RegExp(`to:\\s*${escaped}`, 'i').test(content);
 
       if (isEscalated && involvesTeammate) {
         escalatedCount++;
@@ -140,7 +150,7 @@ async function main() {
     : { hasEscalated: false, count: 0 };
 
   // 결정 로직
-  let decision = 'allow';
+  let decision = 'approve';
   let reason = '';
   const warnings = [];
 
@@ -184,8 +194,8 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(() => {
-    // Hook은 세션을 중단시키지 않아야 함
+  main().catch((err) => {
+    console.error('[teammate-idle-gate] Unhandled error:', err.message);
   });
 }
 

@@ -40,7 +40,7 @@ function resolveCorrelationId(input = {}, fallback = {}) {
 }
 
 function defaultSeverity(decision) {
-  if (decision === 'deny') return 'error';
+  if (decision === 'block') return 'error';
   if (decision === 'warn') return 'warning';
   return 'info';
 }

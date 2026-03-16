@@ -1170,9 +1170,7 @@ async function main() {
   }
 }
 
-main().catch(() => {
-  // Silent exit - hooks must never break the session
-});
+main().catch((err) => { console.error('[architecture-updater] Unhandled error:', err.message); });
 
 // ---------------------------------------------------------------------------
 // Exports for testing

@@ -322,20 +322,20 @@ async function main() {
     if (permissionResult && !permissionResult.allowed) {
       await emitHookDecision(input, {
         hook: 'policy-gate',
-        decision: 'deny',
+        decision: 'block',
         severity: 'error',
         summary: 'Write denied by role policy.',
         remediation: 'Request an authorized role or target an allowed path.',
       });
       process.stdout.write(JSON.stringify({
-        decision: 'deny',
+        decision: 'block',
         reason: permissionResult.reason
       }));
       return;
     }
     await emitHookDecision(input, {
       hook: 'policy-gate',
-      decision: 'allow',
+      decision: 'approve',
       severity: 'info',
       summary: 'Write allowed by policy checks.',
     });
@@ -375,7 +375,7 @@ async function main() {
     } else {
       await emitHookDecision(input, {
         hook: 'policy-gate',
-        decision: 'allow',
+        decision: 'approve',
         severity: 'info',
         summary: 'Standards validation passed.',
       });
@@ -390,7 +390,7 @@ async function main() {
   });
 }
 
-main().catch(() => {});
+main().catch((err) => { console.error('[policy-gate] Unhandled error:', err.message); });
 
 // ---------------------------------------------------------------------------
 // Exports for testing

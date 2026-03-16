@@ -909,7 +909,7 @@ function decisionFromRiskLevel(riskLevel) {
     };
   }
   return {
-    decision: 'allow',
+    decision: 'approve',
     severity: 'info',
     remediation: '',
   };
@@ -1001,9 +1001,7 @@ async function main() {
   }
 }
 
-main().catch(() => {
-  // Silent exit - hooks must never break the session
-});
+main().catch((err) => { console.error('[pre-edit-impact-check] Unhandled error:', err.message); });
 
 // ---------------------------------------------------------------------------
 // Exports for testing
