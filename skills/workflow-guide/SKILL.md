@@ -62,8 +62,8 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 ② 태스크 체크: TASKS.md 없음 → /tasks-init (또는 /tasks-migrate)
 ③ 유지보수: source_code + AGENT_COUNT=0 + GOV=no → /agile iterate
 ④ 거버넌스: TASK>=10 + (DOMAIN>=2 OR TASK>=30) + GOV=no → /governance-setup
-⑤ 인프라: GOV=yes + TASK>=30 + AGENT=0 → install.sh
-⑥ 구현: GOV=yes + AGENT>0 → /team-orchestrate 또는 /agile auto
+⑤ 인프라: GOV=yes + TASK>=30 + AGENT=0 → project-team/install.sh --mode=team
+⑥ 구현: GOV=yes + AGENT>0 + TASK>=30 → /team-orchestrate (Agent Teams 동적 팀 형성)
 ⑦ 소규모: TASK<30 + incomplete>0 → /agile auto
 ⑧ 완료: all_tasks_completed → /audit
 ```
@@ -86,7 +86,7 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 
 ---
 
-## 📊 Standalone 스킬 카탈로그 (19개)
+## 📊 Standalone 스킬 카탈로그 (20개)
 
 | 스킬 | 트리거 | 역할 |
 |------|--------|------|
@@ -95,7 +95,7 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 | **`/tasks-init`** | `/tasks-init` | TASKS.md 스캐폴딩 |
 | **`/tasks-migrate`** | `/tasks-migrate` | 레거시 태스크 통합 |
 | **`/agile`** | `/agile auto` | 레이어 기반 스프린트 |
-| **`/team-orchestrate`** | `/team-orchestrate` | 30~200개 병렬 실행 |
+| **`/team-orchestrate`** | `/team-orchestrate` | Agent Teams 동적 팀 형성 + 병렬 실행 |
 | **`/multi-ai-run`** | `/multi-ai-run` | 역할별 모델 라우팅 |
 | **`/checkpoint`** | "리뷰해줘" | 태스크 완료 시 2단계 리뷰 |
 | **`/security-review`** | `/security-review` | OWASP TOP 10 보안 검사 |
@@ -114,13 +114,11 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 
 ## 📊 태스크 규모별 구현 스킬 선택
 
-| 태스크 수 | 권장 스킬 | 에이전트 팀 | 선행 스킬 |
+| 태스크 수 | 권장 스킬 | Agent Teams | 선행 스킬 |
 |-----------|-----------|------------|-----------|
 | **1~30개** | `/agile auto` | ❌ 불필요 | - |
-| **30~80개** | `/team-orchestrate` | ✅ 선택 | `/governance-setup` |
-| **80~200개** | `/team-orchestrate --mode=wave` | ✅ 권장 | `/governance-setup` |
-| **러프 골** | `/team-orchestrate --mode=auto` | ✅ 선택 | 불필요 |
-| **200개+** | 하위 프로젝트 분할 → wave | ✅ 필수 | `/governance-setup` |
+| **30개+** | `/team-orchestrate` | ✅ 동적 팀 형성 | `/governance-setup` + `install.sh --mode=team` |
+| **200개+** | 하위 프로젝트 분할 | ✅ 필수 | `/governance-setup` |
 
 ---
 
@@ -136,9 +134,8 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 "품질 검사해줘"                 → /audit
 "작업이 중단됐어"               → /recover
 "대규모 프로젝트야"             → /governance-setup
-"스프린트로 실행해줘"           → /team-orchestrate --mode=sprint
-"자율 실행해줘"                 → /team-orchestrate --mode=auto
-"칸반 보드 보여줘"              → /whitebox status
+"에이전트 팀으로 실행해줘"      → /team-orchestrate
+"실행 상태 보여줘"              → /whitebox status
 "컨텍스트 압축해줘"             → /compress
 ```
 

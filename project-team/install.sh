@@ -1008,6 +1008,38 @@ NODE
     printf "\n"
 }
 
+install_agent_teams_leads() {
+    local global_agents="$HOME/.claude/agents"
+    local lead_src="${SCRIPT_DIR}/../.claude/agents"
+    local leads=("team-lead.md" "architecture-lead.md" "qa-lead.md" "design-lead.md")
+    local count=0
+
+    header "Installing Agent Teams Leads (global)"
+
+    mkdir -p "$global_agents"
+    for lead in "${leads[@]}"; do
+        local src="${lead_src}/${lead}"
+        local dest="${global_agents}/${lead}"
+        if [ ! -e "$src" ]; then
+            log_warn "Lead agent not found: ${src}"
+            continue
+        fi
+        if [ "$DRY_RUN" = true ]; then
+            log_dry "Would install: ${lead} → ${dest}"
+        else
+            cp -a "$src" "$dest"
+            count=$((count + 1))
+            log_success "  ${lead} → ~/.claude/agents/"
+        fi
+    done
+
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "${count} Agent Teams lead(s) would be installed globally"
+    else
+        log_success "${count} Agent Teams lead(s) installed to ~/.claude/agents/"
+    fi
+}
+
 do_install() {
     prompt_install_mode
     prompt_configuration_mode
@@ -1037,6 +1069,11 @@ do_install() {
     if [ "$HOOKS_ONLY" = false ]; then
         install_registry_category agents
         install_registry_category templates
+    fi
+
+    # Team 모드: Agent Teams 리더를 전역에 설치 (템플릿 — 프로젝트 독립)
+    if [ "$MODE" = "team" ]; then
+        install_agent_teams_leads
     fi
     if [ "$HOOKS_ONLY" = false ]; then
         install_project_scripts

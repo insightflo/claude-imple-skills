@@ -305,8 +305,10 @@ cd project-team
 ./install.sh --mode=lite      # 3 에이전트, 2 훅
 ./install.sh --mode=standard  # 4 에이전트, 7 훅 (기본값)
 ./install.sh --mode=full      # 전체 에이전트, 전체 훅
-./install.sh --mode=team      # Agent Teams + 거버넌스 훅
+./install.sh --mode=team      # Agent Teams + 거버넌스 훅 + 리더를 ~/.claude/agents/에 전역 설치
 ```
+
+`--mode=team`은 Agent Teams 리더를 전역(`~/.claude/agents/`)에 설치합니다 — TASKS.md 분석으로 동적 활성화되는 템플릿이므로 프로젝트별 복사가 불필요합니다.
 
 ---
 

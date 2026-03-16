@@ -303,8 +303,10 @@ Choose a mode:
 ./install.sh --mode=lite      # 3 agents, 2 hooks
 ./install.sh --mode=standard  # 4 agents, 7 hooks (default)
 ./install.sh --mode=full      # All agents, all hooks
-./install.sh --mode=team      # Agent Teams + governance hooks
+./install.sh --mode=team      # Agent Teams + governance hooks + leads to ~/.claude/agents/
 ```
+
+`--mode=team` installs Agent Teams leads globally (`~/.claude/agents/`) since they're templates activated dynamically based on TASKS.md — not bound to a specific project.
 
 ---
 
