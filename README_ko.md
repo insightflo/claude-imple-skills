@@ -10,34 +10,32 @@ Claude Code로 소프트웨어를 개발할 때 도와주는 **스킬**과 **에
 
 ## 빠른 시작
 
-### 옵션 1: 원라인 설치 (git clone 불필요)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
-```
-
-`~/.claude/claude-impl-tools/`에 설치되고 스킬이 `~/.claude/skills/`로 연결됩니다.
-
-### 옵션 2: 수동 설치
+### 옵션 1: 대화형 설치 (권장)
 
 ```bash
 git clone https://github.com/insightflo/claude-impl-tools.git
 cd claude-impl-tools
-
-# macOS/Linux
-chmod +x ./scripts/install-unix.sh && ./scripts/install-unix.sh
-
-# Windows PowerShell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
+./install.sh
 ```
 
-### 선택사항: Project Team
+TUI 기반 설치 프로그램에서 선택할 수 있습니다:
+- 설치 위치 (전역 / 프로젝트)
+- 스킬 카테고리 (Core, Orchestration, Quality, Analysis, Tasks)
+- Project Team (에이전트 + 훅)
+- Multi-AI 라우팅 (Claude + Gemini + Codex)
 
-대규모 프로젝트용 AI 에이전트 팀 배포:
+### 옵션 2: 비대화형 설치
 
 ```bash
-cd claude-impl-tools/project-team
-./install.sh --global
+./install.sh --global      # 전역 설치 (Core + Project Team)
+./install.sh --all         # 모든 스킬 전역 설치
+./install.sh --local       # 현재 프로젝트만
+```
+
+### 옵션 3: 원격 설치 (git clone 불필요)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 ```
 
 ---
@@ -79,7 +77,7 @@ cd claude-impl-tools/project-team
 |------|------|
 | `/quality-auditor` | 배포 전 종합 감사 |
 | `/security-review` | OWASP TOP 10, CVE, secrets 감지 |
-| `/multi-ai-review` | 범용 멀티-AI 합의 엔진 (Claude + Gemini CLI + Codex CLI) — 코드 리뷰, 시황 레짐, 투자 심사, 리스크 평가 등 5개 도메인 자동 라우팅 |
+| `/multi-ai-review` | 범용 멀티-AI 합의 엔진 (Claude + Gemini CLI + Codex CLI) — 코드 리뷰, 시황 레짐, 투자 심사, 리스크 평가를 3-Stage Pipeline으로 자동 라우팅 |
 
 ### 자동화
 
@@ -210,7 +208,8 @@ cd project-team
   │   └─ 중대규모 (30+) ────────── /team-orchestrate
   │
   ├─ 유지보수
-  │   ├─ 수정 전 ──────────────── /impact
+  │   ├─ 버그 수정/기능 변경 ────── /maintenance
+  │   ├─ 수정 전 영향도 ────────── /impact
   │   ├─ 의존성 확인 ──────────── /deps
   │   └─ 변경 이력 ────────────── /changelog
   │
@@ -260,7 +259,7 @@ claude-impl-tools/
 ├── project-team/              # 에이전트 팀 시스템
 │   ├── install.sh             # 설치 스크립트
 │   ├── agents/                # 코어 워커 에이전트
-│   ├── hooks/                 # 20개 검증 및 거버넌스 훅
+│   ├── hooks/                 # 19개 검증 및 거버넌스 훅
 │   ├── scripts/               # 협업 & 충돌 해결
 │   ├── references/            # 통신 프로토콜
 │   ├── templates/             # 프로토콜, ADR, 계약
@@ -320,7 +319,7 @@ cd project-team
 { "design-lead": { "cli": "gemini" } }
 ```
 
-기본값은 `null` (Claude only).
+서브에이전트(Claude)가 외부 CLI 호출 시점을 판단하고, 결과를 검증하며, 훅은 그대로 적용됩니다. 기본값은 `null` (Claude only).
 
 ---
 
@@ -331,7 +330,7 @@ cd project-team
 | 스킬 | 요구사항 |
 |------|----------|
 | 모든 스킬 | Claude Code CLI |
-| `/multi-ai-review` | `gemini` CLI, `codex` CLI (선택) — 5개 도메인 프리셋 |
+| `/multi-ai-review` | `gemini` CLI, `codex` CLI (선택) — 5개 도메인 프리셋 (code-review, market-regime, investment, risk-assessment, default) |
 | `/agile`, `/audit` | `agent-browser` CLI, `lighthouse` CLI (선택, 브라우저 검증용) |
 
 ### Project Team 훅용
