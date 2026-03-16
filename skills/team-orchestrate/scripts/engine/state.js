@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * State Management for Orchestrate Standalone
+ * State Management for Team Orchestrate
  *
  * Manages orchestrate-state.json for resume capability
  *
- * @TASK orchestrate-standalone
+ * @TASK team-orchestrate
  * @SPEC SKILL.md
  */
 

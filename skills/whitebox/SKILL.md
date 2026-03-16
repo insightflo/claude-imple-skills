@@ -148,7 +148,7 @@ updated: 2026-03-07
 3. `/whitebox explain` 로 근거, trigger, linked DEC, approve/reject 선택지 또는 inspect-only 결정을 확인한다.
 4. `/whitebox approvals list|show` 로 mutable pending gate 를 확인한다.
 5. `/whitebox approvals approve|reject --gate-id=...` 로 canonical control command 를 기록한다.
-6. ChiefArchitect 가 `FINAL` DEC 를 기록하면 matching `ESCALATED` REQ 는 canonical hook/event 경로에서 자동 `RESOLVED` 된다.
+6. architecture-lead 가 `FINAL` DEC 를 기록하면 matching `ESCALATED` REQ 는 canonical hook/event 경로에서 자동 `RESOLVED` 된다.
 7. `/whitebox status` 또는 `/task-board show` 로 resumed/blocked 상태를 다시 확인한다.
 
 **규칙**:
