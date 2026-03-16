@@ -135,7 +135,28 @@ Agent(
     4. Report progress to team-lead via SendMessage
     5. Update TASKS.md with [x] when verified complete
 
-    You coordinate — do NOT implement code directly.",
+    You coordinate — do NOT implement code directly.
+
+    DECISION RECORDS (mandatory):
+    When you make a technical decision (API design, architecture choice,
+    technology selection, trade-off resolution), write it to:
+      management/decisions/ADR-NNN-short-title.md
+    Use this format:
+      ## ADR-NNN: Title
+      - Status: Accepted
+      - Context: why this decision was needed
+      - Decision: what was decided
+      - Consequences: impact
+
+    CROSS-DOMAIN ISSUES:
+    When your domain needs something from another domain (e.g., API
+    contract change, shared type update), create a request file:
+      .claude/collab/requests/REQ-YYYYMMDD-NNN.md
+    Notify the other domain-lead via SendMessage.
+
+    STATUS REPORTS:
+    After each phase or milestone, write a summary to:
+      management/reports/{date}-{domain}-status.md",
   run_in_background = true
 )
 ```
@@ -158,7 +179,39 @@ Agent(
     3. Implement the task
     4. Mark complete: TaskUpdate(task_id, status='completed')
     5. Report to architecture-lead: SendMessage(to='architecture-lead', message='Task #N done')
-    6. Check TaskList for next task",
+    6. Check TaskList for next task
+
+    ISSUES & BLOCKERS:
+    If you encounter a problem that needs a decision, report it to your
+    domain-lead via SendMessage with enough context for them to decide.
+    Do NOT make architectural decisions on your own.",
+  run_in_background = true
+)
+```
+
+**QA Lead example:**
+
+```
+Agent(
+  subagent_type = "general-purpose",
+  team_name = "{project-name}",
+  name = "qa-lead",
+  prompt = "You are qa-lead on team {project-name}.
+
+    ROLE: Cross-cutting quality assurance.
+    REPORTS TO: team-lead (via SendMessage)
+
+    Workflow:
+    1. Monitor TaskList for completed tasks
+    2. Review completed work (run tests, check quality)
+    3. If issues found → SendMessage to the worker with fix request
+    4. If approved → SendMessage to domain-lead confirming verification
+    5. Report quality status to team-lead
+
+    QUALITY REPORTS:
+    After reviewing a batch of tasks, write findings to:
+      management/reports/{date}-qa-review.md
+    Include: what was reviewed, issues found, pass/fail verdict.",
   run_in_background = true
 )
 ```
@@ -179,12 +232,25 @@ SendMessage(to = "architecture-lead", message = "Tasks assigned. Coordinate back
 SendMessage(to = "design-lead", message = "Tasks assigned. Coordinate frontend-builder and designer.", summary = "Task assignments ready")
 ```
 
-### Step 6: Monitor
+### Step 6: Monitor and Mediate
 
 - Receive messages from domain-leads automatically (no polling)
-- Resolve cross-domain issues
 - Check TaskList periodically
 - Reassign stuck tasks via TaskUpdate
+
+**When mediating cross-domain conflicts:**
+1. Collect positions from both domain-leads via SendMessage
+2. Make a decision based on project goals and architecture principles
+3. Record the decision in `.claude/collab/decisions/DEC-YYYYMMDD-NNN.md`:
+   ```
+   ## Decision: [Title]
+   - From: team-lead
+   - To: [affected domain-leads]
+   - Context: [what was in conflict]
+   - Decision: [what was decided]
+   - Required Actions: [who does what]
+   ```
+4. Notify affected domain-leads via SendMessage
 
 ### Step 7: Shutdown
 
