@@ -6,8 +6,10 @@
 # 배포 제외 (로컬 전용)
 # --------------------------------------------
 
-# Skills 로컬 설정 (별도 배포)
+# .claude/ — ignore all except shared agent definitions
 .claude/
+!.claude/agents/
+!.claude/agents/*.md
 
 # Opencode 설정 (임시)
 .sisyphus
@@ -15,8 +17,8 @@
 # 로컬 프로젝트 지침 (프로젝트별 설정)
 CLAUDE.md
 
-# 개선 계획 (배포 불필요)
-.auto-revision
+# auto-revision (local only)
+.auto-revision/
 
 # 로컬 구현 계획 문서
 docs/
