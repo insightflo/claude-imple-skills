@@ -67,7 +67,6 @@ File-based communication bus for the hierarchical agent collaboration system.
 
 - **board-state.json**: Current kanban board snapshot (Backlog / In Progress / Blocked / Done).
   Derived from TASKS.md + orchestrate-state.json + requests/. Never edit directly.
-  Rebuild: \`node skills/task-board/scripts/board-builder.js\`
 
 - **events.ndjson**: Append-only board event log.
   One JSON event per line: task_claimed, task_started, task_done, task_blocked,
@@ -78,7 +77,7 @@ File-based communication bus for the hierarchical agent collaboration system.
 - \`/whitebox\` is the only product boundary.
 - The TUI is the interactive renderer/operator shell for \`/whitebox\`.
 - The CLI mutation surface is the shared mutation path and headless/scriptable surface.
-- \`task-board\` is a renderer inside the whitebox product surface, not a separate product.
+- The whitebox surface handles all board rendering and state visualization.
 
 ## REQ File Format
 
@@ -181,14 +180,6 @@ function init(projectDir) {
       ) + '\n'
     );
   }
-
-  const boardBuilderPath = path.resolve(__dirname, '..', '..', 'skills', 'task-board', 'scripts', 'board-builder.js');
-  if (!fs.existsSync(boardBuilderPath)) {
-    throw new Error(`board builder missing: ${boardBuilderPath}`);
-  }
-  childProcess.execFileSync(process.execPath, [boardBuilderPath, `--project-dir=${projectDir}`], {
-    stdio: 'ignore',
-  });
 
   log(`collab initialized: ${collabDir}`);
   for (const sub of SUBDIRS) {

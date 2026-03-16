@@ -100,7 +100,6 @@ Installs 20 JavaScript hooks that enforce standards:
 - `policy-gate.js` - Policy rule enforcement
 - `risk-gate.js` - Risk-level gating
 - `security-scan.js` - Security vulnerability scanning
-- `task-board-sync.js` - Task board synchronization
 - `task-completed-gate.js` - Task completion verification
 - `task-sync.js` - Task state synchronization
 - `teammate-idle-gate.js` - Idle agent detection

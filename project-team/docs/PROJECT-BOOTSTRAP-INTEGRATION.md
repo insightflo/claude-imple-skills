@@ -807,7 +807,7 @@ grep -c "standards-validator" .claude/settings.json  # Should be 1
 
 #### Agent File Naming
 
-Bootstrap uses hyphenated names (`backend-specialist.md`), Project Team uses PascalCase (`ChiefArchitect.md`). No naming conflicts occur.
+Agent Teams leads use hyphenated names (`team-lead.md`, `architecture-lead.md`), Project Team workers use PascalCase (`Builder.md`). No naming conflicts occur.
 
 #### Hook Execution Order
 
