@@ -25,7 +25,7 @@ cli_models:
 
     codex:
         command: "codex exec"
-        model: "gpt-5.3-codex" # 기본 모델
+        model: "gpt-5.4" # 기본 모델
         # model: "o3"           # 추론 강화 모델
         # model: "gpt-4.1"      # 범용 모델
         args: "--sandbox workspace-write" # 프로젝트 폴더 직접 읽기/쓰기 허용
