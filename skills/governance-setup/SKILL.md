@@ -186,6 +186,24 @@ After governance completes, present next-step options via **AskUserQuestion**:
 | "Deficit analysis first" | `Skill({ skill: "eros" })` |
 | "Start implementing directly" | `Skill({ skill: "agile" })` |
 
+### Standalone Init (Local Project Team Setup)
+
+When the user selects "Local project team initialization", run the following **in the current project directory** (never globally):
+
+```bash
+# Install workers + hooks + Agent Teams env to the current project's .claude/
+# The --local flag ensures project-scoped installation
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=team --force --quiet
+```
+
+This installs to `<project-root>/.claude/`:
+- Worker agents (Builder, Reviewer, Designer, MaintenanceAnalyst)
+- 19 governance hooks
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` env flag in settings.json
+- Agent Teams leads to `~/.claude/agents/` (global, since they are shared templates)
+
+**CRITICAL**: Always use `--local`. Never use `--global` from within a project — governance artifacts (hooks, workers) must be project-scoped so different projects can have different configurations.
+
 ---
 
 ## Hook Integration
@@ -208,7 +226,7 @@ After governance completes, present next-step options via **AskUserQuestion**:
 → Read the corresponding `references/phase-N-*.md` then invoke the Task
 
 **Q: Agent invocation failed**
-→ Check `ls ~/.claude/agents/` (Claude Project Team required)
+→ Check `ls .claude/agents/` in your project root (run `project-team/install.sh --local --mode=team` if missing)
 
 **Q: Planning documents are too long**
 → Run `/compress optimize docs/planning/*.md` (extracts key content with the H2O pattern)
