@@ -212,11 +212,11 @@
 
 ## 8. Governance Operationalization (Doc → Execution)
 
-> 품질 게이트가 "문서로만" 남지 않도록, 실제 실행 경로(로컬/CI)와 산출물을 명시합니다.
+> Ensure quality gates are operationalized beyond documentation by specifying actual execution paths (local/CI) and output artifacts.
 
-### 8.1 Single Entry 검증 커맨드
-- Recommended: `scripts/verify_all.sh` 또는 `make verify`
-- 목적: Gate 1~7을 **한 번에** 실행해서 PASS/FAIL을 결정
+### 8.1 Single Entry Verification Command
+- Recommended: `scripts/verify_all.sh` or `make verify`
+- Purpose: Execute Gates 1–7 **in a single run** and determine PASS/FAIL
 
 ### 8.2 Gate ↔ Command 매핑
 
