@@ -1,20 +1,20 @@
 ---
 name: team-orchestrate
-description: Hierarchical agent orchestration using Claude Code native Agent Teams. Analyzes TASKS.md, creates a team via TeamCreate, spawns teammates with Agent(team_name), and coordinates via shared TaskList + SendMessage. Use this for 30+ task projects requiring parallel execution with governance.
+description: 3-level hierarchical agent orchestration using Claude Code native Agent Teams. Analyzes TASKS.md, creates a flat team via TeamCreate, enforces logical hierarchy (lead → domain-leads → workers) through SendMessage protocols. Supports parallel execution, inter-agent communication, and governance hooks.
 triggers:
   - /team-orchestrate
   - 에이전트 팀 실행
   - 팀 오케스트레이트
-version: 2.0.0
+version: 3.0.0
 updated: 2026-03-16
 ---
 
-# Agent Teams Orchestration
+# Agent Teams Orchestration (3-Level)
 
-> **Goal**: Parallel agent execution using Claude Code native Agent Teams API.
+> **Goal**: Parallel agent execution with hierarchical coordination using native Agent Teams API.
 >
-> **v2.0**: Uses TeamCreate + TaskCreate + Agent(team_name) + SendMessage for real
-> Agent Teams with mailbox communication, shared task lists, and governance hooks.
+> **v3.0**: Flat TeamCreate + logical 3-level hierarchy via SendMessage protocol.
+> All agents are teammates (can communicate freely). Hierarchy is enforced by prompt convention.
 
 ---
 
@@ -31,22 +31,69 @@ updated: 2026-03-16
 
 ---
 
-## Architecture: 2-Level Team
+## Architecture: Logical 3-Level on Flat Team
+
+All agents are spawned flat by the lead (TeamCreate), but communicate in a hierarchical protocol via SendMessage.
 
 ```
-Level 0 — Team Lead (this session)
-  │
-  ├── architecture-lead (Teammate)  — backend, api, database tasks
-  ├── qa-lead (Teammate)            — test, security, quality tasks
-  └── design-lead (Teammate)        — frontend, ui, design tasks
+Physical structure (flat — all are teammates):
+  TeamCreate("project")
+  ├── architecture-lead    ← domain coordinator
+  ├── backend-builder      ← worker
+  ├── reviewer             ← worker
+  ├── design-lead          ← domain coordinator
+  ├── frontend-builder     ← worker
+  ├── designer             ← worker
+  └── qa-lead              ← cross-cutting quality
 
-Communication: SendMessage (bidirectional)
-Task coordination: Shared TaskList (TeamCreate → TaskCreate → TaskUpdate)
-Governance: TeammateIdle hook + TaskCompleted hook
+Logical hierarchy (enforced by prompts + SendMessage):
+  Level 0: team-lead (this session)
+    │
+    ├── Level 1: architecture-lead (coordinates backend domain)
+    │     ├── Level 2: backend-builder (implements, reports to architecture-lead)
+    │     └── Level 2: reviewer (reviews, reports to architecture-lead)
+    │
+    ├── Level 1: design-lead (coordinates frontend domain)
+    │     ├── Level 2: frontend-builder (implements, reports to design-lead)
+    │     └── Level 2: designer (designs, reports to design-lead)
+    │
+    └── Level 1: qa-lead (cross-cutting quality, reports to team-lead)
 ```
 
-Each teammate works autonomously on assigned tasks, communicates via SendMessage,
-and goes idle between turns (this is normal — idle ≠ done).
+**Key insight**: SendMessage works between ANY teammates. Hierarchy is a communication convention, not a technical limitation.
+
+---
+
+## Communication Protocol
+
+### Reporting Chain (bottom-up)
+
+```
+Worker → SendMessage(to=domain-lead) → "Task T1.1 complete, ready for review"
+Domain-lead → SendMessage(to=team-lead) → "Backend phase 1 complete, 3/5 tasks done"
+```
+
+### Delegation Chain (top-down)
+
+```
+Team-lead → SendMessage(to=domain-lead) → "Priority shift: focus on auth module first"
+Domain-lead → SendMessage(to=worker) → "Start T1.3, auth endpoints"
+```
+
+### Cross-domain (lateral)
+
+```
+architecture-lead → SendMessage(to=design-lead) → "API contract changed, update frontend"
+qa-lead → SendMessage(to=backend-builder) → "T1.1 test failed, fix needed"
+```
+
+### Protocol Rules
+
+1. Workers report to their domain-lead, not directly to team-lead
+2. Domain-leads aggregate status and report to team-lead
+3. Cross-domain issues go through domain-leads or qa-lead
+4. Anyone can message anyone in urgent situations (flat team allows it)
+5. Team-lead is the final arbiter for conflicts
 
 ---
 
@@ -54,166 +101,200 @@ and goes idle between turns (this is normal — idle ≠ done).
 
 ### Step 1: Analyze TASKS.md
 
-Run domain-analyzer to classify tasks by domain and assign to teammates:
-
 ```bash
 node skills/team-orchestrate/scripts/domain-analyzer.js --tasks-file TASKS.md --json
 ```
 
-Output: `{ leader, teammates: [{ agent, taskIds, domains, ... }] }`
+Output determines which domain-leads and workers to activate.
 
 ### Step 2: Create Team
 
 ```
 TeamCreate(
   team_name = "{project-name}",
-  description = "Agent team for {project-name}: {teammate-count} teammates, {task-count} tasks"
+  description = "3-level team: {n} domain-leads, {m} workers, {t} tasks"
 )
 ```
 
 ### Step 3: Create Tasks in Shared TaskList
 
-For each incomplete task from TASKS.md, create a shared task:
+For each incomplete task from TASKS.md:
 
 ```
-TaskCreate(
-  subject = "T1.1: User API design",
-  description = "Design REST endpoints for user domain. deps: []. domain: backend. risk: low."
+TaskCreate(subject = "T1.1: User API design", description = "...")
+```
+
+Set dependencies:
+
+```
+TaskUpdate(task_id = "2", addBlockedBy = ["1"])
+```
+
+### Step 4: Spawn All Agents (Flat)
+
+Spawn domain-leads and workers as flat teammates. Hierarchy is in the prompt.
+
+**Domain Lead prompt template:**
+
+```
+Agent(
+  subagent_type = "general-purpose",
+  team_name = "{project-name}",
+  name = "architecture-lead",
+  prompt = "You are architecture-lead on team {project-name}.
+
+    ROLE: Domain coordinator for backend/api/database.
+    REPORTS TO: team-lead (via SendMessage)
+    SUPERVISES: backend-builder, reviewer (via SendMessage)
+
+    Workflow:
+    1. Check TaskList for tasks in your domain
+    2. Assign tasks to your workers via SendMessage:
+       SendMessage(to='backend-builder', message='Work on task #N: ...')
+    3. Review worker output when they report back
+    4. Aggregate progress and report to team-lead:
+       SendMessage(to='team-lead', message='Domain status: ...')
+    5. Resolve issues within your domain before escalating
+
+    You do NOT implement code directly — delegate to workers.
+    Update TASKS.md with [x] when tasks in your domain are verified complete."
 )
 ```
 
-Set dependencies after creation:
-
-```
-TaskUpdate(task_id = "2", blockedBy = ["1"])
-```
-
-### Step 4: Spawn Teammates
-
-For each active teammate from domain-analyzer output, spawn with Agent:
+**Worker prompt template:**
 
 ```
 Agent(
   subagent_type = "builder",
   team_name = "{project-name}",
-  name = "architecture-lead",
-  prompt = "You are architecture-lead on team {project-name}.
-    Your domains: backend, api, database.
+  name = "backend-builder",
+  prompt = "You are backend-builder on team {project-name}.
+
+    ROLE: Implementation worker for backend domain.
+    REPORTS TO: architecture-lead (via SendMessage)
+    PEERS: reviewer
 
     Workflow:
-    1. Check TaskList for tasks assigned to you
-    2. Work on one task at a time
-    3. After completing each task, call TaskUpdate(status='completed')
-    4. Then check TaskList again for the next available task
-    5. Update TASKS.md with [x] for each completed task
-    6. Send a message to team-lead when you hit a blocker
+    1. Wait for task assignment from architecture-lead
+    2. Check TaskList and claim assigned tasks: TaskUpdate(task_id, owner='backend-builder')
+    3. Implement the task
+    4. Mark complete: TaskUpdate(task_id, status='completed')
+    5. Report to architecture-lead:
+       SendMessage(to='architecture-lead', message='Task #N complete, ready for review')
+    6. Check TaskList for next available task
 
     {cli_hint}"
 )
 ```
 
-**CLI hint** (if `cli` is set in team-topology.json):
-```
-CLI hint: For design subtasks, you may invoke `gemini` CLI via Bash if available.
-Check: command -v gemini
-Usage: echo '<subtask prompt>' | gemini
-Always validate CLI output before applying.
-```
-
-### Step 5: Assign Tasks
-
-Assign tasks to teammates based on domain-analyzer output:
+**QA Lead prompt (cross-cutting):**
 
 ```
-TaskUpdate(task_id = "1", owner = "architecture-lead")
-TaskUpdate(task_id = "5", owner = "design-lead")
-TaskUpdate(task_id = "8", owner = "qa-lead")
+Agent(
+  subagent_type = "general-purpose",
+  team_name = "{project-name}",
+  name = "qa-lead",
+  prompt = "You are qa-lead on team {project-name}.
+
+    ROLE: Cross-cutting quality assurance.
+    REPORTS TO: team-lead (via SendMessage)
+    REVIEWS: All workers' output
+
+    Workflow:
+    1. Monitor TaskList for completed tasks
+    2. Review completed work (run tests, check quality)
+    3. If issues found → SendMessage(to=worker, message='Fix needed: ...')
+    4. If approved → SendMessage(to=domain-lead, message='Task #N verified')
+    5. Report overall quality status to team-lead"
+)
+```
+
+### Step 5: Assign Initial Tasks
+
+```
+TaskUpdate(task_id = "1", owner = "backend-builder")
+TaskUpdate(task_id = "5", owner = "frontend-builder")
+TaskUpdate(task_id = "8", owner = "designer")
+```
+
+Then notify domain-leads:
+
+```
+SendMessage(to = "architecture-lead", message = "Tasks #1,#2,#3 assigned to your domain. Coordinate backend-builder and reviewer.")
+SendMessage(to = "design-lead", message = "Tasks #5,#6 assigned to your domain. Coordinate frontend-builder and designer.")
 ```
 
 ### Step 6: Monitor and Coordinate
 
-While teammates work:
-- **Receive messages** automatically (no polling needed)
-- **Resolve blockers** when teammates report issues via SendMessage
-- **Handle plan approvals** via SendMessage protocol:
-  ```
-  SendMessage(
-    to = "architecture-lead",
-    message = { "type": "plan_approval_response", "request_id": "...", "approve": true }
-  )
-  ```
-- **Reassign tasks** if a teammate is stuck: `TaskUpdate(task_id, owner="other-lead")`
-- **Check progress** via `TaskList` periodically
+While team works:
+- Receive status reports from domain-leads automatically
+- Resolve cross-domain conflicts (architecture-lead ↔ design-lead)
+- Handle plan approvals if configured
+- Check TaskList periodically for overall progress
+- Reassign tasks if a worker is stuck
 
 ### Step 7: Completion and Shutdown
 
 When TaskList shows all tasks completed:
 
-1. Verify TASKS.md is fully updated (`[x]` for all done tasks)
-2. Gracefully shut down each teammate:
+1. Verify TASKS.md is fully updated
+2. Ask qa-lead for final quality report:
    ```
-   SendMessage(to = "architecture-lead", message = { "type": "shutdown_request", "reason": "All tasks complete" })
-   SendMessage(to = "design-lead", message = { "type": "shutdown_request", "reason": "All tasks complete" })
-   SendMessage(to = "qa-lead", message = { "type": "shutdown_request", "reason": "All tasks complete" })
+   SendMessage(to = "qa-lead", message = "All tasks marked complete. Run final quality check.")
    ```
-3. Report final status to user
+3. Shutdown all teammates (workers first, then leads):
+   ```
+   SendMessage(to = "backend-builder", message = { "type": "shutdown_request" })
+   SendMessage(to = "frontend-builder", message = { "type": "shutdown_request" })
+   SendMessage(to = "designer", message = { "type": "shutdown_request" })
+   SendMessage(to = "reviewer", message = { "type": "shutdown_request" })
+   SendMessage(to = "architecture-lead", message = { "type": "shutdown_request" })
+   SendMessage(to = "design-lead", message = { "type": "shutdown_request" })
+   SendMessage(to = "qa-lead", message = { "type": "shutdown_request" })
+   ```
+4. Report final status to user
+
+---
+
+## Team Sizing
+
+Not all projects need all agents. Spawn only what domain-analyzer recommends:
+
+| Project type | Domain leads | Workers | Total |
+|-------------|-------------|---------|-------|
+| Backend only | architecture-lead | backend-builder, reviewer | 3 |
+| Full-stack | architecture-lead, design-lead | backend-builder, frontend-builder, reviewer, designer | 6 |
+| Full + QA | architecture-lead, design-lead, qa-lead | backend-builder, frontend-builder, reviewer, designer | 7 |
+
+---
+
+## Optional Multi-AI CLI Routing
+
+Workers can invoke external AI CLI for subtasks. Set `cli` in `team-topology.json`:
+
+```json
+{ "design-lead": { "cli": "gemini" } }
+```
+
+The CLI hint is included in the worker's spawn prompt. The worker (Claude) decides when to invoke, validates results, and hooks still apply.
 
 ---
 
 ## Configuration
 
-### team-topology.json
-
-`skills/team-orchestrate/config/team-topology.json` controls domain-to-teammate mapping
-and optional CLI routing. See the file for full schema.
-
-### Optional Multi-AI CLI Routing
-
-Set `cli` field per teammate to hint external CLI usage:
-
-| `cli` value | Effect |
-|-------------|--------|
-| `null` | Claude only (default) |
-| `"gemini"` | Teammate may call `gemini` CLI via Bash for subtasks |
-| `"codex"` | Teammate may call `codex exec` via Bash for subtasks |
-
-The teammate (Claude) decides when to invoke the CLI, validates the result, and hooks still apply.
-
-### Governance Hooks
-
-Registered in `.claude/settings.json`:
-- `TeammateIdle` → fires when a teammate finishes a turn
-- `TaskCompleted` → fires when a task is marked complete
-- `task-progress-gate` (Stop) → warns if TASKS.md not updated
+- `config/team-topology.json` — domain mapping, CLI routing
+- `references/agent-teams-api.md` — full API reference
 
 ---
 
-## Key Behaviors
+## Governance Hooks
 
-**Teammates go idle between turns** — this is normal. Idle means waiting for input, not done.
-Send a message to wake an idle teammate.
-
-**Task discovery is automatic** — teammates check TaskList after completing each task
-and claim the next available unblocked task.
-
-**TASKS.md sync is mandatory** — after each task completion, the teammate must update
-TASKS.md with `[x]`. The task-progress-gate Stop hook catches any missed updates.
+| Hook | When | Effect |
+|------|------|--------|
+| TeammateIdle | Any teammate finishes a turn | Check for incomplete work |
+| TaskCompleted | Any task marked complete | Lightweight quality gate |
+| task-progress-gate (Stop) | Lead session ending | Warn if TASKS.md not updated |
 
 ---
 
-## Usage
-
-```bash
-/team-orchestrate                          # default
-/team-orchestrate --tasks-file path/to    # custom TASKS.md
-```
-
----
-
-## Reference Documents
-
-- `references/agent-teams-api.md` — Full Agent Teams API reference (TeamCreate, SendMessage, etc.)
-
----
-
-**Last Updated**: 2026-03-16 (v2.0.0 — Native Agent Teams API)
+**Last Updated**: 2026-03-16 (v3.0.0 — 3-Level logical hierarchy on flat TeamCreate)
