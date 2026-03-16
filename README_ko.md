@@ -46,7 +46,7 @@ cd claude-impl-tools/project-team
 
 | 구성요소 | 개수 | 용도 |
 |----------|------|------|
-| **스킬** | 19개 | 작업 실행, 분석, 자동화 |
+| **스킬** | 20개 | 작업 실행, 분석, 자동화 |
 | **Agent Teams 리더** | 4개 | team-lead, architecture-lead, qa-lead, design-lead |
 | **코어 워커 에이전트** | 4개 | builder, reviewer, designer, maintenance-analyst |
 | **훅** | 19개 | 자동 검증, 게이트, 동기화, 거버넌스 |
@@ -234,7 +234,7 @@ cd project-team
 
 ```
 claude-impl-tools/
-├── skills/                    # 19개 스킬
+├── skills/                    # 20개 스킬
 │   ├── workflow-guide/        # 메타 허브
 │   ├── governance-setup/      # Phase 0 설정
 │   ├── agile/                 # 레이어별 스프린트

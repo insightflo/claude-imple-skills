@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Skills** | 19 | Task execution, analysis, automation |
+| **Skills** | 20 | Task execution, analysis, automation |
 | **Agent Teams Leads** | 4 | team-lead, architecture-lead, qa-lead, design-lead |
 | **Core Worker Agents** | 4 | builder, reviewer, designer, maintenance-analyst |
 | **Hooks** | 19 | Auto-validation, gates, sync, governance |
@@ -232,7 +232,7 @@ Start
 
 ```
 claude-impl-tools/
-├── skills/                    # 19 skills
+├── skills/                    # 20 skills
 │   ├── workflow-guide/        # Meta hub
 │   ├── governance-setup/      # Phase 0 setup
 │   ├── agile/                 # Layered sprints
