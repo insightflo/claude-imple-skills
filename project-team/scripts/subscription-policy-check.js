@@ -21,7 +21,7 @@ const SCAN_DIR_BLOCKLIST = new Set([
   'build',
   '.next',
   'coverage',
-  '.sisyphus'
+  '.tmp'
 ]);
 
 const SCAN_FILE_EXTENSIONS = new Set([

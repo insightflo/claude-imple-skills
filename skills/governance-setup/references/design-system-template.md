@@ -280,12 +280,12 @@ Top Nav (64px)
 
 ## 6. Governance Operationalization (Doc → Execution)
 
-> 디자인 시스템이 문서로만 남지 않도록, 실제 개발/리뷰 과정에서 강제되는 경로를 정의합니다.
+> Defines the paths through which the design system is enforced during actual development and review, rather than remaining as documentation only.
 
-### 6.1 Single Entry 검증 커맨드
-- Recommended: `scripts/verify_all.sh` 또는 `make verify`
+### 6.1 Single Entry Verification Command
+- Recommended: `scripts/verify_all.sh` or `make verify`
 
-### 6.2 Design System ↔ Checks 매핑
+### 6.2 Design System ↔ Checks Mapping
 
 | Area | Check Type | Tool/Job | Command | Output Artifact | Enforcement |
 |------|------------|----------|---------|-----------------|-------------|
@@ -295,9 +295,9 @@ Top Nav (64px)
 | Accessibility | a11y audit | {{TOOL}} | {{COMMAND}} | {{PATH}} | Block/Warn |
 
 ### 6.3 Update Triggers
-- 디자인 토큰 변경(색/타이포/spacing)으로 UI 일괄 영향 발생
-- 접근성(a11y) 기준 변경 또는 위반 발견
-- 신규 핵심 컴포넌트/패턴이 반복적으로 등장
+- Design token changes (color/typography/spacing) causing broad UI impact
+- Accessibility (a11y) standard changes or violations discovered
+- New core components/patterns appearing repeatedly
 
 ---
 

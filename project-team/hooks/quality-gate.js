@@ -12,7 +12,7 @@
  * if quality standards are not met.
  *
  * @TASK P2-T4 - Quality Gate Hook
- * @SPEC project-team/agents/QAManager.md#enforcement-hook
+ * @SPEC .claude/agents/qa-lead.md#enforcement-hook
  *
  * Claude Code Hook Protocol (Manual):
  *   - Triggered: When Phase is ready for completion
@@ -31,6 +31,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { emitHookDecision } = require('./lib/hook-decision-event');
 
 // ---------------------------------------------------------------------------
@@ -207,6 +208,110 @@ const PROJECT_PATTERNS = {
   }
 };
 
+function fileExists(filePath) {
+  try {
+    return !!filePath && fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function resolveProjectRoot() {
+  if (process.env.CLAUDE_PROJECT_DIR) {
+    return path.resolve(process.env.CLAUDE_PROJECT_DIR);
+  }
+
+  try {
+    return fs.realpathSync(process.cwd());
+  } catch {
+    return path.resolve(process.cwd());
+  }
+}
+
+function resolveWhiteboxRuntime(projectRoot) {
+  const explicitRoot = process.env.CLAUDE_IMPL_SKILLS_ROOT || '';
+  const skillRoots = [
+    explicitRoot,
+    path.join(os.homedir(), '.claude', 'claude-imple-skills'),
+    '/Users/kwak/Projects/ai/claude-imple-skills',
+  ].filter(Boolean);
+
+  const collabInitCandidates = [
+    path.join(projectRoot, '.claude', 'scripts', 'collab-init.js'),
+    path.join(projectRoot, '.claude', 'project-team', 'scripts', 'collab-init.js'),
+    ...skillRoots.map((root) => path.join(root, 'project-team', 'scripts', 'collab-init.js')),
+  ];
+
+  const dashboardCandidates = skillRoots.map((root) =>
+    path.join(root, 'skills', 'whitebox', 'scripts', 'whitebox-dashboard.js')
+  );
+
+  return {
+    collabInit: collabInitCandidates.find(fileExists) || null,
+    dashboard: dashboardCandidates.find(fileExists) || null,
+  };
+}
+
+function openWhiteboxUi(projectRoot) {
+  const runtime = resolveWhiteboxRuntime(projectRoot);
+  const result = {
+    opened: false,
+    url: '',
+    error: '',
+  };
+
+  if (runtime.collabInit) {
+    spawnSync(process.execPath, [runtime.collabInit, `--project-dir=${projectRoot}`], {
+      cwd: projectRoot,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: 'pipe',
+      env: process.env,
+    });
+  }
+
+  if (!runtime.dashboard) {
+    result.error = 'whitebox_dashboard_missing';
+    return result;
+  }
+
+  const opened = spawnSync(process.execPath, [runtime.dashboard, 'open', `--project-dir=${projectRoot}`, '--json'], {
+    cwd: projectRoot,
+    encoding: 'utf-8',
+    shell: false,
+    stdio: 'pipe',
+    env: process.env,
+  });
+
+  if (opened.status !== 0) {
+    result.error = (opened.stderr || opened.stdout || '').trim() || 'whitebox_dashboard_open_failed';
+    return result;
+  }
+
+  try {
+    const payload = JSON.parse(opened.stdout || '{}');
+    result.opened = Boolean(payload && payload.url);
+    result.url = payload && payload.url ? payload.url : '';
+    return result;
+  } catch {
+    const url = String(opened.stdout || '').trim();
+    result.opened = /^https?:\/\//.test(url);
+    result.url = result.opened ? url : '';
+    if (!result.opened) result.error = 'whitebox_dashboard_invalid_response';
+    return result;
+  }
+}
+
+function reasonWithWhitebox(baseReason, whitebox) {
+  if (whitebox && whitebox.opened && whitebox.url) {
+    return `${baseReason} Whitebox opened at ${whitebox.url}`;
+  }
+  if (whitebox && whitebox.error) {
+    return `${baseReason} Whitebox open failed: ${whitebox.error}`;
+  }
+  return baseReason;
+}
+
 // ---------------------------------------------------------------------------
 // 2. Project Detection
 // ---------------------------------------------------------------------------
@@ -216,7 +321,7 @@ const PROJECT_PATTERNS = {
  * @returns {'backend' | 'frontend' | 'unknown'}
  */
 function detectProjectType() {
-  const cwd = process.cwd();
+  const cwd = resolveProjectRoot();
 
   // Check for package.json (frontend)
   const packageJsonPath = path.join(cwd, 'package.json');
@@ -656,9 +761,11 @@ async function main() {
       tool_name: 'quality-gate',
       tool_input: {},
     };
+    const projectRoot = resolveProjectRoot();
     const projectType = detectProjectType();
 
     if (projectType === 'unknown') {
+      const whitebox = openWhiteboxUi(projectRoot);
       await emitHookDecision(input, {
         hook: 'quality-gate',
         decision: 'deny',
@@ -668,7 +775,10 @@ async function main() {
       });
       process.stdout.write(JSON.stringify({
         decision: 'deny',
-        reason: 'Could not detect project type (no package.json or pyproject.toml found)'
+        reason: reasonWithWhitebox(
+          'Could not detect project type (no package.json or pyproject.toml found)',
+          whitebox
+        )
       }));
       return;
     }
@@ -703,6 +813,7 @@ async function main() {
 
     // Generate report
     const report = generateReport(results);
+    const whitebox = results.passed ? null : openWhiteboxUi(projectRoot);
 
     await emitHookDecision(input, {
       hook: 'quality-gate',
@@ -715,6 +826,7 @@ async function main() {
     // Output decision
     process.stdout.write(JSON.stringify({
       decision: results.passed ? 'allow' : 'deny',
+      reason: results.passed ? '' : reasonWithWhitebox('Quality gate blocked the stop boundary.', whitebox),
       report,
       metrics: {
         tests: results.tests,
@@ -731,9 +843,10 @@ async function main() {
       summary: 'Quality gate execution error.',
       remediation: 'Review hook runtime errors and rerun.',
     });
+    const whitebox = openWhiteboxUi(resolveProjectRoot());
     process.stdout.write(JSON.stringify({
       decision: 'deny',
-      reason: `Quality gate error: ${error.message}`
+      reason: reasonWithWhitebox(`Quality gate error: ${error.message}`, whitebox)
     }));
   }
 }
@@ -763,6 +876,7 @@ if (typeof module !== 'undefined' && module.exports) {
     runTypeCheck,
     parseTypeOutput,
     generateReport,
-    isQualityGatePassed
+    isQualityGatePassed,
+    resolveProjectRoot
   };
 }

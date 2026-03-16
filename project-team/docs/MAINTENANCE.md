@@ -13,8 +13,9 @@ Run daily or before starting work:
 npm test --prefix ~/.claude/hooks/
 
 # Verify installations
-ls ~/.claude/hooks/*.js | wc -l       # Should be 10
-ls ~/.claude/agents/*.md | wc -l      # Should be 6+
+ls ~/.claude/hooks/*.js | wc -l       # Should be 20
+ls ~/.claude/agents/*.md | wc -l      # Should be 4 leads + 4 workers = 8+
+ls project-team/agents/*.md | wc -l  # Should be 4 worker agents
 ```
 
 ### Monitor Hook Execution
@@ -125,14 +126,23 @@ npm run coverage --prefix ~/.claude/hooks/
 Customize agents for your team:
 
 ```bash
-# List all agents
-ls -la ~/.claude/agents/*.md
+# List Agent Teams leads
+ls -la ~/.claude/agents/team-lead.md \
+       ~/.claude/agents/architecture-lead.md \
+       ~/.claude/agents/qa-lead.md \
+       ~/.claude/agents/design-lead.md
 
-# Edit agent capabilities
-vim ~/.claude/agents/ProjectManager.md
+# List worker agents
+ls -la project-team/agents/{Builder,Reviewer,Designer,MaintenanceAnalyst}.md
 
-# Update role permissions
-vim ~/.claude/agents/templates/DomainDeveloper.md
+# Edit lead agent capabilities
+vim ~/.claude/agents/architecture-lead.md
+
+# Edit worker agent capabilities
+vim project-team/agents/Builder.md
+
+# Update domain templates
+vim project-team/agents/templates/DomainDeveloper.md
 ```
 
 ### Perform Backup
@@ -430,7 +440,7 @@ Standard architecture document format:
 ---
 domain: payment
 version: 2.1.0
-owner: chief-architect
+owner: architecture-lead
 status: stable
 updated: 2026-02-08
 ---
@@ -521,17 +531,21 @@ find .claude/changelog -mtime +90 -delete
 
 ### Agent File Structure
 
-Each agent defined in `.claude/agents/`:
+Agents are split across two directories: leads live in `.claude/agents/` (global, orchestrate via Task tool), workers live in `project-team/agents/` (installed locally, executed as subagents).
 
 ```
-~/.claude/agents/
-├─ ProjectManager.md          # Main agent
-├─ ChiefArchitect.md
-├─ ChiefDesigner.md
-├─ DBA.md
-├─ QAManager.md
-├─ MaintenanceAnalyst.md
-└─ templates/                 # Domain-specific templates
+~/.claude/agents/                     # Agent Teams leads (orchestrators)
+├─ team-lead.md                       # Overall coordination & task decomposition
+├─ architecture-lead.md               # Technical standards & VETO authority
+├─ qa-lead.md                         # Quality gates & release approval
+└─ design-lead.md                     # Design system & consistency
+
+project-team/agents/                  # Core worker agents (subagents)
+├─ Builder.md                         # Implementation execution
+├─ Reviewer.md                        # Code review & QA
+├─ Designer.md                        # Design specialist
+├─ MaintenanceAnalyst.md              # System maintenance & refactoring
+└─ templates/                         # Domain-specific agent templates
    ├─ PartLeader.md
    ├─ DomainDesigner.md
    └─ DomainDeveloper.md
@@ -563,7 +577,7 @@ access_rights:
 
 constraints:
   - Must pass design-validator hook
-  - Requires chief-architect review for interface changes
+  - Requires architecture-lead review for interface changes
   - Cannot modify payment interface without approval
 ```
 
@@ -572,8 +586,8 @@ constraints:
 Edit agent file to adjust permissions:
 
 ```bash
-# Edit agent
-vim ~/.claude/agents/templates/DomainDeveloper.md
+# Edit a worker agent
+vim project-team/agents/Builder.md
 
 # Find access_rights section
 # Example: Allow write to more directories
@@ -592,16 +606,16 @@ npm test -- permission-checker.test.js
 Create new domain-specific agent:
 
 ```bash
-# 1. Create agent file
-cat > ~/.claude/agents/templates/PaymentArchitect.md << 'EOF'
+# 1. Create worker agent file (subagent)
+cat > project-team/agents/templates/PaymentSpecialist.md << 'EOF'
 ---
-name: payment-architect
-description: Payment system architecture and design
+name: payment-specialist
+description: Payment domain implementation and design
 tools: [Read, Write, Edit]
 model: opus
 
 responsibilities:
-  - Design payment features
+  - Implement payment features
   - Define payment interfaces
   - Review payment code
 
@@ -617,12 +631,12 @@ access_rights:
 EOF
 
 # 2. Register in permission-checker.js
-vim ~/.claude/hooks/permission-checker.js
+vim project-team/hooks/permission-checker.js
 # Add to PERMISSION_MATRIX:
-# 'payment-architect': { level: 'high', ... }
+# 'payment-specialist': { level: 'high', ... }
 
 # 3. Test
-node ~/.claude/hooks/permission-checker.js --test payment-architect
+node ~/.claude/hooks/permission-checker.js --test payment-specialist
 ```
 
 ---
@@ -772,7 +786,7 @@ grep -A 30 "PERMISSION_MATRIX\|access_rights" ~/.claude/hooks/permission-checker
 # For common issues:
 # 1. Role too restricted: Add write path
 # 2. Unexpected denials: Check domain pattern matching
-# 3. Need to escalate: Temporarily use project-manager role
+# 3. Need to escalate: Temporarily use team-lead role
 
 # Test specific role
 CLAUDE_AGENT_ROLE="my-role" node ~/.claude/hooks/permission-checker.js < test.json
@@ -912,5 +926,5 @@ EOF
 
 ---
 
-**Version:** 1.0.0
-**Last Updated:** 2026-02-08
+**Version:** 4.0.0
+**Last Updated:** 2026-03-16

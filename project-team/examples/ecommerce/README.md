@@ -8,7 +8,7 @@ ShopHub는 이커머스 프로젝트의 표준적인 팀 구성과 위험 영역
 
 - **프로젝트 규모**: 중규모 (5개 도메인, 15명 팀)
 - **기술 스택**: FastAPI + React + PostgreSQL
-- **팀 구조**: 프로젝트 레벨 5명 + 도메인 레벨 10명
+- **팀 구조**: Agent Teams 리드 4명 + 도메인 레벨 팀
 
 ## 파일 구조
 
@@ -21,48 +21,56 @@ ecommerce/
 
 ## 프로젝트 팀 구조
 
-### 프로젝트 레벨 에이전트 (5명)
+### Agent Teams 리드 (4명, .claude/agents/)
 
-| 역할 | 담당자 | 책임 |
-|------|--------|------|
-| **Project Manager** | 프로젝트 리드 | 전체 조율, 도메인 간 조정, 스프린트 관리 |
-| **Chief Architect** | 아키텍처 리드 | 기술 표준, 마이크로서비스 설계, 아키텍처 VETO |
-| **Chief Designer** | 디자인 리드 | 디자인 시스템, UI/UX 가이드, 일관성 감시 |
-| **QA Manager** | QA 리드 | 통합 테스트, 품질 게이트, 릴리스 승인 |
-| **DBA** | DB 리드 | 데이터 표준, 스키마 관리, 마이그레이션 |
+| 역할 | 책임 |
+|------|------|
+| **team-lead** | 전체 조율, 도메인 간 조정, 스프린트 관리 |
+| **architecture-lead** | 기술 표준, 마이크로서비스 설계, 아키텍처 VETO |
+| **design-lead** | 디자인 시스템, UI/UX 가이드, 일관성 감시 |
+| **qa-lead** | 통합 테스트, 품질 게이트, 릴리스 승인 |
 
-### 도메인 레벨 팀 (5개 도메인 × 3명 = 15명)
+### 프로젝트 팀 에이전트 (project-team/agents/)
+
+| 역할 | 책임 |
+|------|------|
+| **Builder** | 구현 작업 지원, 도메인 간 전달 |
+| **Reviewer** | 품질 리뷰 및 릴리스 검증 |
+| **Designer** | 디자인 시스템 및 UX |
+| **MaintenanceAnalyst** | 유지보수 및 분석 |
+
+### 도메인 레벨 팀 (5개 도메인 × 3명)
 
 #### 1. User Domain (사용자 관리)
 - **책임**: 회원가입, 로그인, 프로필, 권한 관리
-- **Part Leader**: 인증/권한 정책 결정
+- **Domain lead**:인증/권한 정책 결정
 - **Domain Designer**: 데이터 모델, API 설계, 인증 흐름
 - **Domain Developer**: 개발/테스트 구현
 
 #### 2. Product Domain (상품 관리)
 - **책임**: 상품 조회, 검색, 필터링, 카테고리
-- **Part Leader**: 카탈로그 정책 결정
+- **Domain lead**:카탈로그 정책 결정
 - **Domain Designer**: 검색 전략, API 설계
 - **Domain Developer**: 개발/테스트 구현
 - **의존성**: Inventory 도메인
 
 #### 3. Order Domain (주문 관리)
 - **책임**: 주문 생성, 조회, 취소, 반품
-- **Part Leader**: 주문 정책 결정
+- **Domain lead**:주문 정책 결정
 - **Domain Designer**: 상태 머신, 이벤트 정의
 - **Domain Developer**: 개발/테스트 구현
 - **의존성**: User, Product, Payment, Inventory 도메인
 
 #### 4. Payment Domain (결제 관리)
 - **책임**: 결제 처리, 결제 수단, 영수증
-- **Part Leader**: 결제 정책 결정, PCI-DSS 준수
+- **Domain lead**:결제 정책 결정, PCI-DSS 준수
 - **Domain Designer**: 결제 흐름, 보안 설계
 - **Domain Developer**: 개발/테스트 구현
 - **의존성**: Order, User 도메인
 
 #### 5. Inventory Domain (재고 관리)
 - **책임**: 재고 조회, 업데이트, 예약, 경고
-- **Part Leader**: 재고 정책 결정
+- **Domain lead**:재고 정책 결정
 - **Domain Designer**: 재고 모델, 예약 전략
 - **Domain Developer**: 개발/테스트 구현
 - **의존성**: Product 도메인
@@ -96,13 +104,13 @@ ecommerce/
 #### 1. 결제 시스템 (Payment Domain)
 - **위험도**: 최고 (금융 데이터)
 - **PCI-DSS**: 3.2.1 준수 필수
-- **필수 승인**: Chief Architect, QA Manager
+- **필수 승인**: architecture-lead, qa-lead
 - **필수 테스트**: Unit, Integration, E2E
 - **보안 검사**: 암호화, PCI-DSS, SQL Injection, XSS, CSRF, 사기 탐지
 
 ```yaml
 # 결제 도메인의 모든 변경은 다음을 만족해야 함:
-required_approvals: ["chief-architect", "qa-manager"]
+required_approvals: ["architecture-lead", "qa-lead"]
 required_tests: ["unit", "integration", "e2e"]
 security_checks:
   - encryption (AES-256)
@@ -113,7 +121,7 @@ security_checks:
 #### 2. 사용자 인증/권한 (User Domain)
 - **위험도**: 최고 (보안)
 - **영향도**: 모든 도메인에 영향
-- **필수 승인**: Chief Architect
+- **필수 승인**: architecture-lead
 - **필수 테스트**: Unit (95%), Integration, Security
 - **보안 검사**: OAuth2, JWT, Password Hashing, Session Management, Rate Limiting
 
@@ -154,9 +162,9 @@ security_checks:
 
 ```yaml
 protected_paths:
-  - ".claude/project-team.yaml" → project-manager만 수정
-  - ".claude/standards/" → chief-architect만 수정
-  - "design-system/" → chief-designer만 수정
+  - ".claude/project-team.yaml" → team-lead만 수정
+  - ".claude/standards/" → architecture-lead만 수정
+  - "design-system/" → design-lead만 수정
 
 domain_paths:
   - "src/domains/{domain}/" → domain-developer만 수정
@@ -289,39 +297,39 @@ pci_dss: "PCI-DSS 3.2.1 (결제 도메인)"
 1. 요청서 작성
    → requests/to-{domain}/ 디렉토리에 PR 생성
 
-2. Part Leader 검토
-   → 요청 대상 도메인의 Part Leader가 검토
+2. Domain lead 검토
+   → 요청 대상 도메인의 Domain lead가 검토
 
 3. 영향도 분석
    → interface-validator 훅이 자동 검증
 
-4. Chief Architect 승인
+4. Chief Architect (architecture-lead) 승인
    → Major changes (Breaking Changes)는 필수
 
 5. 구현 및 테스트
-   → Domain Developer가 구현, 테스트 작성
+   → Builder/Domain Developer가 구현, 테스트 작성
 
-6. QA Manager 승인
+6. QA Manager (qa-lead) 승인
    → 통합 테스트, 품질 게이트 통과
 
 7. 배포
-   → Project Manager가 배포 승인
+   → team-lead가 배포 승인
 ```
 
 ### 정기 회의
 
 | 회의 | 빈도 | 참석자 | 시간 |
 |------|------|--------|------|
-| Architecture Sync | 주 1회 | Chief Architect, 모든 Part Leader | 1시간 |
-| Design Sync | 격주 | Chief Designer, 모든 Domain Designer | 1시간 |
-| QA/Release Planning | 주 1회 | QA Manager, 모든 Part Leader | 1시간 |
-| Domain Leads Standup | 일일 | Project Manager, 모든 Part Leader | 30분 |
+| Architecture Sync | 주 1회 | architecture-lead, 모든 Domain Lead | 1시간 |
+| Design Sync | 격주 | design-lead, 모든 Domain Designer | 1시간 |
+| QA/Release Planning | 주 1회 | qa-lead, 모든 Domain Lead | 1시간 |
+| Domain Leads Standup | 일일 | team-lead, 모든 Domain Lead | 30분 |
 
 ### 문제 해결 (Escalation)
 
-1. **Level 1**: 도메인 간 협의 (Part Leaders)
-2. **Level 2**: Project Manager 중재
-3. **Level 3**: Chief Architect 최종 결정
+1. **Level 1**: 도메인 간 협의 (Domain Leads)
+2. **Level 2**: team-lead 중재
+3. **Level 3**: architecture-lead 최종 결정
 
 ## 모니터링 및 메트릭
 
@@ -352,12 +360,12 @@ pci_dss: "PCI-DSS 3.2.1 (결제 도메인)"
 
 ### Staging (스테이징)
 - 자동 배포: 아니오
-- 승인 필요: **QA Manager** (필수)
+- 승인 필요: **qa-lead** (필수)
 - 목적: 본배포 전 최종 검증
 
 ### Production (운영)
 - 자동 배포: 아니오
-- 승인 필요: **Project Manager** (필수)
+- 승인 필요: **team-lead** (필수)
 - QA 검증: 필수
 - 모니터링: 활성화
 
@@ -395,7 +403,7 @@ vi .claude/risk-areas.yaml
 # 1. Domain Designer가 API 컨트랙트 작성
 # 2. Domain Developer가 모델, 서비스 구현
 # 3. standards-validator 통과
-# 4. Part Leader가 API 컨트랙트 승인
+# 4. Domain lead가 API 컨트랙트 승인
 ```
 
 ### 4. 도메인 간 의존성 관리
@@ -403,9 +411,9 @@ vi .claude/risk-areas.yaml
 ```bash
 # 1. Consumer 도메인이 요청서 작성
 #    → requests/to-{provider-domain}/
-# 2. Provider Part Leader 검토
+# 2. Provider domain lead 검토
 # 3. 영향도 분석 (interface-validator)
-# 4. Chief Architect 승인 (breaking change)
+# 4. architecture-lead 승인 (breaking change)
 # 5. 구현 및 통합 테스트
 # 6. 배포
 ```
@@ -416,12 +424,12 @@ vi .claude/risk-areas.yaml
 Phase 1: 개발 (Development)
   ↓
 Phase 2: 통합 테스트 (Staging)
-  ├─ QA Manager 검증
+  ├─ qa-lead 검증
   ├─ 성능 테스트 (1000 RPS)
   └─ 보안 스캔
   ↓
 Phase 3: 운영 배포 (Production)
-  ├─ Project Manager 승인
+  ├─ team-lead 승인
   ├─ Blue-Green 배포
   └─ Monitoring 활성화
   ↓
@@ -445,9 +453,9 @@ mkdir -p requests/to-order/
 # - 영향받는 도메인
 # - 마이그레이션 계획
 
-# 3. 대상 도메인의 Part Leader에게 검토 요청
+# 3. 대상 도메인의 domain lead에게 검토 요청
 # 4. interface-validator 훅이 자동으로 영향도 분석
-# 5. Breaking change라면 Chief Architect 승인 필수
+# 5. Breaking change라면 architecture-lead 승인 필수
 ```
 
 ### Q: 도메인 개발 중 기술 표준 위반이 있으면?
@@ -457,7 +465,7 @@ mkdir -p requests/to-order/
 ```bash
 # 1. 코드 리뷰 시 표준 위반 지적
 # 2. .claude/standards/ 문서 참조
-# 3. Chief Architect와 상담 (필요시)
+# 3. architecture-lead와 상담 (필요시)
 # 4. 수정 후 다시 제출
 ```
 
@@ -483,7 +491,7 @@ mkdir -p requests/to-order/
 ```bash
 # 1. 테스트 작성으로 커버리지 증가
 # 2. CRITICAL 도메인은 최소 95% 필요
-# 3. 예외 승인은 Project Manager에게 요청
+# 3. 예외 승인은 team-lead에게 요청
 
 # 확인 방법:
 pytest --cov=src --cov-report=html
@@ -528,5 +536,5 @@ pytest --cov=src --cov-report=html
 ---
 
 **작성자**: Documentation Team
-**최종 검토**: Chief Architect, Project Manager
+**최종 검토**: architecture-lead, team-lead
 **다음 검토**: 2026-05-08

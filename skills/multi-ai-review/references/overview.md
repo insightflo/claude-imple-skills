@@ -1,97 +1,97 @@
 # Multi-AI Review Overview
 
-## 워크플로우
+## Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Multi-AI Review Pipeline                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  Stage 1: Initial Opinions (병렬 실행)                              │
-│  ├── 💎 Gemini CLI → opinion.md (창의적 관점)                        │
-│  └── 🤖 Codex CLI → opinion.md (기술적 관점)                         │
+│  Stage 1: Initial Opinions (parallel execution)                     │
+│  ├── 💎 Gemini CLI → opinion.md (creative perspective)               │
+│  └── 🤖 Codex CLI → opinion.md (technical perspective)               │
 │                                                                      │
 │  Stage 2: Response Collection                                        │
-│  └── 각 응답 수집 및 포맷팅                                          │
+│  └── Collect and format each response                               │
 │                                                                      │
 │  Stage 3: Chairman Synthesis                                         │
-│  └── 🧠 Claude가 모든 의견 종합 → 최종 리포트                        │
+│  └── 🧠 Claude synthesizes all opinions → final report               │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## 핵심 특징
+## Key Features
 
-### 1. CLI 기반 실행
-- MCP 서버 불필요
-- 추가 API 비용 없음 (구독 플랜만 사용)
-- 간단한 설정 (YAML 파일)
+### 1. CLI-Based Execution
+- No MCP server required
+- No additional API costs (subscription plans only)
+- Simple configuration (YAML file)
 
-### 2. 병렬 실행
-- 모든 멤버가 동시에 실행
-- 가장 느린 응답 시간에 의존
-- 타임아웃 설정 가능
+### 2. Parallel Execution
+- All members run simultaneously
+- Depends on the slowest response time
+- Configurable timeout
 
-### 3. Job 기반 관리
-- 백그라운드 실행 지원
-- 진행 상황 폴링 가능
-- 결과 파일로 저장
+### 3. Job-Based Management
+- Background execution support
+- Progress polling available
+- Results saved to files
 
-## 파일 구조
+## File Structure
 
 ```
 skills/multi-ai-review/
-├── SKILL.md                    # 스킬 문서
-├── council.config.yaml         # 멤버 설정
+├── SKILL.md                    # Skill documentation
+├── council.config.yaml         # Member configuration
 ├── scripts/
-│   ├── council.sh              # 메인 실행
-│   ├── council-job.sh          # Job 러너
-│   ├── council-job.js          # Job 구현
-│   └── council-job-worker.js   # 워커
+│   ├── council.sh              # Main entry point
+│   ├── council-job.sh          # Job runner
+│   ├── council-job.js          # Job implementation
+│   └── council-job-worker.js   # Worker
 ├── templates/
-│   └── report.md               # 리포트 템플릿
+│   └── report.md               # Report template
 └── references/
-    ├── overview.md             # 이 파일
-    ├── config.md               # 설정 가이드
-    ├── examples.md             # 사용 예시
-    └── requirements.md         # 요구사항
+    ├── overview.md             # This file
+    ├── config.md               # Configuration guide
+    ├── examples.md             # Usage examples
+    └── requirements.md         # Requirements
 ```
 
-## 실행 모드
+## Execution Modes
 
-### One-shot (간단)
+### One-shot (Simple)
 
 ```bash
-./scripts/council.sh "리뷰 요청 내용"
+./scripts/council.sh "Review request content"
 ```
 
-### Job Mode (세밀한 제어)
+### Job Mode (Fine-grained Control)
 
 ```bash
-# 1. 잡 시작
-JOB_DIR=$(./scripts/council.sh start "리뷰 요청")
+# 1. Start a job
+JOB_DIR=$(./scripts/council.sh start "Review request")
 
-# 2. 진행 상황 확인
+# 2. Check progress
 ./scripts/council.sh status "$JOB_DIR"
 
-# 3. 결과 확인
+# 3. Check results
 ./scripts/council.sh results "$JOB_DIR"
 
-# 4. 정리
+# 4. Clean up
 ./scripts/council.sh clean "$JOB_DIR"
 ```
 
-## 멤버 역할
+## Member Roles
 
-| 멤버 | 역할 | 주요 검토 항목 |
-|------|------|---------------|
-| 💎 Gemini | Creative Reviewer | UX, 대안 아이디어, 혁신성 |
-| 🤖 Codex | Technical Reviewer | 아키텍처, 패턴, 성능 |
-| 🧠 Claude | Chairman | 종합 판정, 최종 리포트 |
+| Member | Role | Primary Review Areas |
+|--------|------|---------------------|
+| 💎 Gemini | Creative Reviewer | UX, alternative ideas, innovation |
+| 🤖 Codex | Technical Reviewer | Architecture, patterns, performance |
+| 🧠 Claude | Chairman | Synthesis and final report |
 
-## 에러 처리
+## Error Handling
 
-- `missing_cli`: CLI가 설치되지 않음
-- `timed_out`: 타임아웃 초과
-- `error`: 실행 오류
-- `canceled`: 사용자 취소
+- `missing_cli`: CLI is not installed
+- `timed_out`: Timeout exceeded
+- `error`: Execution error
+- `canceled`: User cancellation

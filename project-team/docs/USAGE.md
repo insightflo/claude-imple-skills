@@ -7,8 +7,8 @@ Comprehensive guide for using Claude Project Team's hooks, agents, templates, an
 ### 1. Set Your Role
 
 ```bash
-export CLAUDE_AGENT_ROLE="project-manager"
-# or your specific role: chief-architect, dba, {domain}-developer, etc.
+export CLAUDE_AGENT_ROLE="builder"
+# or your specific role: reviewer, designer, maintenance-analyst, team-lead, etc.
 ```
 
 ### 2. Start Claude Code
@@ -37,41 +37,52 @@ Continue reading sections relevant to your role.
 
 ### Available Agents
 
-Claude Project Team provides 9 specialized agents for different project roles:
+Claude Project Team v4.0 provides two tiers of agents: Agent Teams leads that orchestrate work natively via the Task tool, and core worker agents that execute tasks.
 
-#### Main Agents (Global)
+#### Agent Teams Leads (.claude/agents/)
+
+These agents orchestrate the team by spawning worker subagents via Claude's native Task tool.
 
 | Agent | Role | Responsibility | Tools |
 |-------|------|-----------------|-------|
-| **Project Manager** | Orchestration | Request intake, domain coordination, scheduling | Read, Write, Edit, Task |
-| **Chief Architect** | Technical Leadership | Design decisions, standards, architecture | Read, Write, Edit |
-| **Chief Designer** | Design Leadership | Design system, UI/UX standards, patterns | Read, Write, Edit |
-| **DBA** | Data Management | Database schema, migrations, queries | Read, Write, Edit |
-| **QA Manager** | Quality Assurance | Test strategy, quality metrics, test suites | Read, Write, Edit |
-| **Maintenance Analyst** | Operations | Documentation, technical debt, refactoring | Read, Write, Edit |
+| **team-lead** | Orchestration | Request intake, task decomposition, worker coordination | Read, Write, Edit, Task |
+| **architecture-lead** | Technical Leadership | Design decisions, standards, VETO authority | Read, Write, Edit, Task |
+| **qa-lead** | Quality Assurance | Quality gates, test strategy, release approval | Read, Write, Edit, Task |
+| **design-lead** | Design Leadership | Design system, UI/UX standards, design review | Read, Write, Edit, Task |
 
-#### Domain-Specific Agents (Templates)
+#### Core Worker Agents (project-team/agents/)
+
+These agents are invoked as subagents by leads (team mode) or directly by the user (lite/standard/full modes).
+
+| Agent | Role | Responsibility | Tools |
+|-------|------|-----------------|-------|
+| **Builder** | Implementation | Code implementation, feature development, testing | Read, Write, Edit |
+| **Reviewer** | Code Review | Quality review, standards enforcement, feedback | Read, Write, Edit |
+| **Designer** | Design | UI/UX design, design system application | Read, Write, Edit |
+| **MaintenanceAnalyst** | Operations | Documentation, technical debt, refactoring analysis | Read, Write, Edit |
+
+#### Domain-Specific Agent Templates (project-team/agents/templates/)
 
 | Agent | Role | Responsibility |
 |-------|------|-----------------|
-| **Part Leader** | Domain Head | Coordinate domain tasks, interface management |
-| **Domain Designer** | Domain Design | UI/service design for domain |
-| **Domain Developer** | Implementation | Code implementation and testing |
+| **PartLeader** | Domain Head | Coordinate domain tasks, interface management |
+| **DomainDesigner** | Domain Design | UI/service design for domain |
+| **DomainDeveloper** | Implementation | Code implementation and testing |
 
 ### Setting Agent Role
 
 #### In Claude Code
 
 ```
-> /set-role project-manager
-> /set-role auth-developer
-> /set-role payment-designer
+> /set-role builder
+> /set-role reviewer
+> /set-role team-lead
 ```
 
 #### Via Environment Variable
 
 ```bash
-export CLAUDE_AGENT_ROLE="project-manager"
+export CLAUDE_AGENT_ROLE="builder"
 claude
 ```
 
@@ -80,10 +91,10 @@ claude
 ```json
 {
   "agentConfig": {
-    "defaultRole": "project-manager",
+    "defaultRole": "builder",
     "roleConfig": {
-      "payment-developer": {
-        "riskLevel": "critical"
+      "builder": {
+        "riskLevel": "high"
       }
     }
   }
@@ -129,8 +140,8 @@ Allowed paths for auth-developer:
 ```
 
 **Solution:**
-- Switch role: `export CLAUDE_AGENT_ROLE="project-manager"`
-- Or escalate to appropriate agent
+- Switch role: `export CLAUDE_AGENT_ROLE="team-lead"`
+- Or escalate to the appropriate lead agent
 
 ---
 
@@ -254,7 +265,7 @@ Validates that your current agent role has permission to edit a file.
 **Example - Blocked:**
 ```
 [Permission Check] Your role 'auth-developer' cannot modify 'payment/checkout.ts'
-Escalate to: project-manager or chief-architect
+Escalate to: team-lead or architecture-lead
 ```
 
 #### 2. pre-edit-impact-check.js (Pre-Edit)
@@ -456,8 +467,8 @@ Result:
 │   ├─ src/auth/__tests__/token-manager.test.ts (45 cases)
 │   └─ ...
 └─ Recommended Reviewers:
-    ├─ chief-architect (security)
-    └─ auth-developer (domain expert)
+    ├─ architecture-lead (security)
+    └─ reviewer (code review)
 ```
 
 #### 2. /architecture - Architecture Map
@@ -532,7 +543,7 @@ Auth Domain
 
 Overview:
 ├─ Description: User authentication and session management
-├─ Owner: chief-architect
+├─ Owner: architecture-lead
 ├─ Status: Stable
 └─ Version: 2.1.0
 
@@ -655,12 +666,12 @@ When handing off work between agents, use the structured handoff template:
 # Handoff: Payment Feature Implementation
 
 ## From
-- **Agent**: project-manager
+- **Agent**: team-lead
 - **Date**: 2026-02-08
 - **Status**: Requirements finalized
 
 ## To
-- **Agent**: payment-developer
+- **Agent**: builder
 - **Priority**: P0 (urgent)
 - **Deadline**: 2026-02-15
 
@@ -678,7 +689,7 @@ Feature scope: 3 phases, estimated 5 days.
 - [ ] Implement Phase 1: Database migration
 - [ ] Add unit tests (80% coverage target)
 - [ ] Update API documentation
-- [ ] Get code review from chief-architect
+- [ ] Get code review from reviewer (architecture-lead for interface changes)
 
 ## Access Granted
 - Write: src/payment/**
@@ -701,11 +712,11 @@ When requesting work from another agent:
 # Request: Design System Update
 
 ## From
-- **Role**: chief-designer
+- **Role**: design-lead
 - **Date**: 2026-02-08
 
 ## To
-- **Role**: frontend-developer
+- **Role**: builder (frontend)
 - **Priority**: P1
 
 ## Request
@@ -747,7 +758,7 @@ When responding to requests:
 # Response: Design System Update
 
 ## Request ID
-From: chief-designer, 2026-02-08
+From: design-lead, 2026-02-08
 
 ## Status
 ✅ COMPLETED (2026-02-11)
@@ -809,9 +820,9 @@ Main configuration for hooks, permissions, and integrations.
     "requireReview": ["src/core/*"]
   },
   "agents": {
-    "defaultRole": "developer",
+    "defaultRole": "builder",
     "roleConfig": {
-      "chief-architect": {
+      "architecture-lead": {
         "maxRiskLevel": "critical"
       }
     }
@@ -850,7 +861,7 @@ project:
 
 domains:
   payment:
-    owner: chief-architect
+    owner: architecture-lead
     riskLevel: critical
     requiresReview: true
   order:
@@ -931,23 +942,24 @@ Merge
 
 ```
 1. Create Feature Request
-   └─ Post in management/requests/
+   └─ Submit to team-lead (team mode) or directly to builder (lite/standard/full)
 
-2. Project Manager Assigns
-   ├─ Breaks down into domains
-   ├─ Creates task list (T1.1, T1.2, ...)
-   └─ Sends handoff to part-leaders
+2. team-lead Orchestrates (team mode)
+   ├─ Decomposes into tasks via Task tool
+   ├─ Spawns Builder workers for implementation
+   ├─ Spawns Reviewer workers for code review
+   └─ Coordinates with architecture-lead / design-lead / qa-lead
 
-3. Domain Developers Implement
+3. Builder Agents Implement
    ├─ Run /impact before changes
-   ├─ Hooks enforce standards
+   ├─ Hooks enforce standards automatically
    ├─ Regular architecture checks
    └─ Cross-domain notifications auto-sent
 
 4. Code Review
-   ├─ Chief Architect reviews design
-   ├─ Domain expert reviews implementation
-   └─ QA Manager approves quality
+   ├─ architecture-lead reviews design decisions
+   ├─ Reviewer agent reviews implementation
+   └─ qa-lead approves quality
 
 5. Merge & Deploy
    ├─ Changelog auto-recorded
@@ -993,10 +1005,10 @@ If you modify an interface that other domains depend on:
 echo $CLAUDE_AGENT_ROLE
 
 # Switch to appropriate role
-export CLAUDE_AGENT_ROLE="project-manager"
+export CLAUDE_AGENT_ROLE="team-lead"
 
-# Or escalate to someone with permission
-# Ask chief-architect or project-manager to make the change
+# Or escalate to a lead agent with broader access
+# Ask architecture-lead or team-lead to make the change
 ```
 
 ### Design Validator Blocking Valid Code
@@ -1049,9 +1061,10 @@ claude
 
 - See [MAINTENANCE.md](./MAINTENANCE.md) for long-term management
 - See [INSTALLATION.md](./INSTALLATION.md) to troubleshoot setup issues
-- Review specific agent files in `~/.claude/agents/` for detailed role descriptions
+- Review Agent Teams lead files in `.claude/agents/` (team-lead.md, architecture-lead.md, qa-lead.md, design-lead.md)
+- Review worker agent files in `project-team/agents/` (Builder.md, Reviewer.md, Designer.md, MaintenanceAnalyst.md)
 
 ---
 
-**Version:** 1.0.0
-**Last Updated:** 2026-02-08
+**Version:** 4.0.0
+**Last Updated:** 2026-03-16

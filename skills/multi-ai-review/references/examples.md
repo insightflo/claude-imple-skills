@@ -1,123 +1,123 @@
 # Multi-AI Review Examples
 
-## 기본 사용법
+## Basic Usage
 
-### 코드 리뷰
+### Code Review
 
 ```bash
-# CLI 직접 실행
-./skills/multi-ai-review/scripts/council.sh "이 코드의 보안 취약점을 검토해줘"
+# Run directly via CLI
+./skills/multi-ai-review/scripts/council.sh "Review this code for security vulnerabilities"
 
-# Claude Code에서 요청
-"이 파일 리뷰해줘, council 소집해줘"
+# Request from Claude Code
+"Review this file, convene the council"
 ```
 
-### 아키텍처 리뷰
+### Architecture Review
 
 ```bash
-./skills/multi-ai-review/scripts/council.sh "이 마이크로서비스 아키텍처가 확장 가능한지 검토해줘"
+./skills/multi-ai-review/scripts/council.sh "Review whether this microservice architecture is scalable"
 ```
 
-### 기획서 리뷰
+### Planning Document Review
 
 ```bash
-./skills/multi-ai-review/scripts/council.sh "이 PRD의 완전성과 실현 가능성을 검토해줘"
+./skills/multi-ai-review/scripts/council.sh "Review this PRD for completeness and feasibility"
 ```
 
-## Job Mode 예시
+## Job Mode Examples
 
-### 1. 잡 시작
+### 1. Start a Job
 
 ```bash
-JOB_DIR=$(./skills/multi-ai-review/scripts/council.sh start "리뷰 요청 내용")
+JOB_DIR=$(./skills/multi-ai-review/scripts/council.sh start "Review request content")
 echo "Job started: $JOB_DIR"
 ```
 
-### 2. 진행 상황 모니터링
+### 2. Monitor Progress
 
 ```bash
-# JSON 형식
+# JSON format
 ./skills/multi-ai-review/scripts/council.sh status "$JOB_DIR"
 
-# 텍스트 형식
+# Text format
 ./skills/multi-ai-review/scripts/council.sh status --text "$JOB_DIR"
 
-# 상세 출력
+# Verbose output
 ./skills/multi-ai-review/scripts/council.sh status --text --verbose "$JOB_DIR"
 ```
 
-### 3. 결과 확인
+### 3. Check Results
 
 ```bash
-# 텍스트 형식
+# Text format
 ./skills/multi-ai-review/scripts/council.sh results "$JOB_DIR"
 
-# JSON 형식
+# JSON format
 ./skills/multi-ai-review/scripts/council.sh results --json "$JOB_DIR"
 ```
 
-### 4. 정리
+### 4. Clean Up
 
 ```bash
 ./skills/multi-ai-review/scripts/council.sh clean "$JOB_DIR"
 ```
 
-## Claude Code 통합 예시
+## Claude Code Integration Examples
 
-### 키워드 트리거
+### Keyword Triggers
 
 ```
-User: "이 코드 리뷰해줘"
-User: "council 소집해줘"
-User: "여러 AI 의견 물어봐"
-User: "Gemini랑 Codex 의견 들어보자"
+User: "Review this code"
+User: "Convene the council"
+User: "Get opinions from multiple AIs"
+User: "Let's hear what Gemini and Codex think"
 ```
 
-### 리뷰 결과 예시
+### Review Result Example
 
 ```markdown
 ## 💎 Gemini (Creative Reviewer)
 
-### 긍정적 평가
-- 코드 구조가 명확함
-- 에러 처리가 잘 되어 있음
+### Positive Evaluation
+- Code structure is clear
+- Error handling is well implemented
 
-### 개선 제안
-1. **[High]** 성능 최적화 필요
-2. **[Medium]** 접근성 개선 권장
+### Improvement Suggestions
+1. **[High]** Performance optimization needed
+2. **[Medium]** Accessibility improvements recommended
 
-### 대안 아이디어
-- 캐싱 레이어 추가 고려
+### Alternative Ideas
+- Consider adding a caching layer
 
 ---
 
 ## 🤖 Codex (Technical Reviewer)
 
-### 아키텍처 평가
-- SOLID 원칙 준수 양호
-- 의존성 주입 패턴 적절
+### Architecture Evaluation
+- SOLID principles compliance is good
+- Dependency injection pattern is appropriate
 
-### 개선 제안
-1. **[Critical]** SQL 인젝션 취약점
-2. **[High]** 테스트 커버리지 부족
+### Improvement Suggestions
+1. **[Critical]** SQL injection vulnerability
+2. **[High]** Insufficient test coverage
 
 ---
 
 ## 🧠 Claude (Chairman Synthesis)
 
-### 최종 판정
-- **상태**: Conditional Approval
-- **합의율**: 75%
+### Final Verdict
+- **Status**: Conditional Approval
+- **Consensus Rate**: 75%
 
-### 우선 개선사항
-1. SQL 인젝션 수정 (Critical)
-2. 성능 최적화 (High)
-3. 테스트 커버리지 향상 (High)
+### Priority Improvements
+1. Fix SQL injection (Critical)
+2. Performance optimization (High)
+3. Improve test coverage (High)
 ```
 
-## 설정 예시
+## Configuration Examples
 
-### 최소 설정
+### Minimal Configuration
 
 ```yaml
 council:
@@ -132,7 +132,7 @@ council:
     timeout: 60
 ```
 
-### 전체 설정
+### Full Configuration
 
 ```yaml
 council:
@@ -149,28 +149,28 @@ council:
 
   chairman:
     role: "auto"
-    description: "모든 의견을 종합하여 최종 추천 제시"
+    description: "Synthesizes all opinions and provides final recommendation"
 
   settings:
     timeout: 120
     exclude_chairman_from_members: true
 ```
 
-## 에러 처리 예시
+## Error Handling Examples
 
-### CLI 미설치
+### CLI Not Installed
 
 ```bash
-# Gemini CLI가 없는 경우
-$ ./scripts/council.sh "리뷰 요청"
+# When Gemini CLI is not found
+$ ./scripts/council.sh "Review request"
 Error: gemini CLI not found
 Install from: https://github.com/google-gemini/gemini-cli
 ```
 
-### 타임아웃
+### Timeout
 
 ```bash
-# 120초 타임아웃 초과 시
+# When 120-second timeout is exceeded
 $ ./scripts/council.sh status "$JOB_DIR"
 {
   "members": [

@@ -26,9 +26,11 @@ The Vibelab Extension Skills are specialized auxiliary skills built on top of th
 ┌────────────────────────────────────────────────────────────────┐
 │                  Claude Project Team v1.0.0                     │
 │ ┌──────────────────────────────────────────────────────────┐   │
-│ │ 9 Agents (Project Manager, Chief Architect, QA, etc.)    │   │
+│ │ 4 Agents (Builder, Reviewer, Designer, MaintenanceAnalyst) │   │
+│ │ + 4 Agent Teams Leads (team-lead, architecture-lead,    │   │
+│ │   qa-lead, design-lead)                                 │   │
 │ ├──────────────────────────────────────────────────────────┤   │
-│ │ 10 Hooks (Quality Gate, Permission Checker, etc.)        │   │
+│ │ 20 Hooks (Quality Gate, Permission Checker, etc.)        │   │
 │ ├──────────────────────────────────────────────────────────┤   │
 │ │ 5 Skills (/impact, /deps, /architecture, /changelog)    │   │
 │ └──────────────────────────────────────────────────────────┘   │
@@ -48,7 +50,7 @@ The Vibelab Extension Skills are specialized auxiliary skills built on top of th
 ### Information Flow
 
 ```
-Project Manager Request
+team-lead Request
     ↓
 Skill Router Hook
     ├─→ skill-router (auto-detect appropriate skill)
@@ -68,7 +70,7 @@ Claude Project Team Hooks
     ├─→ interface-validator (analyze API impacts)
     └─→ cross-domain-notifier (alert stakeholders)
     ↓
-Project Manager Review & Approval
+team-lead Review & Approval
 ```
 
 ---
@@ -81,31 +83,31 @@ Project Manager Review & Approval
 
 | Scenario | Agent | Agile Command | Integration Point | CPT Hook |
 |----------|-------|---------------|-------------------|----------|
-| **Sprint Planning** | Project Manager | `/agile start` | Task generation | quality-gate |
-| **Layer Execution** | Domain Developer | `/agile auto` | Skeleton→Muscles→Skin | standards-validator |
-| **Change Iteration** | Part Leader | `/agile iterate` | Impact analysis | interface-validator |
-| **Layer Completion** | Chief Architect | `/agile review` | Architecture validation | architecture-updater |
-| **Task Tracking** | Project Manager | `/agile status` | Progress reporting | changelog-recorder |
+| **Sprint Planning** | team-lead | `/agile start` | Task generation | quality-gate |
+| **Layer Execution** | Builder | `/agile auto` | Skeleton→Muscles→Skin | standards-validator |
+| **Change Iteration** | team-lead | `/agile iterate` | Impact analysis | interface-validator |
+| **Layer Completion** | architecture-lead | `/agile review` | Architecture validation | architecture-updater |
+| **Task Tracking** | team-lead | `/agile status` | Progress reporting | changelog-recorder |
 
 **Key Integration Points:**
 
 ```
-Project Manager initializes sprint
+team-lead initializes sprint
     ↓
 /agile start → generates TASKS.md
     ↓
-Chief Architect reviews plan
+architecture-lead reviews plan
     ↓
 /agile auto executes layers
     ├─→ Skeleton: Quality Gate checks lint + build
     ├─→ Muscles: Standards Validator checks SOLID + patterns
     └─→ Skin: Interface Validator checks API changes
     ↓
-Part Leaders coordinate domain tasks
+Domain leads coordinate domain tasks
     ↓
 Post-layer notification triggers cross-domain notifier hook
     ↓
-QA Manager approves layer completion
+qa-lead approves layer completion
 ```
 
 **Example Workflow:**
@@ -113,7 +115,7 @@ QA Manager approves layer completion
 > /agile start
 Creates sprint plan with Skeleton→Muscles→Skin layers
 
-[Project Manager approves]
+[team-lead approves]
 
 > /agile auto
 Executes Skeleton layer
@@ -121,21 +123,21 @@ Executes Skeleton layer
 ├─ Build verification
 └─ notify_user with screenshot
 
-[Chief Architect reviews Skeleton]
+[architecture-lead reviews Skeleton]
 
 Executes Muscles layer
 ├─ Standards validation (via standards-validator hook)
 ├─ SOLID principle check
 └─ notify_user with feature demo
 
-[Part Leaders review Muscles]
+[Domain leads review Muscles]
 
 Executes Skin layer
 ├─ Interface validation (via interface-validator hook)
 ├─ API impact analysis
 └─ cross-domain-notifier alerts affected domains
 
-[QA Manager final approval]
+[qa-lead final approval]
 ```
 
 ---
@@ -144,15 +146,15 @@ Executes Skin layer
 
 | Scenario | Trigger | MCP Orchestration | CPT Agent | CPT Hook |
 |----------|---------|-------------------|-----------|----------|
-| **Code Review** | PR creation | GLM + Gemini (async) | Chief Architect | standards-validator |
-| **Architecture Review** | Major design change | Gemini (design analysis) + GLM (feasibility) | Chief Architect | interface-validator |
-| **Spec Compliance** | Phase completion | 3-stage review (GLM→Gemini→Claude) | QA Manager | quality-gate |
-| **API Change Impact** | Contract change | Cross-domain analysis | Project Manager | cross-domain-notifier |
+| **Code Review** | PR creation | GLM + Gemini (async) | architecture-lead | standards-validator |
+| **Architecture Review** | Major design change | Gemini (design analysis) + GLM (feasibility) | architecture-lead | interface-validator |
+| **Spec Compliance** | Phase completion | 3-stage review (GLM→Gemini→Claude) | qa-lead | quality-gate |
+| **API Change Impact** | Contract change | Cross-domain analysis | team-lead | cross-domain-notifier |
 
 **Key Integration Points:**
 
 ```
-Domain Developer proposes change
+Builder proposes change
     ↓
 /multi-ai-review triggered (or auto via hook)
     ↓
@@ -172,12 +174,12 @@ Claude Integration (Final Decision)
 ├─ Reflection validation
 └─ Generate final review report
     ↓
-Chief Architect approves/vetoes
+architecture-lead approves/vetoes
     ↓
 If API change detected:
 └─ interface-validator hook → cross-domain-notifier
     ↓
-Affected domains notified (Part Leaders)
+Affected domains notified (domain leads)
 ```
 
 **OAuth MCP Integration (v2.2.0):**
@@ -194,8 +196,8 @@ mcp__gemini__auth_login
 
 #### 3. Quality Auditor Skill Integration
 
-| Audit Stage | Validator | Chief | QA Manager | Hook |
-|-------------|-----------|-------|-----------|------|
+| Audit Stage | Validator | architecture-lead | qa-lead | Hook |
+|-------------|-----------|-------------------|---------|------|
 | **Spec Compliance** | GLM + Custom | ✓ Review | ✓ Block/Approve | standards-validator |
 | **Code Quality** | Static Analysis | ✓ Veto | ✓ Checklist | quality-gate |
 | **Test Coverage** | /coverage skill | ✓ Verify | ✓ Enforce 80%+ | quality-gate |
@@ -207,7 +209,7 @@ mcp__gemini__auth_login
 ```
 Phase complete / Deployment imminent
     ↓
-/audit triggered by QA Manager
+/audit triggered by qa-lead
     ↓
 Stage 1: Spec Compliance Review
 ├─ Read planning docs (01-prd.md, 02-trd.md)
@@ -242,7 +244,7 @@ Quality Report Generated
     ├─ 🟡 Medium Issues → /code-review
     └─ 🟢 Low Issues → Tech debt backlog
     ↓
-QA Manager Decision
+qa-lead Decision
 ├─ PASS (90+) → Release approved
 ├─ CAUTION (70-89) → Minor fixes, then re-audit
 └─ FAIL (<70) → Major fixes, re-audit required
@@ -275,11 +277,11 @@ Quality Audit: 78% (CAUTION)
 
 | Interruption Type | Detection Method | Recovery Path | CPT Agent |
 |-------------------|------------------|---------------|-----------|
-| **CLI Crash** | .claude/orchestrate-state.json | `/auto-orchestrate --resume` | Project Manager |
-| **Agile Mid-Sprint** | task.md `[/]` status | `/agile status` → `/agile run {task-id}` | Part Leader |
-| **Worktree Issues** | git worktree list | Git cleanup → reassign tasks | Chief Architect |
-| **Incomplete Code** | Parse syntax errors | `/systematic-debugging` → fix → resume | Domain Developer |
-| **Quality Gate Failure** | Previous /audit report | Re-execute recommended skill chain | QA Manager |
+| **CLI Crash** | .claude/orchestrate-state.json | `/auto-orchestrate --resume` | team-lead |
+| **Agile Mid-Sprint** | task.md `[/]` status | `/agile status` → `/agile run {task-id}` | team-lead |
+| **Worktree Issues** | git worktree list | Git cleanup → reassign tasks | architecture-lead |
+| **Incomplete Code** | Parse syntax errors | `/systematic-debugging` → fix → resume | Builder |
+| **Quality Gate Failure** | Previous /audit report | Re-execute recommended skill chain | qa-lead |
 
 **Key Integration Points:**
 
@@ -320,7 +322,7 @@ Recovery Execution:
 Post-Recovery:
 ├─→ Verify hook state (quality-gate, standards-validator)
 ├─→ Resume at correct checkpoint
-└─→ Notify Project Manager of recovery
+└─→ Notify team-lead of recovery
 ```
 
 **Skill Chain After Recovery:**
@@ -345,14 +347,14 @@ This meta-skill routes to appropriate skills based on project state. It acts as 
 
 | Project State | Detected By | Recommended Skill | CPT Agent Role |
 |---------------|-------------|-------------------|-----------------|
-| Idea only | No docs | `/neurion` → `/socrates` | Project Manager |
-| Planning incomplete | No 06-tasks.md | `/tasks-generator` | Project Manager |
-| Code ready | TASKS.md exists | `/agile auto` or `/auto-orchestrate` | Part Leader |
-| Mid-development | tasks.md [/] found | `/agile iterate` | Domain Developer |
+| Idea only | No docs | `/neurion` → `/socrates` | team-lead |
+| Planning incomplete | No 06-tasks.md | `/tasks-generator` | team-lead |
+| Code ready | TASKS.md exists | `/agile auto` or `/auto-orchestrate` | Builder |
+| Mid-development | tasks.md [/] found | `/agile iterate` | Builder |
 | Work interrupted | .claude files | `/recover` | Any (auto-detect) |
-| API mismatch | specs/ drift | `/sync` | Chief Architect |
-| Feature complete | all tasks [x] | `/trinity` → `/audit` | QA Manager |
-| Ready for release | audit PASS | `/verification-before-completion` | QA Manager |
+| API mismatch | specs/ drift | `/sync` | architecture-lead |
+| Feature complete | all tasks [x] | `/trinity` → `/audit` | qa-lead |
+| Ready for release | audit PASS | `/verification-before-completion` | qa-lead |
 
 **Key Integration Points:**
 
@@ -420,7 +422,7 @@ Output guides user through:
 
 **Flow**:
 ```
-1. Project Manager requests coordination
+1. team-lead requests coordination
    > /workflow
 
 2. Workflow Guide detects:
@@ -441,9 +443,9 @@ Output guides user through:
 
    e) interface-validator hook:
       ├─ Analyzes impact on Orders domain
-      └─ cross-domain-notifier → alerts Orders Part Leader
+      └─ cross-domain-notifier → alerts Orders domain lead
 
-   f) Part Leader (Orders) coordinates:
+   f) Orders domain lead coordinates:
       > /agile iterate "Update order creation to use new profile field"
       └─ quality-gate hook validates changes against interface contract
 
@@ -465,7 +467,7 @@ interface-validator hook
   ↓ Analyzes Orders domain impact
   ↓
 cross-domain-notifier hook
-  ↓ Alerts Orders Part Leader
+  ↓ Alerts Orders domain lead
   ↓
 standards-validator hook (on Orders changes)
   ↓
@@ -484,12 +486,12 @@ architecture-updater hook (updates API contract docs)
 
 **Flow**:
 ```
-1. QA Manager detects production issue
+1. qa-lead detects production issue
    > /systematic-debugging "Payment fails for amounts > 999"
 
 2. Issue identified: Validation regex too strict
 
-3. Domain Developer starts fix but CLI crashes
+3. Builder starts fix but CLI crashes
 
 4. Next session, automatic recovery:
    > /recover (auto-triggered by error-recovery-advisor hook)
@@ -505,7 +507,7 @@ architecture-updater hook (updates API contract docs)
 7. Fix implemented
    > /code-review payment_service.py
    ├─ Standards validator checks pattern compliance
-   └─ Chief Architect approves fix
+   └─ architecture-lead approves fix
 
 8. Verify fix
    > /powerqa payment_service.py (auto-QA cycling)
@@ -540,7 +542,7 @@ architecture-updater hook (updates API contract docs)
 
 **Flow**:
 ```
-1. Project Manager initiates
+1. team-lead initiates
    > /agile start
 
 2. Sprint plan created with 3 layers:
@@ -556,7 +558,7 @@ architecture-updater hook (updates API contract docs)
    ├─ Build verification
    └─ notify_user with screenshot
 
-   [Part Leader reviews → Approves]
+   [Domain lead reviews → Approves]
 
 4. Layer 2: Muscles
    > /agile auto (Muscles layer)
@@ -566,8 +568,8 @@ architecture-updater hook (updates API contract docs)
    ├─ Cross-domain check (cart-service impacts other domains)
    └─ cross-domain-notifier hook → alerts Payment & Inventory
 
-   [Chief Architect approves architecture]
-   [Other Part Leaders confirm no conflicts]
+   [architecture-lead approves architecture]
+   [Other domain leads confirm no conflicts]
 
 5. Layer 3: Skin
    > /agile auto (Skin layer)
@@ -576,7 +578,7 @@ architecture-updater hook (updates API contract docs)
    ├─ Responsive test (playwright-mcp if available)
    └─ Final quality check
 
-   [Chief Designer approves design system compliance]
+   [design-lead approves design system compliance]
 
 6. Post-implementation
    > /coverage (verify 80%+ test coverage)
@@ -619,7 +621,7 @@ architecture-updater hook (updates API contract docs)
 | **design-validator** | `/agile` (Skin layer) | Design changes | Check design system |
 | **quality-gate** | `/audit`, `/powerqa` | Phase completion | Block if < 80% coverage |
 | **interface-validator** | `/multi-ai-review` | API changes | Analyze cross-domain impact |
-| **cross-domain-notifier** | `/agile iterate`, `/multi-ai-review` | Domain impact detected | Alert Part Leaders |
+| **cross-domain-notifier** | `/agile iterate`, `/multi-ai-review` | Domain impact detected | Alert domain leads |
 | **post-edit-analyzer** | `/agile`, `/multi-ai-review` | After edit | Security pattern check |
 | **git-commit-checker** | All skills | Before git push | Warn of audit failures |
 | **architecture-updater** | `/audit`, `/multi-ai-review` | ADR/major changes | Update architecture docs |
@@ -744,8 +746,8 @@ export VIBELAB_HOOKS_PATH="/path/to/claude-imple-skills/.claude/hooks"
 ├──────────────────────┬──────────────────────────────────────┤
 │ Component            │ Compatibility                        │
 ├──────────────────────┼──────────────────────────────────────┤
-│ Agents               │ ✅ Full (9 agents recognize skills)  │
-│ Hooks                │ ✅ Full (14 hooks active)            │
+│ Agents               │ ✅ Full (4 agents + 4 team leads)    │
+│ Hooks                │ ✅ Full (20 hooks active)            │
 │ Quality Gates        │ ✅ Full (coverage, audit)            │
 │ Interface Validator  │ ✅ Full (API contract checking)      │
 │ MCP Integration      │ ✅ Partial (Gemini OAuth, GLM API)   │
@@ -764,9 +766,9 @@ export VIBELAB_HOOKS_PATH="/path/to/claude-imple-skills/.claude/hooks"
 ### 1. Sprint Planning with Agile + Project Team
 
 **DO:**
-- [ ] Start with `/agile start` after Project Manager approves plan
+- [ ] Start with `/agile start` after team-lead approves plan
 - [ ] Let quality-gate hook validate each layer before proceeding
-- [ ] Notify Part Leaders after each layer completion
+- [ ] Notify domain leads after each layer completion
 - [ ] Use `/agile iterate` for mid-sprint changes (not `/agile auto`)
 - [ ] Coordinate with interface-validator before API changes
 
@@ -783,12 +785,12 @@ export VIBELAB_HOOKS_PATH="/path/to/claude-imple-skills/.claude/hooks"
 **DO:**
 - [ ] Use `/multi-ai-review` for architecture/API decisions
 - [ ] Let standards-validator check code patterns
-- [ ] Wait for Chief Architect VETO period before merging
+- [ ] Wait for architecture-lead VETO period before merging
 - [ ] Use GLM + Gemini consensus for major decisions
 
 **DON'T:**
 - ❌ Merge without standards-validator passing
-- ❌ Override Chief Architect veto without justification
+- ❌ Override architecture-lead veto without justification
 - ❌ Skip Gemini creativity review for complex features
 
 ---
@@ -929,7 +931,7 @@ cat pytest.ini | grep omit
 # or
 cat package.json | grep "coverage.exclude"
 
-# 4. Update threshold if justified (with Chief Architect approval)
+# 4. Update threshold if justified (with architecture-lead approval)
 # ⚠️ Never lower threshold without documentation
 ```
 
@@ -967,7 +969,7 @@ ls ~/.claude/hooks/ | wc -l
 # Should trigger skill-router hook + context-guide-loader
 /agile start
 
-# Should recognize Project Manager as orchestrator
+# Should recognize team-lead as orchestrator
 /workflow
 
 # Should run quality-gate hook
@@ -977,7 +979,7 @@ ls ~/.claude/hooks/ | wc -l
 ### Step 5: Update Team Workflows
 - Brief team on new hooks
 - Update runbooks to include quality-gate blocking
-- Configure domain-level Part Leaders in settings.json
+- Configure domain-level leads in settings.json
 - Set up interface contracts in contracts/interfaces/
 
 ---
@@ -1006,7 +1008,7 @@ The integration of **Vibelab Extension Skills** with **Claude Project Team** cre
 4. **Intelligent Recovery** (/recover): Automatic restoration from interruptions
 5. **Skill Routing** (/workflow-guide): Intelligent dispatcher for 39+ skills
 
-All backed by **14 automated hooks** that enforce governance, prevent breaking changes, and maintain architectural consistency.
+All backed by **20 automated hooks** that enforce governance, prevent breaking changes, and maintain architectural consistency.
 
 ---
 
@@ -1017,8 +1019,8 @@ For integration issues:
 1. Check this document for troubleshooting
 2. Review hook logs: `tail -f ~/.claude/logs/hooks.log`
 3. Test hook directly: `claude mcp list | grep -E "(skill-router|quality-gate)"`
-4. Consult Chief Architect if architectural conflicts arise
-5. Consult QA Manager for quality gate enforcement questions
+4. Consult architecture-lead if architectural conflicts arise
+5. Consult qa-lead for quality gate enforcement questions
 
 ---
 
@@ -1030,9 +1032,9 @@ For integration issues:
 
 ---
 
-**Next Steps for Project Managers:**
+**Next Steps for team-lead:**
 1. Run `./install.sh --global` to activate Claude Project Team
 2. Set up domain configurations in `.claude/settings.json`
 3. Brief teams on new workflows
-4. Schedule initial `/audit` with QA Manager
+4. Schedule initial `/audit` with qa-lead
 5. Begin first sprint with `/agile start` + quality gate enforcement

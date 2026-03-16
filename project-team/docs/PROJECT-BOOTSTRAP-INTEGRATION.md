@@ -34,8 +34,8 @@
 
 **Claude Project Team** is an enterprise-grade agent coordination system that provides:
 
-1. **Multi-tier governance**: 5 project-level agents + per-domain 3-agent teams
-2. **10 automated hooks**: Permission checking, standards validation, quality gates
+1. **Multi-tier governance**: 4 project-team agents + 4 Agent Teams leads + per-domain 3-agent teams
+2. **20 automated hooks**: Permission checking, standards validation, quality gates
 3. **Interface contracts**: Safe cross-domain API coordination
 4. **Configuration template**: `project-team.yaml` master configuration
 
@@ -64,8 +64,8 @@
 │                                                                  │
 │  Adds:                                                           │
 │    .claude/project-team.yaml     (master team configuration)     │
-│    .claude/hooks/                (10 automated governance hooks)  │
-│    .claude/agents/ (extended)    (project-level agents: PM, CA)  │
+│    .claude/hooks/                (20 automated governance hooks)  │
+│    .claude/agents/ (extended)    (4 agents + 4 Agent Teams leads) │
 │    .claude/skills/               (architecture, changelog, etc)  │
 │    contracts/interfaces/         (cross-domain API contracts)    │
 │    design-system/                (design tokens, components)     │
@@ -85,7 +85,7 @@
 | **L1: Planning** | `/socrates` | 21-question requirements gathering, 7 planning documents |
 | **L2: Team Creation** | `/project-bootstrap` | Agent team + project scaffolding |
 | **L3: Governance** | Claude Project Team | Hooks, permissions, quality gates, standards |
-| **L4: Execution** | `/orchestrate` | Task routing to specialist agents |
+| **L4: Execution** | `team-orchestrate` | Task routing to specialist agents |
 | **L5: Quality** | Vibelab Extension Skills | Multi-AI review, quality audit, sprint management |
 
 ### Data Flow Between Systems
@@ -104,7 +104,7 @@ Claude Project Team (Governance)
     │
     │  project-team.yaml, hooks/, contracts/
     ▼
-/orchestrate (Execution)
+team-orchestrate (Execution)
     │
     │  Task tool → specialist agents
     ▼
@@ -234,8 +234,9 @@ cd project-team
 ```
 
 This installs:
-- 10 governance hooks into `.claude/hooks/`
-- 5 project-level agents (PM, Chief Architect, Chief Designer, QA Manager, DBA)
+- 20 governance hooks into `.claude/hooks/`
+- 4 project-team agents (Builder, Reviewer, Designer, MaintenanceAnalyst)
+- 4 Agent Teams leads (team-lead, architecture-lead, qa-lead, design-lead)
 - 4 built-in skills (`/impact`, `/deps`, `/architecture`, `/changelog`)
 - Domain agent templates into `.claude/agents/templates/`
 
@@ -252,11 +253,14 @@ After both systems are installed, the project should have:
 │   ├── frontend-specialist.md # [Bootstrap] Implementation agent
 │   ├── database-specialist.md # [Bootstrap] Implementation agent
 │   ├── test-specialist.md     # [Bootstrap] Implementation agent
-│   ├── ProjectManager.md      # [Project Team] Coordination
-│   ├── ChiefArchitect.md      # [Project Team] Standards/VETO
-│   ├── ChiefDesigner.md       # [Project Team] Design system
-│   ├── QAManager.md           # [Project Team] Quality gates
-│   ├── DBA.md                 # [Project Team] DB standards
+│   ├── Builder.md             # [Project Team] Implementation tasks
+│   ├── Reviewer.md            # [Project Team] Quality review
+│   ├── Designer.md            # [Project Team] Design system
+│   ├── MaintenanceAnalyst.md  # [Project Team] Maintenance tasks
+│   ├── team-lead.md           # [Agent Teams] Overall coordination
+│   ├── architecture-lead.md   # [Agent Teams] Architecture decisions
+│   ├── qa-lead.md             # [Agent Teams] Quality gates
+│   ├── design-lead.md         # [Agent Teams] Design decisions
 │   └── templates/
 │       ├── PartLeader.md      # [Project Team] Domain template
 │       ├── DomainDesigner.md  # [Project Team] Domain template
@@ -330,17 +334,17 @@ User: "에이전트 팀 만들어줘"
 │                                                          │
 │ ./install.sh --local                                     │
 │                                                          │
-│ - Install 10 hooks                                       │
-│ - Add 5 project-level agents                             │
+│ - Install 20 hooks                                       │
+│ - Add 4 project-team agents + 4 Agent Teams leads        │
 │ - Copy domain agent templates                            │
 │ - Configure settings.json hook entries                   │
 └────────────────────────────┬────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────┐
-│ Step 4: Development begins with /orchestrate             │
+│ Step 4: Development begins with team-orchestrate         │
 │                                                          │
-│ /orchestrate T1.1 인증 API 구현해줘                      │
+│ /team-orchestrate T1.1 인증 API 구현해줘                  │
 │                                                          │
 │ Orchestrator:                                            │
 │   1. Reads TASKS.md (from /socrates)                     │
@@ -398,13 +402,13 @@ project:
     database: "PostgreSQL"
 
 agents:
-  project-manager:
+  team-lead:
     enabled: false       # Not needed for small projects
-  chief-architect:
+  architecture-lead:
     enabled: true        # Keep for architecture standards
-  chief-designer:
+  design-lead:
     enabled: false       # Not needed
-  qa-manager:
+  qa-lead:
     enabled: true        # Keep for quality gates
   dba:
     enabled: false       # Handled by database-specialist
@@ -448,13 +452,13 @@ project:
     infrastructure: "Docker"
 
 agents:
-  project-manager:
+  team-lead:
     enabled: true
-  chief-architect:
+  architecture-lead:
     enabled: true
-  chief-designer:
+  design-lead:
     enabled: true
-  qa-manager:
+  qa-lead:
     enabled: true
   dba:
     enabled: true
@@ -517,13 +521,13 @@ project:
     messaging: "RabbitMQ"
 
 agents:
-  project-manager:
+  team-lead:
     enabled: true
-  chief-architect:
+  architecture-lead:
     enabled: true
-  chief-designer:
+  design-lead:
     enabled: true
-  qa-manager:
+  qa-lead:
     enabled: true
   dba:
     enabled: true
@@ -567,15 +571,15 @@ collaboration:
     - step: 1
       description: "Submit change request to target domain"
     - step: 2
-      description: "Part Leader review"
+      description: "Domain lead review"
     - step: 3
       description: "Impact analysis by interface-validator"
     - step: 4
-      description: "Chief Architect approval for breaking changes"
+      description: "architecture-lead approval for breaking changes"
     - step: 5
       description: "Implementation with TDD"
     - step: 6
-      description: "QA Manager release approval"
+      description: "qa-lead release approval"
 ```
 
 ---
@@ -588,24 +592,30 @@ Project Bootstrap creates **implementation agents**. Claude Project Team adds **
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Project Level (Claude Project Team)                     │
+│  Agent Teams Leads (.claude/agents/)                     │
 │                                                          │
-│  Project Manager ─── Overall coordination                │
-│  Chief Architect ─── Architecture decisions, VETO        │
-│  Chief Designer ──── Design system consistency           │
-│  QA Manager ──────── Quality gates, release approval     │
-│  DBA ─────────────── Schema standards, migrations        │
+│  team-lead ──────────── Overall coordination             │
+│  architecture-lead ───── Architecture decisions, VETO    │
+│  qa-lead ─────────────── Quality gates, release approval │
+│  design-lead ─────────── Design system consistency       │
+│                                                          │
+│  Project Team Agents (project-team/agents/)              │
+│                                                          │
+│  Builder ─────────────── Implementation tasks            │
+│  Reviewer ────────────── Quality review and approval     │
+│  Designer ────────────── Design system and UX            │
+│  MaintenanceAnalyst ───── Maintenance and analysis       │
 └──────────────────────────┬──────────────────────────────┘
                            │
-                           │  Delegates via /orchestrate
+                           │  Delegates via team-orchestrate
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Domain Level (Project Bootstrap + Project Team)         │
 │                                                          │
 │  Per domain:                                             │
-│    Part Leader ───────── Domain decisions (Project Team)  │
-│    Domain Designer ───── API/data design (Project Team)   │
-│    Domain Developer ──── Implementation (Bootstrap)       │
+│    Domain lead ──────── Domain decisions (Project Team)  │
+│    Domain designer ───── API/data design (Project Team)  │
+│    Domain builder ─────── Implementation (Bootstrap)     │
 │                                                          │
 │  Shared specialists:                                     │
 │    backend-specialist ── FastAPI, business logic          │
@@ -621,10 +631,10 @@ Project Bootstrap creates **implementation agents**. Claude Project Team adds **
 |--------|----------------|-------------------|------|
 | API endpoint implementation | backend-specialist | - | standards-validator |
 | UI component creation | frontend-specialist | - | design-validator |
-| Database migration | database-specialist | DBA (approval) | risk-area-warning |
-| Cross-domain API change | - | Chief Architect (VETO) | interface-validator |
-| Quality verification | test-specialist | QA Manager (gate) | quality-gate |
-| Design consistency | - | Chief Designer | design-validator |
+| Database migration | database-specialist | dba (approval) | risk-area-warning |
+| Cross-domain API change | - | architecture-lead (VETO) | interface-validator |
+| Quality verification | test-specialist | qa-lead (gate) | quality-gate |
+| Design consistency | - | design-lead | design-validator |
 | File permission check | - | - | permission-checker |
 | Architecture documentation | - | - | architecture-updater |
 
@@ -797,7 +807,7 @@ grep -c "standards-validator" .claude/settings.json  # Should be 1
 
 #### Agent File Naming
 
-Bootstrap uses hyphenated names (`backend-specialist.md`), Project Team uses PascalCase (`ChiefArchitect.md`). No naming conflicts occur.
+Agent Teams leads use hyphenated names (`team-lead.md`, `architecture-lead.md`), Project Team workers use PascalCase (`Builder.md`). No naming conflicts occur.
 
 #### Hook Execution Order
 
@@ -817,9 +827,9 @@ If both systems define agents with overlapping responsibilities, follow these pr
 | Responsibility | Primary Agent | Secondary Agent |
 |---------------|---------------|-----------------|
 | Database schema design | DBA (Project Team) | database-specialist (Bootstrap) |
-| Code implementation | backend/frontend-specialist (Bootstrap) | Domain Developer (Project Team) |
-| Quality verification | QA Manager (Project Team) | test-specialist (Bootstrap) |
-| Architecture decisions | Chief Architect (Project Team) | - |
+| Code implementation | backend/frontend-specialist (Bootstrap) | Builder (Project Team) |
+| Quality verification | qa-lead (Agent Teams) | test-specialist (Bootstrap) |
+| Architecture decisions | architecture-lead (Agent Teams) | - |
 
 ### 4. Version Compatibility
 
@@ -833,7 +843,7 @@ If both systems define agents with overlapping responsibilities, follow these pr
 
 ### 5. Performance Considerations
 
-- **Hook overhead**: 10 hooks add latency to each file operation. For small projects, disable unused hooks (permission-checker, cross-domain-notifier).
+- **Hook overhead**: 20 hooks add latency to each file operation. For small projects, disable unused hooks (permission-checker, cross-domain-notifier).
 - **Agent context**: More agents mean larger context windows. For projects with limited context budget, use a smaller configuration (Type 1 or Type 2).
 - **MCP servers**: Bootstrap may configure MCP servers with `defer_loading: true` for token efficiency. Ensure Project Team hooks do not conflict with MCP tool invocations.
 

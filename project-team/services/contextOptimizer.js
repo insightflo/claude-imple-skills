@@ -603,10 +603,8 @@ Options:
 
 Examples:
   # Optimize single file (heuristic)
-  contextOptimizer.js optimize docs/plan/long-context-optimization.md
 
   # Optimize with LLM scoring
-  contextOptimizer.js optimize docs/plan/long-context-optimization.md --llm
 
   # Compress content (heuristic)
   contextOptimizer.js compress large-file.md

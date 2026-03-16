@@ -1,6 +1,6 @@
 ---
 name: context-optimize
-description: 긴 컨텍스트 최적화 - H2O 패턴으로 핵심 정보 추출, 압축, 요약. 문서가 너무 길 때, 컨텍스트 윈도우 부족할 때, 여러 파일 종합 시 반드시 사용하세요. "압축해줘", "요약해줘", "문서가 너무 길어", "context overflow", "컨텍스트 정리" 요청에 즉시 실행. /compress 트리거.
+description: Long context optimization — extract key information, compress, and summarize using the H2O pattern. Use this whenever documents are too long, the context window is running low, or you need to synthesize multiple files. Triggers immediately on "compress this", "summarize this", "document is too long", "context overflow", or "clean up context". Triggers on /compress.
 trigger: /compress, /optimize, "컨텍스트 압축", "문서 압축", "긴 문서 요약", "context overflow"
 version: 1.1.0
 updated: 2026-03-12
@@ -8,143 +8,142 @@ updated: 2026-03-12
 
 # Context Optimize Skill
 
-> **언제 사용하나요?**
-> - 긴 문서/코드를 분석해야 할 때
-> - 컨텍스트 윈도우가 부족할 때
-> - 여러 파일을 종합해야 할 때
-> - 프로젝트 구현 시작 전 문서 정리 시
+> **When to use:**
+> - When you need to analyze a long document or codebase
+> - When the context window is running low
+> - When you need to synthesize multiple files
+> - When cleaning up documents before starting a project implementation
 
 ## Quick Start
 
 ```bash
-# 핵심 정보 추출 (Heavy-Hitter)
+# Extract key information (Heavy-Hitter)
 /compress optimize <file>
 
-# 문서 압축
+# Compress a document
 /compress <file>
 
-# LLM 기반 요약 (Claude CLI 필요)
+# LLM-based summarization (requires Claude CLI)
 /compress <file> --llm
 ```
 
 ---
 
-## 사용 시나리오
+## Usage Scenarios
 
-### 1. 프로젝트 시작 전 문서 정리
-
-```
-상황: 기획서, 명세서가 너무 길어서 한 번에 읽기 어려움
-해결: /compress optimize docs/spec.md --heavy-count=20
-결과: 핵심 20개 항목만 추출하여 빠르게 파악
-```
-
-### 2. 컨텍스트 과부하
+### 1. Pre-project document cleanup
 
 ```
-상황: "Context window exceeded" 또는 응답 품질 저하
-해결: /compress <large-file> --summary-ratio=0.3
-결과: 70% 압축하여 컨텍스트 여유 확보
+Situation: Planning docs and specs are too long to read in one pass
+Solution:  /compress optimize docs/spec.md --heavy-count=20
+Result:    Extract only the top 20 key items for quick understanding
 ```
 
-### 3. 여러 파일 종합
+### 2. Context overload
 
 ```
-상황: 10개 이상의 파일을 참조해야 함
-해결: /compress build "요약해줘" docs/*.md
-결과: RAG 하이브리드로 관련 내용만 추출
+Situation: "Context window exceeded" or degraded response quality
+Solution:  /compress <large-file> --summary-ratio=0.3
+Result:    70% compression to free up context headroom
+```
+
+### 3. Synthesizing multiple files
+
+```
+Situation: Need to reference 10+ files at once
+Solution:  /compress build "summarize" docs/*.md
+Result:    RAG hybrid extracts only relevant content
 ```
 
 ---
 
-## 명령어
+## Commands
 
-| 명령어 | 설명 | 예시 |
-|--------|------|------|
-| `optimize <file>` | Heavy-Hitter 추출 | `/compress optimize spec.md` |
-| `compress <file>` | 압축 (시작/끝 보존) | `/compress README.md` |
-| `build <query> <files>` | RAG 하이브리드 | `/compress build "API 목록" src/*.ts` |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `optimize <file>` | Heavy-Hitter extraction | `/compress optimize spec.md` |
+| `compress <file>` | Compress (preserve start/end) | `/compress README.md` |
+| `build <query> <files>` | RAG hybrid | `/compress build "API list" src/*.ts` |
 
-## 옵션
+## Options
 
-| 옵션 | 설명 | 기본값 |
-|------|------|--------|
-| `--heavy-count=N` | 추출할 핵심 항목 수 | 10 |
-| `--summary-ratio=N` | 압축 비율 (0.1~0.9) | 0.3 |
-| `--llm` | LLM 기반 요약 사용 | false |
-| `--json` | JSON 형식 출력 | false |
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--heavy-count=N` | Number of key items to extract | 10 |
+| `--summary-ratio=N` | Compression ratio (0.1–0.9) | 0.3 |
+| `--llm` | Use LLM-based summarization | false |
+| `--json` | Output in JSON format | false |
 
 ---
 
-## 기술 원리
+## Technical Principles
 
 ### H2O (Heavy-Hitter Oracle)
 
-"Lost in the Middle" 현상 완화를 위해 핵심 정보를 상단에 배치:
+Places critical information at the top to mitigate the "Lost in the Middle" phenomenon:
 
-| 타입 | 우선순위 | 예시 |
-|------|---------|------|
-| h1 헤더 | 1 | `# Title` |
-| 클래스 정의 | 1 | `class Foo` |
-| h2 헤더 | 2 | `## Section` |
-| 함수 정의 | 2 | `function bar()` |
-| 테이블 헤더 | 2 | `\| col1 \| col2 \|` |
-| 코드 블록 | 3 | ` ```javascript` |
-| 리스트 | 4 | `- item` |
+| Type | Priority | Example |
+|------|----------|---------|
+| h1 header | 1 | `# Title` |
+| Class definition | 1 | `class Foo` |
+| h2 header | 2 | `## Section` |
+| Function definition | 2 | `function bar()` |
+| Table header | 2 | `\| col1 \| col2 \|` |
+| Code block | 3 | ` ```javascript` |
+| List | 4 | `- item` |
 
-**보너스 시스템**:
-- 문서 상위 10%: 우선순위 0.8x (높음)
-- 문서 하위 10%: 우선순위 0.9x
-- 중요 키워드 (`CRITICAL`, `IMPORTANT`, `🔥`): 0.5x
+**Bonus system**:
+- Top 10% of document: priority multiplier 0.8x (higher priority)
+- Bottom 10% of document: priority multiplier 0.9x
+- Critical keywords (`CRITICAL`, `IMPORTANT`, `🔥`): multiplier 0.5x
 
 ### Compressive Context
 
-오래된/덜 중요한 내용은 요약, 최신/핵심은 원본 유지:
+Older or less important content is summarized; recent and critical content is preserved as-is:
 
 ```
-[시작 5줄 - 원본 유지]
+[First 5 lines — preserved as-is]
 ... (compressed) ...
-[중간 샘플링]
+[Middle sampling]
 ... (compressed) ...
-[끝 5줄 - 원본 유지]
+[Last 5 lines — preserved as-is]
 ```
 
-### LLM 모드 (`--llm`)
+### LLM Mode (`--llm`)
 
-Claude CLI를 활용한 의미 기반 요약:
-- 구독 비용만으로 추가 API 비용 없음
-- Claude Code 내부에서는 자동 fallback to heuristic
+Semantic summarization using Claude CLI:
+- No additional API cost — subscription only
+- Automatically falls back to heuristic when running inside Claude Code
 
 ---
 
-## 실행 방법
+## How to Run
 
-이 skill은 내부적으로 `contextOptimizer.js`를 호출합니다:
+This skill internally calls `contextOptimizer.js`:
 
 ```bash
 node project-team/services/contextOptimizer.js <command> <file> [options]
 ```
 
-### 예시
+### Examples
 
 ```bash
-# Heavy-Hitter 추출
+# Heavy-Hitter extraction
 node project-team/services/contextOptimizer.js optimize docs/spec.md --heavy-count=15 --json
 
-# 압축
+# Compress
 node project-team/services/contextOptimizer.js compress large-file.md --summary-ratio=0.2
 
-# LLM 기반 (독립 터미널에서)
+# LLM-based (run in a separate terminal)
 node project-team/services/contextOptimizer.js compress large-file.md --llm
 
-# RAG 하이브리드
-node project-team/services/contextOptimizer.js build "API 엔드포인트" src/*.ts
+# RAG hybrid
+node project-team/services/contextOptimizer.js build "API endpoints" src/*.ts
 ```
 
 ---
 
-## 관련 리소스
+## Related Resources
 
-- 상세 문서: `docs/plan/long-context-optimization.md`
-- 서비스 README: `project-team/services/README.md`
-- MCP 서버: `project-team/services/mcp-context-server.js`
+- Service README: `project-team/services/README.md`
+- MCP server: `project-team/services/mcp-context-server.js`

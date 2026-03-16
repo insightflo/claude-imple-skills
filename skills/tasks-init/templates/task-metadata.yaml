@@ -18,7 +18,7 @@
 #
 # deps (의존성)
 #   - 선행 태스크가 완료되어야만 실행 가능
-#   - orchestrate-standalone이 DAG로 변환하여 병렬 실행 계획 수립
+#   - team-orchestrate이 DAG로 변환하여 병렬 실행 계획 수립
 #   - 예: deps: [T1.1, T1.2] → T1.1과 T1.2가 완료된 후 실행
 #
 # domain (도메인)

@@ -1,98 +1,98 @@
 ---
 name: changelog
-description: 프로젝트 변경 이력을 조회하고 통계를 분석합니다. 코드 리뷰 전, 배포 준비 시, 특정 파일의 변경 이력 추적 시, 도메인별 활동량 분석 시 사용하세요. "최근 변경사항", "이번 달 변경 이력", "버그 수정 목록" 같은 질문에 응답합니다. /changelog 트리거.
+description: Query and analyze project change history and statistics. Use this before code reviews, when preparing for a deployment, when tracing change history for a specific file, or when analyzing activity by domain. Responds to questions like "recent changes", "change history for this month", or "list of bug fixes". Triggers on /changelog.
 version: 1.1.0
 updated: 2026-02-11
 ---
 
-# Changelog Viewer (변경 이력 조회)
+# Changelog Viewer
 
-> **`changelog-recorder.js` 훅이 자동 기록한 변경 이력을 조회, 필터링, 통계합니다.**
-
----
-
-## 스킬 발동 조건
-
-- `/changelog` - 현재 월 최근 이력
-- `/changelog --since <날짜>` - 특정 날짜 이후
-- `/changelog --domain <도메인>` - 특정 도메인
-- `/changelog --type <유형>` - 특정 변경 유형
-- `/changelog --stats` - 변경 통계
-- `/changelog --file <경로>` - 특정 파일 이력
-- "최근 변경 이력 보여줘"
-- "order 도메인 변경 이력"
+> **Query, filter, and produce statistics from the change history automatically recorded by the `changelog-recorder.js` hook.**
 
 ---
 
-## 절대 금지 사항
+## Skill Triggers
 
-1. **변경 이력을 수정하지 마세요** - 조회 전용입니다.
-2. **YAML 파일을 직접 편집하지 마세요** - `changelog-recorder.js` 훅만 기록합니다.
-
----
-
-## 명령어 옵션
-
-| 옵션 | 설명 | 예시 |
-|------|------|------|
-| (없음) | 현재 월 최근 20건 | `/changelog` |
-| `--since <날짜>` | 특정 날짜 이후 | `--since 2026-02-01` |
-| `--until <날짜>` | 특정 날짜 이전 | `--until 2026-02-07` |
-| `--last <기간>` | 최근 N일/주 | `--last 7d`, `--last 2w` |
-| `--domain <이름>` | 도메인 필터 | `--domain order` |
-| `--type <유형>` | 유형 필터 | `--type fix` |
-| `--stats` | 통계 출력 | `--stats` |
-| `--file <경로>` | 파일 이력 | `--file discount_service.py` |
-
-**옵션 조합**: `/changelog --domain order --type fix --last 7d`
+- `/changelog` — Most recent entries for the current month
+- `/changelog --since <date>` — After a specific date
+- `/changelog --domain <domain>` — Specific domain
+- `/changelog --type <type>` — Specific change type
+- `/changelog --stats` — Change statistics
+- `/changelog --file <path>` — History for a specific file
+- "show me the recent change history"
+- "change history for the order domain"
 
 ---
 
-## 실행 단계
+## Absolute Prohibitions
+
+1. **Do not modify change history** — this skill is read-only.
+2. **Do not edit YAML files directly** — only the `changelog-recorder.js` hook may write entries.
+
+---
+
+## Command Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| (none) | Most recent 20 entries for the current month | `/changelog` |
+| `--since <date>` | After a specific date | `--since 2026-02-01` |
+| `--until <date>` | Before a specific date | `--until 2026-02-07` |
+| `--last <period>` | Last N days/weeks | `--last 7d`, `--last 2w` |
+| `--domain <name>` | Domain filter | `--domain order` |
+| `--type <type>` | Type filter | `--type fix` |
+| `--stats` | Output statistics | `--stats` |
+| `--file <path>` | File history | `--file discount_service.py` |
+
+**Combining options**: `/changelog --domain order --type fix --last 7d`
+
+---
+
+## Execution Steps
 
 ```
-/changelog [옵션] 수신
+Receive /changelog [options]
     |
     v
-[1] 옵션 파싱 (필터 조건 추출)
+[1] Parse options (extract filter conditions)
     |
     v
-[2] 대상 YAML 파일 결정 (날짜 범위 기반)
+[2] Determine target YAML files (based on date range)
     |
     v
-[3] YAML 파일 읽기 및 파싱
+[3] Read and parse YAML files
     |
     v
-[4] 필터 적용 (도메인, 유형, 파일, 날짜)
+[4] Apply filters (domain, type, file, date)
     |
     v
-[5] 정렬 (최신순)
+[5] Sort (newest first)
     |
     v
-[6] 리포트 출력 (또는 통계 출력)
+[6] Output report (or statistics)
 ```
 
 ---
 
-### 1단계: 옵션 파싱
+### Step 1: Parse Options
 
-| 입력 | 변환 결과 |
-|------|-----------|
+| Input | Transformed Result |
+|-------|--------------------|
 | `--since 2026-02-01` | `since = 2026-02-01T00:00:00` |
-| `--last 7d` | `since = (오늘 - 7일)` |
-| `--last 2w` | `since = (오늘 - 14일)` |
+| `--last 7d` | `since = (today - 7 days)` |
+| `--last 2w` | `since = (today - 14 days)` |
 | `--domain order` | `domain = "order"` |
 | `--type fix` | `type = "fix"` |
 
-### 2단계: 대상 YAML 파일 결정
+### Step 2: Determine Target YAML Files
 
-**저장 위치**: `.claude/changelog/{YYYY-MM}.yaml`
+**Storage location**: `.claude/changelog/{YYYY-MM}.yaml`
 
 ```bash
 ls .claude/changelog/*.yaml
 ```
 
-### 3단계: YAML 파싱
+### Step 3: Parse YAML
 
 ```yaml
 entries:
@@ -106,67 +106,67 @@ entries:
       - "external dependency added: member-api"
 ```
 
-### 4단계: 필터 적용
+### Step 4: Apply Filters
 
-1. **날짜 필터**: `date` 필드와 비교
-2. **도메인 필터**: `domain` 필드 (부분 일치)
-3. **유형 필터**: `type` 필드 (정확 일치)
-4. **파일 필터**: `files` 배열 (부분 문자열)
+1. **Date filter**: Compare against the `date` field
+2. **Domain filter**: Match against `domain` field (partial match)
+3. **Type filter**: Match against `type` field (exact match)
+4. **File filter**: Match against `files` array (substring match)
 
-### 5단계: 정렬
+### Step 5: Sort
 
-필터링된 엔트리를 **최신순** (날짜 내림차순)으로 정렬합니다.
+Sort filtered entries in **newest-first** order (descending by date).
 
-### 6단계: 출력
+### Step 6: Output
 
-상세 출력 형식은 `references/output-formats.md`를 참조하세요.
-
----
-
-## Hook 연동
-
-| 구분 | Hook (`changelog-recorder.js`) | Skill (`/changelog`) |
-|------|--------------------------------|----------------------|
-| 시점 | Write/Edit 시 자동 실행 | 사용자 요청 시 |
-| 동작 | YAML에 엔트리 추가 | YAML 읽기 + 필터 |
-| 용도 | 변경 기록 (쓰기) | 변경 조회 (읽기) |
+See `references/output-formats.md` for detailed output format.
 
 ---
 
-## 변경 유형
+## Hook Integration
 
-| 유형 | 판별 기준 |
-|------|-----------|
-| `test` | 파일 경로에 `tests/`, `test_`, `.test.` 포함 |
-| `docs` | 확장자 `.md`, `.rst`, `.txt` |
-| `feature` | 새 파일 생성 또는 새 함수 추가 |
-| `fix` | 주석에 fix/bug 키워드 |
-| `refactor` | 주석에 refactor 키워드 |
+| Aspect | Hook (`changelog-recorder.js`) | Skill (`/changelog`) |
+|--------|-------------------------------|----------------------|
+| Trigger | Auto-runs on Write/Edit | On user request |
+| Action | Appends entry to YAML | Reads YAML + filters |
+| Purpose | Record changes (write) | Query changes (read) |
 
 ---
 
-## 도메인 추출 규칙
+## Change Types
 
-| 경로 패턴 | 추출 도메인 |
-|-----------|-------------|
+| Type | Detection Criteria |
+|------|--------------------|
+| `test` | File path contains `tests/`, `test_`, or `.test.` |
+| `docs` | File extension is `.md`, `.rst`, or `.txt` |
+| `feature` | New file created or new function added |
+| `fix` | Comment contains fix/bug keywords |
+| `refactor` | Comment contains refactor keyword |
+
+---
+
+## Domain Extraction Rules
+
+| Path Pattern | Extracted Domain |
+|-------------|-----------------|
 | `src/domains/<domain>/...` | `<domain>` |
 | `domains/<domain>/...` | `<domain>` |
 | `app/services/<domain>_service.py` | `<domain>` |
-| (해당 없음) | `root` |
+| (no match) | `root` |
 
 ---
 
-## 관련 스킬 연동
+## Related Skill Integration
 
-| 스킬 | 연동 시점 | 용도 |
-|------|-----------|------|
-| `/impact <file>` | 변경이 많은 파일 발견 시 | 영향도 분석 |
-| `/deps <domain>` | 교차 도메인 변경 발견 시 | 의존성 확인 |
-| `/coverage <file>` | 변경이 잦은 파일 발견 시 | 커버리지 확인 |
+| Skill | When to Link | Purpose |
+|-------|--------------|---------|
+| `/impact <file>` | When a frequently changed file is found | Impact analysis |
+| `/deps <domain>` | When cross-domain changes are found | Dependency check |
+| `/coverage <file>` | When a frequently changed file is found | Coverage check |
 
 ---
 
-## 참조 문서
+## Reference Documents
 
-- `references/output-formats.md` - 출력 형식 상세
-- `references/examples.md` - 사용 예시
+- `references/output-formats.md` — Output format details
+- `references/examples.md` — Usage examples

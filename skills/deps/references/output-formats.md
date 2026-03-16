@@ -1,20 +1,20 @@
 # Dependency Graph - Output Formats
 
-> 이 파일은 `/deps` 스킬의 출력 형식 상세 정의입니다.
+> This file defines the detailed output formats for the `/deps` skill.
 
 ---
 
-## 기본 출력: 도메인 의존성 (`/deps`)
+## Default Output: Domain Dependencies (`/deps`)
 
 ```
 ===========================================================
-  Dependency Graph: <대상>
+  Dependency Graph: <target>
 ===========================================================
 
-  Scope: <전체 프로젝트|도메인명|디렉토리 경로>
-  Domains Found: <N>개
-  Total Cross-Domain Dependencies: <N>개
-  Circular Dependencies: <있음/없음>
+  Scope: <full project|domain-name|directory-path>
+  Domains Found: <N>
+  Total Cross-Domain Dependencies: <N>
+  Circular Dependencies: <found/none>
 
 -----------------------------------------------------------
   Mermaid Diagram
@@ -52,38 +52,38 @@
 
 ---
 
-## 특정 도메인 의존성 (`/deps show <도메인>`)
+## Specific Domain Dependencies (`/deps show <domain>`)
 
 ```
 ===========================================================
-  Dependency Graph: <도메인명> Domain
+  Dependency Graph: <domain-name> Domain
 ===========================================================
 
 -----------------------------------------------------------
-  [의존하는 것] (이 도메인이 사용하는 외부 의존성)
+  [Outgoing] (External dependencies used by this domain)
 -----------------------------------------------------------
-  +-- <도메인A> (API <N>개)
-  |   +-- <METHOD> /<경로> - <설명>
-  +-- <도메인B> (import <N>개)
-      +-- <모듈경로> - <클래스/함수명>
+  +-- <domain-A> (<N> APIs)
+  |   +-- <METHOD> /<path> - <description>
+  +-- <domain-B> (<N> imports)
+      +-- <module-path> - <class/function name>
 
 -----------------------------------------------------------
-  [의존받는 것] (이 도메인을 사용하는 외부 의존성)
+  [Incoming] (External dependencies that use this domain)
 -----------------------------------------------------------
-  +-- <도메인C> (API <N>개)
-      +-- <METHOD> /<경로> - <설명>
+  +-- <domain-C> (<N> APIs)
+      +-- <METHOD> /<path> - <description>
 
 -----------------------------------------------------------
-  [순환 의존성]
+  [Circular Dependencies]
 -----------------------------------------------------------
-  +-- 없음
+  +-- None
 
 ===========================================================
 ```
 
 ---
 
-## 순환 의존성 전용 (`/deps --cycles`)
+## Circular Dependencies Only (`/deps --cycles`)
 
 ```
 ===========================================================
@@ -109,31 +109,31 @@
 -----------------------------------------------------------
 
   1. [CRITICAL] order <-> payment:
-     - payment에서 order 참조 제거 권장
-     - 이벤트 기반 비동기 통신으로 전환 검토
-     - 참조: Dependency Inversion Principle (DIP)
+     - Recommend removing the order reference from payment
+     - Consider switching to event-driven async communication
+     - Reference: Dependency Inversion Principle (DIP)
 
 ===========================================================
 ```
 
 ---
 
-## 파일 의존성 트리 (`/deps <파일> --tree`)
+## File Dependency Tree (`/deps <file> --tree`)
 
 ```
 ===========================================================
-  Dependency Tree: <파일경로>
+  Dependency Tree: <file-path>
 ===========================================================
 
-  [이 파일이 의존하는 것] (Outgoing)
-  <파일명>
-  +-- <import 1> (<도메인>)
-  |   +-- <import 1-1> (<도메인>)
-  +-- <import 2> (<도메인>)
+  [Outgoing] (What this file depends on)
+  <filename>
+  +-- <import 1> (<domain>)
+  |   +-- <import 1-1> (<domain>)
+  +-- <import 2> (<domain>)
 
-  [이 파일에 의존하는 것] (Incoming)
-  <파일명>
-  +-- <dependent 1> (<도메인>)
+  [Incoming] (What depends on this file)
+  <filename>
+  +-- <dependent 1> (<domain>)
 
   Tree Depth: <N> levels
   Total Unique Dependencies: <N> files
@@ -144,14 +144,14 @@
 
 ---
 
-## 도메인 간 의존성 매트릭스 (`/deps --matrix`)
+## Cross-Domain Dependency Matrix (`/deps --matrix`)
 
 ```
 ===========================================================
   Cross-Domain Dependency Matrix
 ===========================================================
 
-  (행: 의존하는 쪽 -> 열: 의존받는 쪽)
+  (row: depending side -> column: depended-on side)
 
   |          | order | member | product | payment | auth |
   |----------|-------|--------|---------|---------|------|
@@ -162,38 +162,38 @@
   | auth     |   0   |   1    |    0    |    0    |  -   |
 
   Legend:
-    숫자 = 교차 의존성 수 (import + API 호출)
-    0    = 의존 관계 없음
-    -    = 자기 자신 (내부 의존성)
+    number = number of cross-domain dependencies (imports + API calls)
+    0      = no dependency relationship
+    -      = self (internal dependencies)
 
 -----------------------------------------------------------
-  Hotspots (높은 결합도)
+  Hotspots (High coupling)
 -----------------------------------------------------------
-  1. order -> member (2): API 호출 2건
-  2. order -> product (2): API 호출 2건
+  1. order -> member (2): 2 API calls
+  2. order -> product (2): 2 API calls
 
 ===========================================================
 ```
 
 ---
 
-## 결합도 등급
+## Coupling Grades
 
-| 등급 | 교차 의존 수 | 평가 |
-|------|-------------|------|
-| Loose (느슨) | 0-2개 | 건전한 상태 |
-| Moderate (보통) | 3-5개 | 관리 가능 |
-| Tight (밀접) | 6-10개 | 리팩토링 검토 권장 |
-| Tangled (얽힘) | 11개 이상 | 리팩토링 필수 |
+| Grade    | Cross-dependency count | Assessment                |
+|----------|------------------------|---------------------------|
+| Loose    | 0-2                    | Healthy state             |
+| Moderate | 3-5                    | Manageable                |
+| Tight    | 6-10                   | Refactoring recommended   |
+| Tangled  | 11+                    | Refactoring required      |
 
 ---
 
-## 불안정성 지표 (Instability)
+## Instability Metric
 
 ```
 I = Ce / (Ca + Ce)
 
-I = 0.0: 완전히 안정 (다른 도메인이 많이 의존, 변경 시 영향 큼)
-I = 1.0: 완전히 불안정 (다른 도메인에 많이 의존, 변경이 용이)
-I = 0.5: 중간 (균형 잡힌 상태)
+I = 0.0: Completely stable (many domains depend on this; changes have wide impact)
+I = 1.0: Completely unstable (depends on many domains; easy to change)
+I = 0.5: Balanced state
 ```

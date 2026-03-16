@@ -1,0 +1,23 @@
+# 시장 레짐 판정 프리셋
+# 트리거 키워드: 시장, 시황, 레짐, 주식, 매크로, 금리, 환율, 채권, bull, bear
+
+name: market-regime
+display: "시장 레짐 판정"
+
+# 평가 차원 및 가중치 (합계 = 1.0)
+dimensions:
+  trend:      { weight: 0.25, label: "추세" }
+  volatility: { weight: 0.20, label: "변동성" }
+  liquidity:  { weight: 0.20, label: "유동성" }
+  sentiment:  { weight: 0.20, label: "센티먼트" }
+  valuation:  { weight: 0.15, label: "밸류에이션" }
+
+# 멤버별 역할 정의
+roles:
+  gemini: "매크로/뉴스 애널리스트 — 금리, 지정학, 정책, 시장 심리 분석"
+  codex:  "퀀트 애널리스트 — 기술적 지표, 통계 패턴, 정량 데이터 분석"
+
+# 판정 출력 설정
+output:
+  verdict_options: ["Strong Bull", "Bull", "Neutral", "Bear", "Strong Bear"]
+  verdict_label: "레짐 판정"

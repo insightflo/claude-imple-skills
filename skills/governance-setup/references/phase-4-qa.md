@@ -1,84 +1,84 @@
-# Phase 4: QA Manager 상세 가이드
+# Phase 4: QA Manager Detailed Guide
 
-## 역할
-품질 기준 정의, 테스트 전략
+## Role
+Define quality standards, test strategy
 
-## 산출물
+## Deliverable
 `management/quality-gates.md`
 
-## Task 호출
+## Task Invocation
 
 ```
 Task({
   subagent_type: "test-specialist",
-  description: "QA: 품질 게이트 정의",
+  description: "QA: Quality gate definition",
   prompt: `
-## 역할: QA Manager
+## Role: QA Manager
 
-당신은 이 프로젝트의 QA Manager입니다. 품질 기준과 테스트 전략을 정의하세요.
+You are the QA Manager for this project. Define quality standards and test strategy.
 
-## 입력 정보
+## Input
 - TASKS: docs/planning/06-tasks.md
 - TRD: docs/planning/02-trd.md
 
-## 산출물: management/quality-gates.md
+## Deliverable: management/quality-gates.md
 
-다음 섹션을 포함하세요:
+Include the following sections:
 
 ### 0. Governance Operationalization (Doc → Execution)
-- (필수) **문서 → 실행 연결고리**를 위해, 아래를 포함하세요:
-  - 단일 엔트리 검증 커맨드 제안: `scripts/verify_all.sh` 또는 `make verify`
-  - Gate 항목별 실행 커맨드/CI job/산출물 경로/Block vs Warn 매핑 표
-  - 업데이트 트리거(반복 실패, 신규 퍼블릭 경계 추가, 운영/보안 포스처 변화)
+- (Required) **Doc → Execution linkage**: include the following:
+  - Propose a single-entry verification command: `scripts/verify_all.sh` or `make verify`
+  - A mapping table of execution commands/CI jobs/artifact paths/Block vs Warn for each gate item
+  - Update triggers (repeated failures, new public boundary additions, operational/security posture changes)
 
-### 1. 테스트 커버리지 기준
-- Unit Test: 80% 이상
-- Integration Test: 주요 API 100%
-- E2E Test: Critical Path 100%
+### 1. Test Coverage Standards
+- Unit Test: 80% or higher
+- Integration Test: 100% for critical APIs
+- E2E Test: 100% for Critical Path
 
-### 2. 코드 품질 기준
-- Lint 에러: 0
-- TypeScript strict mode 통과
-- 복잡도 (Cyclomatic): 10 이하
-- 중복 코드: 5% 이하
+### 2. Code Quality Standards
+- Lint errors: 0
+- TypeScript strict mode passing
+- Cyclomatic complexity: 10 or less
+- Code duplication: 5% or less
 
-### 3. 성능 기준
-- API 응답 시간: 200ms 이하 (P95)
-- 페이지 로드: LCP 2.5s 이하
-- Bundle size 제한
+### 3. Performance Standards
+- API response time: 200ms or less (P95)
+- Page load: LCP 2.5s or less
+- Bundle size limits
 
-### 4. 보안 기준
-- OWASP Top 10 검사 통과
-- 의존성 취약점 0 (Critical/High)
-- 민감 정보 노출 검사
+### 4. Security Standards
+- OWASP Top 10 scan passing
+- Zero dependency vulnerabilities (Critical/High)
+- Sensitive data exposure scan
 
-### 5. 코드 리뷰 체크리스트
-- [ ] 요구사항 충족
-- [ ] 테스트 포함
-- [ ] 문서 업데이트
-- [ ] 성능 영향 검토
-- [ ] 보안 검토
+### 5. Code Review Checklist
+- [ ] Requirements met
+- [ ] Tests included
+- [ ] Documentation updated
+- [ ] Performance impact reviewed
+- [ ] Security reviewed
 
-### 6. 릴리즈 승인 기준
-- 모든 테스트 통과
-- 코드 리뷰 승인
-- 품질 게이트 통과
-- 스테이징 검증 완료
+### 6. Release Approval Criteria
+- All tests passing
+- Code review approved
+- Quality gates passed
+- Staging verification complete
 
-## 주의사항
-- 구현 코드 작성 금지
-- 측정 가능한 기준 제시
-- 현실적인 목표 설정
+## Notes
+- Do not write implementation code
+- Provide measurable criteria
+- Set realistic targets
 `
 })
 ```
 
-## 완료 조건
-- [ ] `management/quality-gates.md` 생성됨
-- [ ] 각 기준에 구체적인 수치 포함
-- [ ] 체크리스트 형식 포함
+## Completion Criteria
+- [ ] `management/quality-gates.md` created
+- [ ] Each criterion includes specific numeric values
+- [ ] Checklist format included
 
-## 산출물 예시
+## Sample Deliverable
 
 ```markdown
 # Quality Gates

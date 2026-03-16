@@ -1,69 +1,69 @@
 # Mini-PRD (Progressive)
 
-> **용도**: 빠른 기획 + `/audit` 호환
-> **버전**: 2.0.0
-> **작성일**: {{DATE}}
+> **Purpose**: Fast planning + `/audit` compatible
+> **Version**: 2.0.0
+> **Date**: {{DATE}}
 
 ---
 
-## 📋 Phase 1: 초기 기획 (필수)
+## Phase 1: Initial Planning (Required)
 
-> 프로젝트 시작 전에 반드시 답변해야 할 핵심 질문입니다.
+> Core questions that must be answered before starting the project.
 
-### 1.1 프로젝트 목적 (purpose)
+### 1.1 Project Purpose (purpose)
 
-**Q: 무엇을 만들고 싶나요?**
+**Q: What do you want to build?**
 
-간단히 설명해주세요:
+Describe briefly:
 ```
 {{PROJECT_PURPOSE}}
 ```
 
-### 1.2 핵심 기능 (features)
+### 1.2 Core Features (features)
 
-**Q: 핵심 기능 3~5가지는 무엇인가요?**
+**Q: What are the 3-5 core features?**
 
-| 기능 | 설명 | 우선순위 |
-|------|------|----------|
+| Feature | Description | Priority |
+|---------|-------------|----------|
 | {{FEATURE_1}} | {{DESC_1}} | P0 |
 | {{FEATURE_2}} | {{DESC_2}} | P0 |
 | {{FEATURE_3}} | {{DESC_3}} | P1 |
 
-### 1.3 기술 스택 (tech-stack)
+### 1.3 Technology Stack (tech-stack)
 
-**Q: 선호하는 기술 스택이 있나요?**
+**Q: Do you have a preferred technology stack?**
 
-| 분류 | 기술 | 사유 |
-|------|------|------|
-| 프론트엔드 | {{FRONTEND}} | {{REASON}} |
-| 백엔드 | {{BACKEND}} | {{REASON}} |
+| Category | Technology | Reason |
+|----------|------------|--------|
+| Frontend | {{FRONTEND}} | {{REASON}} |
+| Backend | {{BACKEND}} | {{REASON}} |
 | DB | {{DATABASE}} | {{REASON}} |
-| 배포 | {{DEPLOY}} | {{REASON}} |
+| Deploy | {{DEPLOY}} | {{REASON}} |
 
 ---
 
-## 📋 Phase 2: 구체화 (Skeleton 완료 후)
+## Phase 2: Elaboration (After Skeleton Complete)
 
-> 기본 구조가 만들어진 후, 구체적인 사항을 정의합니다.
+> Define specifics once the basic structure is in place.
 
-### 2.1 비즈니스 로직 상세
+### 2.1 Business Logic Details
 
-**Q: 각 기능의 구체적인 동작은?**
+**Q: What is the specific behavior of each feature?**
 
 ```
-기능: {{FEATURE_NAME}}
-  입력: {{INPUT}}
-  처리: {{PROCESS}}
-  출력: {{OUTPUT}}
-  예외: {{EXCEPTION}}
+Feature: {{FEATURE_NAME}}
+  Input: {{INPUT}}
+  Process: {{PROCESS}}
+  Output: {{OUTPUT}}
+  Exception: {{EXCEPTION}}
 ```
 
-### 2.2 데이터 모델 (data-model)
+### 2.2 Data Model (data-model)
 
-**Q: 주요 엔티티와 관계는?**
+**Q: What are the key entities and their relationships?**
 
 ```yaml
-# 예시
+# Example
 User:
   id: UUID
   email: string (unique)
@@ -78,12 +78,12 @@ Post:
   published_at: datetime?
 ```
 
-### 2.3 API 계약 (api-contract)
+### 2.3 API Contract (api-contract)
 
-**Q: 주요 API endpoint는?**
+**Q: What are the key API endpoints?**
 
 ```yaml
-# 예시
+# Example
 GET /api/users
   response: User[]
 
@@ -97,78 +97,78 @@ GET /api/users/:id
 
 ---
 
-## 📋 Phase 3: 보완 (Muscles 진행 중)
+## Phase 3: Refinement (During Muscles)
 
-> 구현이 진행되면서 발견된 세부 사항을 정의합니다.
+> Define details discovered as implementation progresses.
 
-### 3.1 예외 처리
+### 3.1 Error Handling
 
-**Q: 에러 상황과 처리 방안은?**
+**Q: What are the error scenarios and how should they be handled?**
 
-| 에러 상황 | HTTP Code | 처리 |
-|-----------|-----------|------|
-| 중복 이메일 | 409 | "이미 가입된 이메일입니다" |
-| 인증 실패 | 401 | "이메일 또는 비밀번호가 올바르지 않습니다" |
+| Error Scenario | HTTP Code | Handling |
+|----------------|-----------|----------|
+| Duplicate email | 409 | "This email is already registered" |
+| Auth failure | 401 | "Email or password is incorrect" |
 | {{ERROR}} | {{CODE}} | {{HANDLING}} |
 
-### 3.2 에지 케이스
+### 3.2 Edge Cases
 
-**Q: 예외적인 상황은?**
+**Q: What are the edge cases?**
 
 ```
-상황: {{EDGE_CASE}}
-  현재 처리: {{CURRENT_HANDLING}}
-  개선 필요: {{IMPROVEMENT}}
+Scenario: {{EDGE_CASE}}
+  Current handling: {{CURRENT_HANDLING}}
+  Improvement needed: {{IMPROVEMENT}}
 ```
 
-### 3.3 성능 요구사항
+### 3.3 Performance Requirements
 
-**Q: 성능 목표는?**
+**Q: What are the performance targets?**
 
-| 항목 | 목표 | 측정 방법 |
-|------|------|----------|
-| API 응답 시간 | < 200ms (p95) | Datadog APM |
-| 페이지 로드 | < 2s (p95) | Lighthouse |
-| 동시 사용자 | {{NUMBER}} | 부하 테스트 |
-
----
-
-## 📋 Audit 호환성 매핑
-
-> 이 Mini-PRD는 `/audit`의 기획 정합성 검사를 통과하기 위해
-> Socrates 7개 문서의 핵심을 포함합니다.
-
-| Socrates 문서 | Mini-PRD 매핑 | 상태 |
-|---------------|---------------|------|
-| prd.md | purpose, features | ✅ Phase 1 |
-| trd.md | tech-stack | ✅ Phase 1 |
-| database-design.md | data-model | ✅ Phase 2 |
-| api-contracts.md | api-contract | ✅ Phase 2 |
-| screen-spec.md | (화면별) | 🔄 화면 설계 시 |
-| ui-guide.md | (디자인) | 🔄 디자인 시 |
-| test-strategy.md | (테스트) | 🔄 QA Phase |
+| Metric | Target | Measurement Method |
+|--------|--------|--------------------|
+| API response time | < 200ms (p95) | Datadog APM |
+| Page load | < 2s (p95) | Lighthouse |
+| Concurrent users | {{NUMBER}} | Load test |
 
 ---
 
-## ✅ 완료 체크리스트
+## Audit Compatibility Mapping
 
-### Phase 1 (초기)
-- [ ] 프로젝트 목적 기술
-- [ ] 핵심 기능 3~5개 정의
-- [ ] 기술 스택 선정
+> This Mini-PRD includes the core content of the 7 Socrates documents
+> to pass the planning coherence checks in `/audit`.
 
-### Phase 2 (구체화)
-- [ ] 비즈니스 로직 상세
-- [ ] 데이터 모델 정의
-- [ ] API 계약 작성
-
-### Phase 3 (보완)
-- [ ] 예외 처리 정의
-- [ ] 에지 케이스 식별
-- [ ] 성능 요구사항 설정
+| Socrates Document | Mini-PRD Mapping | Status |
+|-------------------|------------------|--------|
+| prd.md | purpose, features | Phase 1 |
+| trd.md | tech-stack | Phase 1 |
+| database-design.md | data-model | Phase 2 |
+| api-contracts.md | api-contract | Phase 2 |
+| screen-spec.md | (per screen) | At screen design time |
+| ui-guide.md | (design) | At design time |
+| test-strategy.md | (testing) | At QA Phase |
 
 ---
 
-**작성자**: {{AUTHOR}}
-**검토자**: {{REVIEWER}}
-**승인자**: {{APPROVER}}
+## Completion Checklist
+
+### Phase 1 (Initial)
+- [ ] Project purpose stated
+- [ ] 3-5 core features defined
+- [ ] Technology stack selected
+
+### Phase 2 (Elaboration)
+- [ ] Business logic details
+- [ ] Data model defined
+- [ ] API contract written
+
+### Phase 3 (Refinement)
+- [ ] Error handling defined
+- [ ] Edge cases identified
+- [ ] Performance requirements set
+
+---
+
+**Author**: {{AUTHOR}}
+**Reviewer**: {{REVIEWER}}
+**Approver**: {{APPROVER}}

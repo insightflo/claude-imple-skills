@@ -6,9 +6,9 @@
 
 CloudMetrics는 멀티테넌트 SaaS 시스템의 팀 구성과 위험 영역 관리를 보여주는 예제입니다.
 
-- **프로젝트 규모**: 중대형 (5개 도메인, 20명 팀)
+- **프로젝트 규모**: 중대형 (5개 도메인)
 - **기술 스택**: FastAPI + React + PostgreSQL + InfluxDB
-- **팀 구조**: 프로젝트 레벨 5명 + 도메인 레벨 15명
+- **팀 구조**: Agent Teams 리드 4명 + 도메인 레벨 팀
 
 ## SaaS 프로젝트의 특성
 
@@ -41,17 +41,25 @@ saas/
 
 ## 프로젝트 팀 구조
 
-### 프로젝트 레벨 에이전트 (5명)
+### Agent Teams 리드 (4명, .claude/agents/)
 
 | 역할 | 책임 | SaaS 특화 |
 |------|------|----------|
-| **Project Manager** | 전체 조율, 로드맵 | 고객 요청 우선순위 결정 |
-| **Chief Architect** | 기술 표준, 멀티테넌트 아키텍처 | 테넌트 격리 전략 검증 |
-| **Chief Designer** | 디자인 시스템, 대시보드 UI | 분석 시각화 표준 |
-| **QA Manager** | 품질 게이트, 통합 테스트 | 테넌트 격리 검증 |
-| **DBA** | DB 설계, 성능 최적화 | Row-Level Security 정책 |
+| **team-lead** | 전체 조율, 로드맵 | 고객 요청 우선순위 결정 |
+| **architecture-lead** | 기술 표준, 멀티테넌트 아키텍처 | 테넌트 격리 전략 검증 |
+| **design-lead** | 디자인 시스템, 대시보드 UI | 분석 시각화 표준 |
+| **qa-lead** | 품질 게이트, 통합 테스트 | 테넌트 격리 검증 |
 
-### 도메인 레벨 팀 (5개 도메인 × 3명)
+### 프로젝트 팀 에이전트 (project-team/agents/)
+
+| 역할 | 책임 |
+|------|------|
+| **Builder** | 구현 작업 지원, 도메인 간 전달 |
+| **Reviewer** | 품질 리뷰 및 릴리스 검증 |
+| **Designer** | 디자인 시스템 및 UX |
+| **MaintenanceAnalyst** | 유지보수 및 분석 |
+
+### 도메인 레벨 팀 (5개 도메인)
 
 #### 1. Auth Domain (인증 및 테넌트 관리)
 - **책임**: SSO, SAML, 테넌트 프로비저닝, RBAC
@@ -381,7 +389,7 @@ db.query(Invoice)\
     .filter(Invoice.amount > 1000)
 ```
 
-### 규칙 2: 청비 변경 시 QA Manager 승인 필수
+### 규칙 2: 청비 변경 시 qa-lead 승인 필수
 
 청비 계산 로직 변경 시 반드시 다음 단계를 거쳐야 합니다:
 
@@ -390,7 +398,7 @@ db.query(Invoice)\
     ↓
 회귀 테스트 (모든 시나리오)
     ↓
-QA Manager 검증
+qa-lead 검증
     ↓
 스테이징 환경 테스트
     ↓
@@ -483,7 +491,7 @@ def process_payment(invoice_id, amount):
     ↓
 통합 테스트
     ↓
-QA Manager 검증
+qa-lead 검증
     ↓
 성능 테스트
     ↓
@@ -551,7 +559,7 @@ Blue-Green 배포
 3. 데이터 모델에 tenant_id 필드 추가
 4. Row-Level Security(RLS) 정책 작성
 5. 테넌트 격리 테스트 작성
-6. Chief Architect 리뷰
+6. architecture-lead 리뷰
 7. DBA 검증
 8. 배포
 ```
@@ -609,5 +617,5 @@ SaaS 팀 구성에 대한 피드백:
 ---
 
 **작성자**: Documentation Team
-**검토자**: Chief Architect, Project Manager, DBA
+**검토자**: architecture-lead, team-lead, DBA
 **다음 검토**: 2026-05-08

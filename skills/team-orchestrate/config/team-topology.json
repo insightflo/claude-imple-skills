@@ -1,0 +1,59 @@
+{
+  "domainMapping": {
+    "backend": "architecture-lead",
+    "api": "architecture-lead",
+    "architecture": "architecture-lead",
+    "database": "architecture-lead",
+    "shared": "architecture-lead",
+    "frontend": "design-lead",
+    "design": "design-lead",
+    "ui": "design-lead",
+    "ux": "design-lead",
+    "test": "qa-lead",
+    "quality": "qa-lead",
+    "security": "qa-lead",
+    "performance": "qa-lead"
+  },
+  "teammates": {
+    "architecture-lead": {
+      "executors": ["builder", "reviewer"],
+      "domains": ["backend", "api", "architecture", "database", "shared"],
+      "model": "opus",
+      "cli": null
+    },
+    "qa-lead": {
+      "executors": ["reviewer", "test-specialist"],
+      "domains": ["test", "quality", "security", "performance"],
+      "model": "sonnet",
+      "cli": null
+    },
+    "design-lead": {
+      "executors": ["designer", "builder"],
+      "domains": ["frontend", "design", "ui", "ux"],
+      "model": "sonnet",
+      "cli": null
+    }
+  },
+  "cliRouting": {
+    "_comment": "Optional CLI routing. Set teammate cli field to a key here to route execution to external AI CLI instead of Claude Task tool.",
+    "gemini": {
+      "command": "gemini",
+      "description": "Google Gemini CLI — strong at UI/design, visual reasoning",
+      "check": "command -v gemini"
+    },
+    "codex": {
+      "command": "codex",
+      "args": ["exec"],
+      "description": "OpenAI Codex CLI — strong at code generation, refactoring",
+      "check": "command -v codex"
+    }
+  },
+  "defaultTeammate": "architecture-lead",
+  "governance": {
+    "planApprovalRequired": true,
+    "hooks": {
+      "TeammateIdle": "project-team/hooks/teammate-idle-gate.js",
+      "TaskCompleted": "project-team/hooks/task-completed-gate.js"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+name: project-gate
+display: "프로젝트 실행 판단"
+dimensions:
+  progress: { weight: 0.25, label: "진행 상태" }
+  resource_health: { weight: 0.20, label: "리소스 건전성" }
+  risk_exposure: { weight: 0.20, label: "리스크 노출" }
+  stakeholder_alignment: { weight: 0.20, label: "이해관계자 정합" }
+  delivery_confidence: { weight: 0.15, label: "납기 확신도" }
+roles:
+  gemini: "프로그램 매니저 — 이해관계자 기대, 스코프 적절성, 팀 사기, 외부 의존성 평가"
+  codex: "프로젝트 컨트롤러 — 일정 편차, 번다운 추세, 리소스 소진율, 기술 부채 누적 분석"
+output:
+  verdict_options: ["Go", "Go with Conditions", "Pause & Replan", "Escalate", "Kill"]
+  verdict_label: "게이트 판정"

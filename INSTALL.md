@@ -3,7 +3,6 @@
 ## Quick Install (One Command)
 
 ```bash
-# Clone and install
 git clone https://github.com/insightflo/claude-impl-tools.git
 cd claude-impl-tools
 ./install.sh
@@ -17,22 +16,22 @@ cd claude-impl-tools
 ./install.sh
 ```
 
-TUI 모드로 다음을 선택할 수 있습니다:
-- 설치 위치 (전역/프로젝트)
-- 스킬 카테고리
-- Project Team (에이전트 + 훅)
-- Multi-AI 라우팅 설정
+The TUI installer lets you select:
+- Install scope (global / project)
+- Skill categories
+- Project Team (agents + hooks)
+- Multi-AI routing configuration
 
 ### 2. Non-Interactive
 
 ```bash
-# 전역 설치 (Core 스킬 + Project Team)
+# Global install (Core skills + Agent Teams leads)
 ./install.sh --global
 
-# 프로젝트 설치
+# Global + project setup (agents + hooks for current project)
 ./install.sh --local
 
-# 모든 스킬 전역 설치
+# All skills globally + project setup
 ./install.sh --all
 ```
 
@@ -46,45 +45,55 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 ## Skill Categories
 
-| Category | Skills | Description |
-|----------|--------|-------------|
-| **Core** | multi-ai-run, multi-ai-review, orchestrate-standalone | 필수 오케스트레이션 |
-| **Orchestration** | agile, governance-setup, workflow-guide | 프로젝트 관리 |
-| **Quality** | checkpoint, quality-auditor, security-review | 품질 검증 |
-| **Analysis** | architecture, deps, impact, changelog, coverage | 코드베이스 분석 |
-| **Tasks** | tasks-init, tasks-migrate, recover, context-optimize | 태스크 관리 |
+| Category | Skills | Purpose |
+|----------|--------|---------|
+| **Core** | multi-ai-run, multi-ai-review, team-orchestrate | Essential orchestration |
+| **Orchestration** | agile, governance-setup, workflow-guide | Project management |
+| **Quality** | checkpoint, quality-auditor, security-review | Quality verification |
+| **Analysis** | architecture, deps, impact, changelog, coverage | Codebase analysis |
+| **Maintenance** | maintenance | ITIL 5-stage production maintenance |
+| **Tasks** | tasks-init, tasks-migrate, recover, context-optimize | Task management |
 
 ---
 
 ## Project Team
 
-Project Team은 10명의 전문 에이전트와 15개의 자동 검증 훅을 포함합니다.
+Project Team includes 4 Agent Teams leads, 4 core workers, and 19 governance hooks.
 
-### 에이전트
-- FrontendSpecialist (Gemini CLI)
-- BackendSpecialist (Codex CLI)
-- TestSpecialist, SecuritySpecialist, DevOpsSpecialist
-- APIDesigner, DBA, QAManager
-- ChiefArchitect, ProjectManager
+### Agent Teams Leads (`~/.claude/agents/`, installed globally)
+- **team-lead** — PM lead, Plan Approval, conflict mediation
+- **architecture-lead** — Architecture, API design, VETO authority
+- **qa-lead** — Quality gates, test strategy, VETO authority
+- **design-lead** — Design system, visual consistency, VETO authority
 
-### 훅 (Hook Modes)
-- **lite**: 에이전트만 (훅 없음)
-- **standard**: 권한 체크 훅
-- **full**: 모든 검증 훅
+### Core Workers (`project-team/agents/`, installed per-project)
+- **Builder** — Implementation execution
+- **Reviewer** — Code review & QA
+- **Designer** — Design specialist
+- **MaintenanceAnalyst** — Production impact analysis
+
+### Deployment Modes
+
+| Mode | Components | Use Case |
+|------|-----------|----------|
+| **team** | Agent Teams leads (global) + workers + governance hooks + `AGENT_TEAMS` env flag | Recommended |
+| **standard** | Core workers + recommended hooks | Most projects |
+| **lite** | Core workers only (no hooks) | MVP / startups |
+| **full** | All agents + all hooks | Regulated industries |
 
 ---
 
 ## Multi-AI Routing
 
-태스크 유형별 최적 AI 모델 자동 선택:
+Automatic model selection by task type:
 
-| 작업 유형 | CLI | 모델 |
-|----------|-----|------|
-| 코드 작성/리뷰 | Codex | gpt-5.3-codex |
-| 디자인/UI | Gemini | gemini-3.1-pro-preview |
-| 기획/조율 | Claude | opus/sonnet |
+| Task Type | CLI | Model |
+|-----------|-----|-------|
+| Code writing / review | Codex | gpt-5.3-codex |
+| Design / UI | Gemini | gemini-3.1-pro-preview |
+| Planning / coordination | Claude | opus / sonnet |
 
-### CLI 설치
+### CLI Installation
 
 ```bash
 # Gemini CLI
@@ -101,34 +110,35 @@ codex auth
 ## Requirements
 
 - **Claude Code CLI**: https://claude.ai/code
-- **Node.js 18+**: 훅 실행용 (선택)
-- **gum**: TUI용 (자동 설치)
+- **Node.js 18+**: For hook execution (optional)
+- **gum**: For TUI (auto-installed)
 
 ---
 
 ## Directory Structure
 
-설치 후 구조:
+After installation:
 
 ```
-~/.claude/                    # 전역 설치 시
-├── skills/                   # 스킬들
+~/.claude/                    # Global install
+├── skills/                   # Skills (symlinked)
 │   ├── multi-ai-run/
 │   ├── multi-ai-review/
-│   ├── orchestrate-standalone/
+│   ├── team-orchestrate/
+│   ├── maintenance/
 │   └── ...
-├── agents/                   # Project Team 에이전트
-│   ├── FrontendSpecialist.md
-│   ├── BackendSpecialist.md
+├── agents/                   # Agent Teams leads + workers
+│   ├── team-lead.md
+│   ├── architecture-lead.md
+│   ├── Builder.md
 │   └── ...
-├── hooks/                    # 자동 검증 훅
+├── hooks/                    # Governance hooks
 │   ├── permission-checker.js
 │   └── ...
-├── templates/                # 템플릿
+├── templates/                # Templates
 │   ├── project-team.yaml
 │   └── model-routing.yaml
-├── routing.config.yaml       # CLI 모델 설정
-└── settings.json             # 훅 설정
+└── settings.json             # Hook configuration
 ```
 
 ---
@@ -146,13 +156,13 @@ git pull
 ## Uninstall
 
 ```bash
-# 스킬 제거
-rm -rf ~/.claude/skills/{multi-ai-run,multi-ai-review,orchestrate-standalone,...}
+# Remove skills
+rm -rf ~/.claude/skills/{multi-ai-run,multi-ai-review,team-orchestrate,...}
 
-# Project Team 제거
+# Remove Project Team
 rm -rf ~/.claude/agents ~/.claude/hooks ~/.claude/templates
 
-# 전체 제거
+# Full removal
 rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/hooks ~/.claude/templates
 ```
 
@@ -161,15 +171,22 @@ rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/hooks ~/.claude/templates
 ## Quick Start
 
 ```bash
-# 1. Claude Code 실행
+# 1. Launch Claude Code
 claude
 
-# 2. 워크플로우 가이드
+# 2. Workflow guide
 > /workflow
 
-# 3. 오케스트레이션 시작
-> /orchestrate-standalone
+# 3. Start orchestration
+> /team-orchestrate
 
-# 4. 멀티 AI 리뷰
+# 4. Production maintenance
+> /maintenance
+
+# 5. Multi-AI review
 > /multi-ai-review
 ```
+
+---
+
+**[Korean version](./INSTALL_ko.md)**

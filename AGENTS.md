@@ -1,254 +1,84 @@
 # AGENTS.md
 
-This file provides guidance to AI agents (Warp, Claude, Cursor, etc.) when working with code in this repository.
+Instructions for AI agents working in this repository.
 
-## Project Overview
+## Scope
 
-**claude-imple-skills** — A standalone-first implementation skill pack for Claude Code.
+- This file is for agent behavior inside the repo.
+- Product overview, installation, feature lists, and marketing copy belong in `README.md` and `README_ko.md`.
+- Do not duplicate large sections of README here.
 
-A collection of **17 skills** and **agent team system** that help you build software with AI. No external dependencies required.
+## Repository Purpose
 
-### Core Philosophy
-- **Layer-based incremental implementation**: Build projects in three stages - Skeleton (structure), Muscles (functionality), Skin (polish)
-- **Human-in-the-loop checkpoints**: Each layer requires user review and approval before proceeding
-- **Standalone-first**: All skills work independently without external dependencies
-- **Context preservation**: Track work progress through state files and orchestration artifacts
-- **MCP-independent**: All skills work without MCP servers (optional enhancements available)
+- This repository packages reusable implementation skills and an optional `project-team` coordination system for Claude Code.
+- Treat it as a tooling and workflow repository, not as a single application service.
+- Preserve the standalone-first design: optional enhancements are acceptable, but the base workflow should not depend on external MCP services.
 
----
+## Agent Architecture
 
-## 📊 Standalone Skill Catalog (17 Skills)
+### Agent Teams Hierarchy (Primary)
 
-| Skill | Trigger | Role |
-|-------|---------|------|
-| **workflow-guide** | `/workflow` | Meta hub - skill routing recommendation |
-| **agile** | `/agile`, `/sprint` | Sprint master with layer-based checkpoints |
-| **quality-auditor** | `/audit` | Pre-deployment comprehensive audit |
-| **governance-setup** | `/governance-setup` | Phase 0: Governance team setup |
-| **tasks-init** | `/tasks-init` | TASKS.md scaffolding (standalone) |
-| **tasks-migrate** | `/tasks-migrate` | Consolidate legacy task files |
-| **checkpoint** | `/checkpoint` | Task completion code review |
-| **recover** | `/recover` | Universal recovery hub |
-| **orchestrate-standalone** | `/orchestrate` | Dependency-based task automation (30-80 tasks) |
-| **multi-ai-run** | `/multi-ai-run` | Multi-CLI model routing |
-| **multi-ai-review** | `/multi-ai-review` | CLI-based multi-AI review |
-| **security-review** | `/security-review` | OWASP Top 10 vulnerability scan |
-| **impact** | `/impact` | File change impact analysis |
-| **deps** | `/deps` | Dependency graph visualization |
-| **changelog** | `/changelog` | Change history analysis |
-| **architecture** | `/architecture` | Architecture query and visualization |
-| **coverage** | `/coverage` | Test coverage analysis |
-
----
-
-## Installation and Setup
-
-### Installation Commands
-
-**macOS/Linux:**
-```bash
-chmod +x ./scripts/install-unix.sh && ./scripts/install-unix.sh
-```
-
-**Windows (PowerShell):**
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
-```
-
-### Optional: Project Team for Large Projects
-
-```bash
-cd project-team && ./install.sh --global
-```
-
-### What Installation Does
-- Creates symbolic links from `skills/` to `~/.claude/skills/`
-- Makes all 17 skills available to Claude Desktop
-- Skills remain in-repo for version control
-
----
-
-## Architecture
-
-### Directory Structure
-```
-claude-imple-skills/
-├── skills/                      # 17 implementation skills
-│   ├── workflow-guide/          # v4.2.0 - Meta hub for skill routing
-│   ├── agile/                   # v2.4.0 - Sprint master
-│   ├── quality-auditor/         # v2.5.0 - Comprehensive audit
-│   ├── governance-setup/        # v1.4.0 - Phase 0 governance
-│   ├── tasks-init/              # v2.0.0 - TASKS.md scaffolding
-│   ├── tasks-migrate/           # v1.0.0 - Task file consolidation
-│   ├── checkpoint/              # v1.0.0 - Task completion review
-│   ├── recover/                 # v2.3.0 - Recovery hub
-│   ├── orchestrate-standalone/  # v1.1.0 - Task automation
-│   ├── multi-ai-run/            # v1.0.0 - Multi-CLI routing
-│   ├── multi-ai-review/         # v3.0.0 - CLI-based multi-AI review
-│   ├── security-review/         # v1.0.0 - OWASP vulnerability scan
-│   ├── impact/                  # Impact analysis
-│   ├── deps/                    # Dependency graph
-│   ├── changelog/               # Change history analysis
-│   ├── architecture/            # Architecture visualization
-│   └── coverage/                # Test coverage analysis
-├── project-team/                # Enterprise agent coordination system
-│   ├── agents/                  # 9 specialized AI agents
-│   ├── hooks/                   # 16 automated hooks
-│   └── templates/               # Configuration templates
-├── scripts/                     # Installation scripts
-├── README.md                    # User documentation
-├── README_ko.md                 # Korean documentation
-└── AGENTS.md                    # This file (AI agent guidance)
-```
-
-### MCP Dependencies
-
-All skills work **without MCP**. MCP servers provide optional enhancements:
-
-| Skill | Optional MCP | Enhancement |
-|-------|--------------|-------------|
-| `/agile` | playwright | Screenshot capture |
-| `/audit` | playwright | Browser verification |
-| `/architecture` | context7 | Latest docs search |
-
----
-
-## Development Workflows
-
-### Recommended Workflow Sequence
+The primary orchestration model uses Claude Code native Agent Teams:
 
 ```
-Start
-  │
-  ├─ "What should I do?" ─────────── /workflow
-  │
-  ├─ Large project? ──────────────── /governance-setup
-  │
-  ├─ No tasks? ────────────────────── /tasks-init
-  │
-  ├─ Implementation
-  │   ├─ 1-30 tasks ──────────────── /agile auto
-  │   ├─ 30-80 tasks ─────────────── /orchestrate
-  │   └─ Changes ──────────────────── /agile iterate
-  │
-  ├─ Analysis needed?
-  │   ├─ File change ──────────────── /impact
-  │   ├─ Dependencies ─────────────── /deps
-  │   ├─ Architecture ─────────────── /architecture
-  │   └─ Coverage ─────────────────── /coverage
-  │
-  ├─ Verification
-  │   ├─ Task complete ────────────── /checkpoint
-  │   ├─ Phase complete ───────────── /audit
-  │   └─ Deep review ──────────────── /multi-ai-review
-  │
-  └─ Work interrupted ────────────── /recover
+team-lead (PM 리더)
+├── architecture-lead → Task(builder) / Task(reviewer)
+├── qa-lead           → Task(reviewer) / Task(test-specialist)
+└── design-lead       → Task(designer) / Task(builder)
 ```
 
-### Task Scale Selection
+- Agent definitions: `.claude/agents/team-lead.md`, `architecture-lead.md`, `qa-lead.md`, `design-lead.md`
+- Communication: mailbox (bidirectional between lead and teammates)
+- Delegation: Task tool (teammates → subagents)
+- Governance: `TeammateIdle` + `TaskCompleted` hooks in `.claude/settings.local.json`
+- Multi-AI: Optional CLI routing — subagents can invoke `gemini`/`codex` CLI for subtasks (configured via `team-topology.json`)
 
-| Task Count | Recommended Skill | Features |
-|------------|-------------------|----------|
-| **1-10** | `/agile run` + `/agile done` | Manual control |
-| **10-30** | `/agile auto` | Layer checkpoints |
-| **30-80** | `/orchestrate` | Dependency-based parallel |
-| **80+** | `/agile auto` (sprint iteration) | Sprint breakdown |
+### Core Worker Agents (Task Targets)
 
----
+These are spawned by team leads via `Task()`:
 
-## Quality Assurance
+| Agent | Role |
+|-------|------|
+| `builder` | Implementation execution |
+| `reviewer` | Code review & QA |
+| `designer` | Design specialist |
+| `maintenance-analyst` | Production impact analysis |
 
-### Quality Gates
+Definitions: `project-team/agents/`
 
-| Gate | Skill | Criteria |
-|------|-------|----------|
-| **Task Complete** | `/checkpoint` | Git diff review |
-| **Phase Complete** | `/audit` | Spec + DDD + Tests |
-| **Deep Review** | `/multi-ai-review` | Multi-AI consensus |
+## Source of Truth
 
-### Audit (`/audit`) Scoring
+- Prefer `README.md` and `README_ko.md` for user-facing behavior and installation guidance.
+- Prefer the relevant `skills/*/SKILL.md` file for skill-specific behavior.
+- Prefer files under `project-team/` for agent-team, hook, and orchestration behavior.
+- If documents disagree, verify against the current filesystem and executable scripts before restating counts, commands, or capabilities.
 
-| Score | Verdict | Meaning |
-|-------|---------|---------|
-| 90+ | ✅ PASS | Production-ready |
-| 70-89 | ⚠️ CAUTION | Minor fixes needed |
-| <70 | ❌ FAIL | Major revision required |
+## Working Rules
 
----
+- Keep `AGENTS.md` short, operational, and agent-focused.
+- Avoid hardcoding counts of skills, agents, hooks, or templates here. Those values change and go stale quickly.
+- When changing behavior, update the closest source:
+  - skill behavior: matching `skills/*/SKILL.md`
+  - user workflow or installation: `README.md` and `README_ko.md`
+  - project-team behavior: `project-team/README.md`, hooks, scripts, or templates
+- Do not present aspirational features as implemented unless backed by code or docs updated in the same change.
+- Keep Korean and English user-facing docs aligned when behavior changes materially.
 
-## Context Recovery
+## Task And Planning Conventions
 
-### Recovery Priority
+- If task tracking is needed, prefer a root `TASKS.md` as the canonical task file.
+- If `TASKS.md` is absent, do not create it unless the user asks or the workflow explicitly requires it.
+- Use layer-based terminology only where it is already part of the relevant skill or workflow.
 
-When running `/recover`, check in this order:
+## Validation Expectations
 
-1. **Orchestrate State** (`.claude/orchestrate-state.json`)
-2. **TASKS.md** (root canonical task file)
-3. **Progress Log** (`.claude/progress.txt`)
-4. **Git State** — Unmerged branches, dirty state
+- For code changes, run the smallest meaningful verification available.
+- For hook or orchestration changes, prefer targeted tests under `project-team/hooks/__tests__/` and related test directories.
+- For documentation-only changes, verify consistency against current files and commands.
+- If you could not run validation, say so explicitly.
 
----
+## Editing Guidance
 
-## Task File & ID Policy
-
-### Canonical Task File
-
-| Priority | Path | Description |
-|----------|------|-------------|
-| **1 (Canonical)** | `./TASKS.md` | Standard task file (root) |
-| 2 (Legacy) | `docs/planning/06-tasks.md` | Legacy convention |
-| 3 (Legacy) | `task.md`, `*tasks*.md` | Other legacy formats |
-
-> **Rule**: New projects use root `TASKS.md`. Use `/tasks-migrate` to consolidate legacy files.
-
-### Task ID Policy
-
-Two formats supported:
-
-| Format | Pattern | Use Case | Example |
-|--------|---------|----------|---------|
-| **Phase-based** | `P{n}-T{m}` | Large projects | `P1-T1`, `P2-S1-T3` |
-| **Agile Layer** | `T{layer}.{seq}` | Sprint/layer work | `T0.1`, `T1.2`, `T3.4` |
-
-**Agile Layer meanings:**
-- `T0.*` — Skeleton (structure, layout)
-- `T1.*` — Muscles (core functionality)
-- `T2.*` — Muscles Advanced
-- `T3.*` — Skin (UI polish, animations)
-
----
-
-## Important Constraints
-
-### What Skills DON'T Do
-
-**Workflow Guide:**
-- ❌ Does NOT write code directly
-- ❌ Does NOT list all skills (only 1-2 relevant recommendations)
-
-**Quality Auditor:**
-- ❌ Does NOT modify code directly
-- ❌ Does NOT audit without planning documents
-
-**Agile Sprint Master:**
-- ❌ Does NOT skip checkpoints
-- ❌ Does NOT commit to git without explicit user request
-
----
-
-## Korean Language Support
-
-All skills support Korean commands:
-- `/복구` = `/recover`
-- "/스프린트 시작" = "start sprint"
-- "/감사" = `/audit`
-- "/워크플로우" = `/workflow`
-
----
-
-## Version Information
-
-- **Current Version**: v4.2.0 (Standalone-first)
-- **Last Updated**: 2026-03-03
-- **License**: MIT
-- **Requirements**: None (standalone)
+- Minimize unrelated churn.
+- Preserve existing file structure unless the task requires restructuring.
+- Do not turn this file back into a README clone.

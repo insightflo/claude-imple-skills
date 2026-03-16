@@ -1,127 +1,127 @@
 # Workflow Guide Skill Integrations
 
-> 스킬 간 연동 매트릭스 및 실패 복구 경로
+> Inter-skill integration matrix and failure recovery paths
 
-## 성공 경로 (Happy Path)
+## Happy Path
 
 ```
-/governance-setup (Mini-PRD 기획)
+/governance-setup (Mini-PRD planning)
     ↓
-/tasks-init (TASKS.md 스캐폴딩)
+/tasks-init (TASKS.md scaffolding)
     ↓
 ┌─────────────────────────────────────────────────────────┐
-│ 규모 판단 → 경로 분기                                    │
+│ Scale judgment → path branching                          │
 │                                                         │
-│ 📦 소규모 (≤30개)                                        │
-│   └─ /agile auto (Claude 직접 작성)                     │
+│ 📦 Small (≤30 tasks)                                     │
+│   └─ /agile auto (Claude writes directly)               │
 │                                                         │
-│ 🏢 중규모 (30~80개)                                      │
-│   └─ /orchestrate-standalone (의존성 기반 병렬 실행)    │
+│ 🏢 Medium (30~80 tasks)                                  │
+│   └─ /team-orchestrate (dependency-based parallel run)  │
 │                                                         │
-│ 🏃 스프린트 (50~200개) - 사용자 리뷰 게이트 필요         │
-│   └─ /orchestrate-standalone --mode=sprint             │
+│ 🏃 Sprint (50~200 tasks) - user review gate required    │
+│   └─ /team-orchestrate --mode=sprint                   │
 │                                                         │
-│ 🌊 대규모 (80~200개) - Wave profile                      │
-│   └─ /orchestrate-standalone --mode=wave               │
+│ 🌊 Large (80~200 tasks) - Wave profile                   │
+│   └─ /team-orchestrate --mode=wave                     │
 │                                                         │
-│ 🏛️ 거버넌스 (태스크 10+ + 복잡/협업 조건)                │
-│   └─ /governance-setup (Phase 0: PM/Architect/QA/DBA)   │
+│ 🏛️ Governance (10+ tasks + complex/collaborative)        │
+│   └─ /governance-setup (Phase 0: PM/Architect/QA/DBA)  │
 │       ↓                                                 │
-│   └─ 규모에 따라 /agile auto 또는 --mode=wave          │
+│   └─ /agile auto or --mode=wave depending on scale     │
 └─────────────────────────────────────────────────────────┘
     ↓
-/checkpoint (태스크 완료 시 리뷰)
+/checkpoint (review on task completion)
     ↓
-/security-review (보안 검사)
+/security-review (security check)
     ↓
-/audit (배포 전 종합 감사)
+/audit (comprehensive pre-deployment audit)
     ↓
-/multi-ai-review (심층 검토)
+/multi-ai-review (in-depth review)
     ↓
-배포 ✅
+Deploy ✅
 ```
 
-## 레거시 프로젝트 경로
+## Legacy Project Path
 
 ```
-기존 코드베이스
+Existing codebase
     ↓
-/tasks-migrate (레거시 태스크 통합)
+/tasks-migrate (integrate legacy tasks)
     ↓
-/agile iterate (반복 개선)
+/agile iterate (iterative improvement)
     ↓
-/audit (종합 감사)
+/audit (comprehensive audit)
 ```
 
-## 실패 복구 경로
+## Failure Recovery Paths
 
-| 실패 상황 | 복구 스킬 | 다음 단계 |
-|-----------|-----------|-----------|
-| CLI 중단 | `/recover` | 이전 스킬 재개 |
-| 리뷰 실패 | `/agile iterate` | `/checkpoint` |
-| 품질 게이트 실패 | `/agile iterate` | 수정 후 재검증 |
-| 기획 불명확 | `/governance-setup` | `/tasks-init` |
-| 컨텍스트 과부하 | `/compress` | 최적화 후 재시도 |
+| Failure Scenario | Recovery Skill | Next Step |
+|-----------------|---------------|-----------|
+| CLI interrupted | `/recover` | Resume previous skill |
+| Review failed | `/agile iterate` | `/checkpoint` |
+| Quality gate failed | `/agile iterate` | Fix and re-verify |
+| Planning unclear | `/governance-setup` | `/tasks-init` |
+| Context overload | `/compress` | Retry after optimization |
 
 ---
 
-## 자연어 → 스킬 빠른 매핑
+## Natural Language → Skill Quick Mapping
 
 ```
-"뭐부터 해야 할지 모르겠어"     → /workflow
-"기획서 있는데 코딩 시작해줘"   → /agile auto
-"이 기능 수정해줘"              → /agile iterate
-"코드 검토해줘"                 → /checkpoint
-"리뷰해줘"                      → /checkpoint
-"심층 리뷰해줘"                 → /multi-ai-review
-"council 소집해줘"              → /multi-ai-review
-"여러 AI 의견 들어보자"         → /multi-ai-review
-"보안 검사해줘"                 → /security-review
-"품질 검사해줘"                 → /audit
-"작업이 중단됐어"               → /recover
-"대규모 프로젝트야"             → /governance-setup
-"거버넌스 셋업"                 → /governance-setup
-"멀티 AI로 실행"                → /multi-ai-run
-"Codex로 코드 작성"             → /multi-ai-run --model=codex
-"Gemini로 디자인"               → /multi-ai-run --model=gemini
-"컨텍스트 압축해줘"             → /compress
-"문서가 너무 길어"              → /compress optimize
-"스프린트로 실행해줘"           → /orchestrate-standalone --mode=sprint
-"자율 실행해줘"                 → /orchestrate-standalone --mode=auto
-"칸반 보드 보여줘"              → /task-board show
-"보드 보여줘"                   → /task-board show
-"blocked 태스크 확인"           → /task-board health
+"I don't know where to start"         → /workflow
+"I have a spec, let's start coding"   → /agile auto
+"Fix this feature"                    → /agile iterate
+"Review the code"                     → /checkpoint
+"Review this"                         → /checkpoint
+"Deep review"                         → /multi-ai-review
+"Convene the council"                 → /multi-ai-review
+"Get opinions from multiple AIs"      → /multi-ai-review
+"Run a security check"                → /security-review
+"Run a quality check"                 → /audit
+"Work was interrupted"                → /recover
+"This is a large project"             → /governance-setup
+"Governance setup"                    → /governance-setup
+"Run with multi-AI"                   → /multi-ai-run
+"Write code with Codex"               → /multi-ai-run --model=codex
+"Design with Gemini"                  → /multi-ai-run --model=gemini
+"Compress the context"                → /compress
+"The document is too long"            → /compress optimize
+"Run as a sprint"                     → /team-orchestrate --mode=sprint
+"Run autonomously"                    → /team-orchestrate --mode=auto
+"Show the kanban board"               → /whitebox status
+"Show the board"                      → /whitebox status
+"Check blocked tasks"                 → /whitebox status
 ```
 
 ---
 
-## 품질 게이트 체크리스트
+## Quality Gate Checklist
 
-모든 구현 완료 후 반드시 거쳐야 하는 게이트:
+Gates that must be passed after all implementation is complete:
 
-| 게이트 | 필수 스킬 | 통과 기준 |
-|--------|-----------|-----------|
-| **G0: 태스크 리뷰** | `/checkpoint` | 2단계 리뷰 통과 |
-| **G1: 종합 감사** | `/audit` | 기획 정합성 + DDD + 보안 + 테스트/브라우저 |
-| **G2: 심층 검토** | `/multi-ai-review` | Multi-AI 합의 (선택적) |
+| Gate | Required Skill | Pass Criteria |
+|------|---------------|---------------|
+| **G0: Task Review** | `/checkpoint` | 2-stage review passed |
+| **G1: Comprehensive Audit** | `/audit` | Spec alignment + DDD + security + test/browser |
+| **G2: In-depth Review** | `/multi-ai-review` | Multi-AI consensus (optional) |
 
 ---
 
-## Hook 시스템 연동
+## Hook System Integration
 
-`project-team/hooks/` 내장 Hook이 워크플로우를 자동화합니다:
+Built-in hooks in `project-team/hooks/` automate the workflow:
 
-| Hook | 효과 |
-|------|------|
-| `task-sync.js` | 태스크 완료 시 TASKS.md 자동 업데이트 |
-| `quality-gate.js` | Phase 완료 전 품질 검증 |
-| `permission-checker.js` | 에이전트 역할별 파일 접근 제어 |
-| `domain-boundary-enforcer.js` | PreToolUse 단계에서 교차 도메인 쓰기 차단 |
-| `design-validator.js` | 디자인 시스템 준수 검증 |
+| Hook | Effect |
+|------|--------|
+| `task-sync.js` | Auto-updates TASKS.md on task completion |
+| `quality-gate.js` | Quality verification before phase completion |
+| `permission-checker.js` | File access control per agent role |
+| `domain-boundary-enforcer.js` | Blocks cross-domain writes at PreToolUse stage |
+| `design-validator.js` | Validates design system compliance |
 
-### Hook 설치
+### Hook Installation
 
 ```bash
-# project-team 설치 스크립트 실행
+# Run the project-team installation script
 cd project-team && ./install.sh --mode standard
 ```

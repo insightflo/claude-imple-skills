@@ -1,0 +1,14 @@
+name: business-plan
+display: "사업 계획 평가"
+dimensions:
+  market_opportunity: { weight: 0.25, label: "시장 기회" }
+  business_model: { weight: 0.25, label: "수익 모델" }
+  competitive_edge: { weight: 0.20, label: "경쟁 우위" }
+  execution_plan: { weight: 0.15, label: "실행 계획" }
+  financial_viability: { weight: 0.15, label: "재무 건전성" }
+roles:
+  gemini: "전략/시장 분석가 — 시장 규모, 트렌드, 고객 세그먼트, 경쟁 구도, 차별화 전략 평가"
+  codex: "재무/실행 분석가 — 수익 모델 구조, 유닛 이코노믹스, 손익분기점, 실행 리스크 분석"
+output:
+  verdict_options: ["Strong Viable", "Viable", "Conditional", "Weak", "Not Viable"]
+  verdict_label: "사업성 판정"

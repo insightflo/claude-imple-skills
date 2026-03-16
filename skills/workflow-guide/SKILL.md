@@ -1,51 +1,51 @@
 ---
 name: workflow-guide
-description: 여러 스킬 중 상황에 맞는 워크플로우를 안내합니다. 프로젝트 상태를 자동 분석하여 최적 스킬을 추천합니다. "뭐해야해?", "어떤 스킬 써야 해?", "워크플로우 추천", "다음 단계가 뭐야?" 질문에 반드시 사용하세요. /workflow 트리거.
+description: Routes you to the right skill for any situation by auto-analyzing project state. Use this whenever you are unsure what to do next — it diagnoses the project and recommends the optimal skill. Invoke immediately on "what should I do?", "which skill?", "recommend a workflow", or "what's next?" questions. Triggered by /workflow.
 trigger: /workflow, /workflow-guide, "뭐해야해?", "어떤 스킬", "워크플로우 추천"
 version: 5.0.0
 updated: 2026-03-12
 ---
 
-# 🧭 워크플로우 선택 가이드 (Meta Hub)
+# Workflow Selection Guide (Meta Hub)
 
-> **목적**: 프로젝트 상태 자동 분석 → 최적 스킬 1~2개 추천
+> **Purpose**: Auto-analyze project state → recommend 1–2 optimal skills
 >
-> **⚠️ 핵심 원칙**: 이 스킬은 **구현 코드를 작성하지 않습니다**. 오직 **상황 진단 → 스킬 추천 → 사용자 확인**만 수행합니다.
+> **Core principle**: This skill **does not write implementation code**. It only performs **situation diagnosis → skill recommendation → user confirmation**.
 
 ---
 
-## ⛔ 절대 금지 사항
+## Absolute Prohibitions
 
-1. ❌ **직접 코드를 작성하지 마세요** - 워크플로우 안내만 합니다.
-2. ❌ **모든 스킬을 나열하지 마세요** - 상황에 맞는 **1~2개만** 추천합니다.
-3. ❌ **요구사항 질문으로 시작하지 마세요** - 먼저 프로젝트 상태를 **자동 진단**합니다.
+1. Do not write code directly — guide the workflow only.
+2. Do not list all skills — recommend **1–2 only**, matched to the situation.
+3. Do not start with requirements questions — **auto-diagnose** project state first.
 
 ---
 
-## ✅ 스킬 발동 시 즉시 실행할 행동
+## Actions to Execute Immediately on Skill Activation
 
-### 1단계: 프로젝트 상태 자동 진단 (Silent Analysis)
+### Stage 1: Auto-diagnose project state (Silent Analysis)
 
 ```bash
-# 1. 태스크 파일 확인
+# 1. Check for task file
 ls TASKS.md 2>/dev/null || ls docs/planning/06-tasks.md 2>/dev/null
 
-# 2. 코드 베이스 확인 (src/·app/·lib/ 에 실제 코드 파일)
+# 2. Check codebase (actual code files in src/·app/·lib/)
 SOURCE_CODE=$(find src/ app/ lib/ -maxdepth 3 -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" \) 2>/dev/null | head -1)
 echo "source_code=${SOURCE_CODE:+yes}"
 
-# 3. 중단된 작업 확인 (state file + 미완료 태스크)
+# 3. Check for interrupted work (state file + incomplete tasks)
 for STATE_PATH in ".claude/orchestrate-state.json" ".claude/orchestrate/orchestrate-state.json"; do
   if [ -f "$STATE_PATH" ] && grep -qE '"status"[[:space:]]*:[[:space:]]*"(in_progress|pending)"' "$STATE_PATH" 2>/dev/null; then
     echo "state_file=$STATE_PATH incomplete_in_state=1"
   fi
 done
 
-# 4. Git merge conflict 확인
+# 4. Check for git merge conflicts
 CONFLICT_FILES=$(git diff --name-only --diff-filter=U 2>/dev/null | wc -l | tr -d ' ')
 echo "conflicts=$CONFLICT_FILES"
 
-# 5. 에이전트/태스크 카운트
+# 5. Agent/task counts
 AGENT_COUNT=$(ls .claude/agents/*.md 2>/dev/null | wc -l | tr -d ' ')
 TASK_COUNT=$(grep -cE '^\s*[-*]\s*\[|^#{1,6}\s+\[' TASKS.md 2>/dev/null || echo 0)
 INCOMPLETE_COUNT=$(grep -cE '^\s*[-*]\s*\[\s*\]|^#{1,6}\s+\[\s*\]' TASKS.md 2>/dev/null || echo 0)
@@ -53,32 +53,38 @@ GOVERNANCE_DONE=$(ls management/project-plan.md 2>/dev/null && echo "yes" || ech
 echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governance=$GOVERNANCE_DONE"
 ```
 
-### 2단계: 결정 알고리즘 (IF-THEN 순서대로, 첫 RETURN에서 중단)
+### Stage 2: Decision Algorithm (simple router — each skill handles its own prerequisites)
 
-> **상세 알고리즘 및 시나리오 검증**: `references/decision-algorithm.md` 참조
+> workflow-guide only does **current state → recommend 1 skill**.
+> When the recommended skill runs, its own "prerequisite check" section detects any missing dependencies and guides accordingly.
 
 ```
-① 복구 체크: state file + 미완료 OR merge conflicts → /recover
-② 태스크 체크: TASKS.md 없음 → /tasks-init (또는 /tasks-migrate)
-③ 유지보수: source_code + AGENT_COUNT=0 + GOV=no → /agile iterate
-④ 거버넌스: TASK>=10 + (DOMAIN>=2 OR TASK>=30) + GOV=no → /governance-setup
-⑤ 인프라: GOV=yes + TASK>=30 + AGENT=0 → install.sh
-⑥ 구현: GOV=yes + AGENT>0 → /orchestrate-standalone 또는 /agile auto
-⑦ 소규모: TASK<30 + incomplete>0 → /agile auto
-⑧ 완료: all_tasks_completed → /audit
+① Recovery: state file incomplete OR merge conflicts → /recover
+② No tasks: no TASKS.md → /tasks-init (or /tasks-migrate if legacy exists)
+③ Maintenance: source_code exists + bug/fix request → /maintenance
+③-b Maintenance (iterative): source_code exists + incomplete>0 → /agile iterate
+④ New implementation: incomplete>0 + TASK<30 → /agile auto
+⑤ Large-scale implementation: incomplete>0 + TASK>=30 → /team-orchestrate
+⑥ Done: all_tasks_completed → /audit
 ```
 
-### 3단계: 맞춤 추천 (AskUserQuestion)
+Prerequisite checks each skill performs on its own:
+- `/team-orchestrate` → checks TASKS.md format and Agent Teams installation
+- `/agile` → checks TASKS.md existence/format, recommends team-orchestrate for ≥30 tasks
+- `/audit` → checks for planning documents, guides to /governance-setup if missing
+- `/governance-setup` → guides to /tasks-init or /tasks-migrate based on TASKS.md state
 
-진단 결과를 **⭐ 권장** 스킬로 표시하여 사용자 확인:
+### Stage 3: Tailored Recommendation (AskUserQuestion)
+
+Display the diagnosis result with a starred recommendation for user confirmation:
 
 ```json
 {
   "questions": [{
-    "question": "프로젝트 상태를 분석했습니다. 다음 단계를 선택하세요:",
+    "question": "Project state has been analyzed. Choose the next step:",
     "options": [
-      { "label": "⭐ [권장] {진단된 스킬}", "description": "{적합 이유}" },
-      { "label": "{대안 1}", "description": "{설명}" }
+      { "label": "⭐ [Recommended] {diagnosed skill}", "description": "{reason for fit}" },
+      { "label": "{alternative 1}", "description": "{description}" }
     ]
   }]
 }
@@ -86,72 +92,71 @@ echo "agents=$AGENT_COUNT tasks=$TASK_COUNT incomplete=$INCOMPLETE_COUNT governa
 
 ---
 
-## 📊 Standalone 스킬 카탈로그 (20개)
+## Standalone Skill Catalog (21 skills)
 
-| 스킬 | 트리거 | 역할 |
-|------|--------|------|
-| **`/workflow`** | "뭐해야해?" | 메타 허브 - 스킬 라우팅 |
-| **`/governance-setup`** | `/governance-setup` | 거버넌스 + Mini-PRD 기획 |
-| **`/tasks-init`** | `/tasks-init` | TASKS.md 스캐폴딩 |
-| **`/tasks-migrate`** | `/tasks-migrate` | 레거시 태스크 통합 |
-| **`/agile`** | `/agile auto` | 레이어 기반 스프린트 |
-| **`/orchestrate-standalone`** | `/orchestrate-standalone` | 30~200개 병렬 실행 |
-| **`/multi-ai-run`** | `/multi-ai-run` | 역할별 모델 라우팅 |
-| **`/checkpoint`** | "리뷰해줘" | 태스크 완료 시 2단계 리뷰 |
-| **`/security-review`** | `/security-review` | OWASP TOP 10 보안 검사 |
-| **`/audit`** | `/audit` | 배포 전 종합 감사 |
-| **`/multi-ai-review`** | `/multi-ai-review` | 3-AI 컨센서스 리뷰 |
-| **`/recover`** | "작업이 중단됐어" | 작업 복구 허브 |
-| **`/impact`** | `/impact <file>` | 변경 영향도 분석 |
-| **`/deps`** | `/deps` | 의존성 그래프 |
-| **`/coverage`** | `/coverage` | 테스트 커버리지 |
-| **`/architecture`** | `/architecture` | 아키텍처 맵 |
-| **`/compress`** | "컨텍스트 압축" | Long Context 최적화 |
-| **`/task-board`** | "칸반 보드" | 에이전트 태스크 시각화 |
-| **`/statusline`** | 자동 활성화 | 진행률 상태바 표시 |
-| **`/changelog`** | `/changelog` | 변경 이력 조회 |
-
----
-
-## 📊 태스크 규모별 구현 스킬 선택
-
-| 태스크 수 | 권장 스킬 | 에이전트 팀 | 선행 스킬 |
-|-----------|-----------|------------|-----------|
-| **1~30개** | `/agile auto` | ❌ 불필요 | - |
-| **30~80개** | `/orchestrate-standalone` | ✅ 선택 | `/governance-setup` |
-| **80~200개** | `/orchestrate-standalone --mode=wave` | ✅ 권장 | `/governance-setup` |
-| **러프 골** | `/orchestrate-standalone --mode=auto` | ✅ 선택 | 불필요 |
-| **200개+** | 하위 프로젝트 분할 → wave | ✅ 필수 | `/governance-setup` |
+| Skill | Trigger | Role |
+|-------|---------|------|
+| **`/workflow`** | "what should I do?" | Meta hub — skill routing |
+| **`/governance-setup`** | `/governance-setup` | Governance + Mini-PRD planning |
+| **`/tasks-init`** | `/tasks-init` | TASKS.md scaffolding |
+| **`/tasks-migrate`** | `/tasks-migrate` | Consolidate legacy tasks |
+| **`/agile`** | `/agile auto` | Layer-based sprint execution |
+| **`/team-orchestrate`** | `/team-orchestrate` | Agent Teams dynamic team formation + parallel execution |
+| **`/multi-ai-run`** | `/multi-ai-run` | Role-based model routing |
+| **`/checkpoint`** | "review this" | Two-stage review on task completion |
+| **`/security-review`** | `/security-review` | OWASP Top 10 security scan |
+| **`/audit`** | `/audit` | Pre-deployment comprehensive audit |
+| **`/multi-ai-review`** | `/multi-ai-review` | 3-AI consensus review |
+| **`/recover`** | "work was interrupted" | Work recovery hub |
+| **`/impact`** | `/impact <file>` | Change impact analysis |
+| **`/deps`** | `/deps` | Dependency graph |
+| **`/coverage`** | `/coverage` | Test coverage |
+| **`/architecture`** | `/architecture` | Architecture map |
+| **`/maintenance`** | "fix this bug" | ITIL 5-stage production maintenance orchestrator |
+| **`/compress`** | "compress context" | Long context optimization |
+| **`/statusline`** | auto-activated | Progress status bar display |
+| **`/changelog`** | `/changelog` | Change history query |
 
 ---
 
-## 💡 자연어 → 스킬 빠른 매핑
+## Skill Selection by Task Scale
+
+| Task count | Recommended skill | Agent Teams | Prerequisite skills |
+|------------|-------------------|-------------|---------------------|
+| **1–30** | `/agile auto` | Not required | — |
+| **30+** | `/team-orchestrate` | Dynamic team formation | `/governance-setup` + `install.sh --mode=team` |
+| **200+** | Split into sub-projects | Required | `/governance-setup` |
+
+---
+
+## Natural Language → Skill Quick Map
 
 ```
-"뭐부터 해야 할지 모르겠어"     → /workflow
-"기획서 있는데 코딩 시작해줘"   → /agile auto
-"이 기능 수정해줘"              → /agile iterate
-"코드 검토해줘"                 → /checkpoint
-"심층 리뷰해줘"                 → /multi-ai-review
-"보안 검사해줘"                 → /security-review
-"품질 검사해줘"                 → /audit
-"작업이 중단됐어"               → /recover
-"대규모 프로젝트야"             → /governance-setup
-"스프린트로 실행해줘"           → /orchestrate-standalone --mode=sprint
-"자율 실행해줘"                 → /orchestrate-standalone --mode=auto
-"칸반 보드 보여줘"              → /task-board show
-"컨텍스트 압축해줘"             → /compress
+"I don't know where to start"          → /workflow
+"I have a spec, start coding"          → /agile auto
+"Fix this feature"                     → /agile iterate
+"Review the code"                      → /checkpoint
+"Do a deep review"                     → /multi-ai-review
+"Run a security check"                 → /security-review
+"Run a quality check"                  → /audit
+"Work was interrupted"                 → /recover
+"This is a large project"              → /governance-setup
+"Fix this bug"                         → /maintenance
+"Fix this in production"               → /maintenance
+"Run with an agent team"               → /team-orchestrate
+"Show execution status"                → /whitebox status
+"Compress the context"                 → /compress
 ```
 
 ---
 
-## 📚 참조 문서
+## Reference Documents
 
-상세 알고리즘, 스킬 연동 매트릭스, 품질 게이트는 다음 파일을 참조하세요:
+For detailed algorithms, skill integration matrix, and quality gates, see:
 
-- `references/decision-algorithm.md` - 결정 알고리즘 상세 + 시나리오 검증
-- `references/skill-integrations.md` - 스킬 간 연동 + 실패 복구 경로
+- `references/decision-algorithm.md` — Detailed decision algorithm + scenario validation
+- `references/skill-integrations.md` — Skill-to-skill integrations + failure recovery paths
 
 ---
 
-**Last Updated**: 2026-03-12 (v5.0.0 - Progressive Disclosure 적용)
+**Last Updated**: 2026-03-12 (v5.0.0 — Progressive Disclosure applied)

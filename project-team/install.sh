@@ -92,6 +92,7 @@ ${BOLD}Configuration Mode:${NC}
   --mode=lite            Same as above
   --mode standard        Lite + specialists + added gates
   --mode full            Standard + compatibility profile surfaces
+  --mode team            Agent Teams + governance hooks + AGENT_TEAMS env flag
   (no flag)              Interactive install defaults to lite
 
 ${BOLD}Selective Install:${NC}
@@ -108,6 +109,7 @@ ${BOLD}Examples:${NC}
   $(basename "$0") --local --mode lite
   $(basename "$0") --global --mode=standard
   $(basename "$0") --local --mode full --dry-run
+  $(basename "$0") --local --mode=team        # Agent Teams + governance hooks
   $(basename "$0") --global --uninstall
 EOF
 }
@@ -616,7 +618,7 @@ merge_settings_json() {
         original="$(<"$TARGET_SETTINGS")"
     fi
 
-    existing_output="$(TARGET_SETTINGS="$TARGET_SETTINGS" ORIGINAL_JSON="$original" PREVIOUS_MANAGED_COMMANDS_JSON="$PREVIOUS_MANAGED_COMMANDS_JSON" CURRENT_HOOK_CONFIG_JSON="$CURRENT_HOOK_CONFIG_JSON" node - <<'NODE'
+    existing_output="$(TARGET_SETTINGS="$TARGET_SETTINGS" ORIGINAL_JSON="$original" PREVIOUS_MANAGED_COMMANDS_JSON="$PREVIOUS_MANAGED_COMMANDS_JSON" CURRENT_HOOK_CONFIG_JSON="$CURRENT_HOOK_CONFIG_JSON" INSTALL_MODE_NAME="$MODE" node - <<'NODE'
 function parseJson(text, fallback) {
   if (!text) return fallback;
   try {
@@ -665,6 +667,14 @@ if (Object.keys(outputHooks).length > 0) {
   result.hooks = outputHooks;
 } else {
   delete result.hooks;
+}
+
+// Agent Teams 모드일 때 실험적 기능 플래그 추가
+if (process.env.INSTALL_MODE_NAME === 'team') {
+  result.env = { ...(result.env || {}), CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' };
+} else if (result.env && result.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) {
+  delete result.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+  if (Object.keys(result.env).length === 0) delete result.env;
 }
 
 const originalSerialized = `${JSON.stringify(parseJson(process.env.ORIGINAL_JSON, {}), null, 2)}\n`;
@@ -998,6 +1008,38 @@ NODE
     printf "\n"
 }
 
+install_agent_teams_leads() {
+    local global_agents="$HOME/.claude/agents"
+    local lead_src="${SCRIPT_DIR}/../.claude/agents"
+    local leads=("team-lead.md" "architecture-lead.md" "qa-lead.md" "design-lead.md")
+    local count=0
+
+    header "Installing Agent Teams Leads (global)"
+
+    mkdir -p "$global_agents"
+    for lead in "${leads[@]}"; do
+        local src="${lead_src}/${lead}"
+        local dest="${global_agents}/${lead}"
+        if [ ! -e "$src" ]; then
+            log_warn "Lead agent not found: ${src}"
+            continue
+        fi
+        if [ "$DRY_RUN" = true ]; then
+            log_dry "Would install: ${lead} → ${dest}"
+        else
+            cp -a "$src" "$dest"
+            count=$((count + 1))
+            log_success "  ${lead} → ~/.claude/agents/"
+        fi
+    done
+
+    if [ "$DRY_RUN" = true ]; then
+        log_dry "${count} Agent Teams lead(s) would be installed globally"
+    else
+        log_success "${count} Agent Teams lead(s) installed to ~/.claude/agents/"
+    fi
+}
+
 do_install() {
     prompt_install_mode
     prompt_configuration_mode
@@ -1027,6 +1069,11 @@ do_install() {
     if [ "$HOOKS_ONLY" = false ]; then
         install_registry_category agents
         install_registry_category templates
+    fi
+
+    # Team 모드: Agent Teams 리더를 전역에 설치 (템플릿 — 프로젝트 독립)
+    if [ "$MODE" = "team" ]; then
+        install_agent_teams_leads
     fi
     if [ "$HOOKS_ONLY" = false ]; then
         install_project_scripts

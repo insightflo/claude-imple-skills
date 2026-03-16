@@ -21,7 +21,7 @@ cd claude-impl-tools
 TUI-based installer lets you select:
 - Install scope (global / project)
 - Skill categories (Core, Orchestration, Quality, Analysis, Tasks)
-- Project Team (10 agents + 15 hooks)
+- Project Team (agents + hooks)
 - Multi-AI routing (Claude + Gemini + Codex)
 
 ### Option 2: Non-Interactive Install
@@ -45,8 +45,9 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 | Component | Count | Purpose |
 |-----------|-------|---------|
 | **Skills** | 21 | Task execution, analysis, automation |
-| **Agents** | 13 | Canonical roles plus compatibility aliases |
-| **Hooks** | 18 | Auto-validation, gates, sync, and helper checks |
+| **Agent Teams Leads** | 4 | team-lead, architecture-lead, qa-lead, design-lead |
+| **Core Worker Agents** | 4 | builder, reviewer, designer, maintenance-analyst |
+| **Hooks** | 19 | Auto-validation, gates, sync, governance |
 | **Templates** | 11 | Project Team protocols, ADR, contracts, standards |
 
 ---
@@ -66,7 +67,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 | Skill | What it does |
 |-------|--------------|
-| `/governance-setup` | Set up PM → Architect → Designer → QA → DBA team before starting |
+| `/governance-setup` | Set up agent team structure before starting |
 | `/tasks-init` | Generate TASKS.md from scratch (standalone) |
 | `/tasks-migrate` | Migrate existing task files to new format |
 
@@ -76,13 +77,13 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 |-------|--------------|
 | `/quality-auditor` | Pre-deployment comprehensive audit |
 | `/security-review` | OWASP TOP 10, CVE, secrets detection |
-| `/multi-ai-review` | Consensus review (Claude + Gemini CLI + Codex CLI) |
+| `/multi-ai-review` | Universal consensus engine (Claude + Gemini CLI + Codex CLI) — auto-routes code review, market regime, investment thesis, risk assessment via 3-Stage Pipeline |
 
 ### Automation
 
 | Skill | What it does |
 |-------|--------------|
-| `/orchestrate-standalone` | Execute 50-200 tasks with specialist agents and auto-surface the whitebox dashboard (`--mode=sprint` for Agile PI planning + sprint review gates) |
+| `/team-orchestrate` | Native Agent Teams orchestration with Plan Approval, mailbox communication, full hook coverage, and optional multi-AI CLI routing (Gemini/Codex) |
 | `/multi-ai-run` | Parallel AI execution management with automatic CLI routing defaults (Claude/Gemini/Codex) |
 | `/whitebox` | Open the visible execution dashboard, inspect health/state, and handle intervention-aware control-plane decisions |
 
@@ -90,6 +91,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 | Skill | What it does |
 |-------|--------------|
+| `/maintenance` | ITIL 5-stage production maintenance orchestrator (ASSESS → ANALYZE → IMPLEMENT → VERIFY → RECORD) |
 | `/impact` | Analyze change impact before editing |
 | `/deps` | Visualize dependencies + detect cycles |
 | `/changelog` | Query change history by domain |
@@ -97,43 +99,43 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 | `/architecture` | Map project structure & domains |
 | `/compress` | Long Context optimization (H2O pattern) |
 | `/statusline` | Display TASKS.md progress in Claude Code status bar |
-| `/task-board` | Whitebox fallback surface for Kanban/task intervention rendering when browser surfacing is unavailable |
 
 ---
 
-## Project Team
+## Agent Teams
 
-For larger projects, deploy an **AI agent team** with automatic quality gates:
+The orchestration model uses Claude Code native **Agent Teams** for hierarchical coordination with full hook coverage:
 
 ```
-project-team/
-├── agents/          # 13 role definitions and aliases
-├── hooks/           # 18 validation and helper hooks
-├── scripts/         # collaboration & conflict resolution
-├── references/      # communication protocols
-├── skills/          # 5 maintenance tools
-└── templates/       # protocols & contracts
+team-lead (PM 리더)
+├── architecture-lead (Teammate) → Task(builder) / Task(reviewer)
+├── qa-lead (Teammate)           → Task(reviewer) / Task(test-specialist)
+└── design-lead (Teammate)       → Task(designer) / Task(builder)
+
+Communication: Lead ↔ Teammates = mailbox (bidirectional)
+Delegation:    Teammate → Subagents = Task tool (unidirectional)
+Governance:    TeammateIdle hook + TaskCompleted hook
 ```
 
-### Agents (13)
+### Agent Teams Leads (`.claude/agents/`)
 
-| Role | Responsibility |
-|------|----------------|
-| **Lead** | Canonical coordination role |
-| **Builder** | Canonical implementation role |
-| **Reviewer** | Canonical review role |
-| **Designer** | Canonical design specialist |
-| **DBA** | Canonical data specialist |
-| **Security Specialist** | Canonical security specialist |
-| **Project Manager** | Compatibility alias for coordination workflows |
-| **Chief Architect** | Compatibility alias for architecture workflows |
-| **Chief Designer** | Compatibility alias for design workflows |
-| **QA Manager** | Compatibility alias for review and QA workflows |
-| **Frontend Specialist** | Compatibility alias for frontend execution |
-| **Backend Specialist** | Compatibility alias for backend execution |
-| **Maintenance Analyst** | Compatibility alias for production-impact workflows |
+| Agent | Responsibility |
+|-------|----------------|
+| **team-lead** | Plan Approval, team formation, conflict mediation |
+| **architecture-lead** | Architecture, API design, VETO authority |
+| **qa-lead** | Quality gates, test strategy, VETO authority |
+| **design-lead** | Design system, visual consistency, VETO authority |
 
-### Hooks (18)
+### Core Worker Agents (`project-team/agents/`)
+
+| Agent | Responsibility |
+|-------|----------------|
+| **Builder** | Implementation execution |
+| **Reviewer** | Code review & QA |
+| **Designer** | Design specialist |
+| **Maintenance Analyst** | Production impact analysis |
+
+### Hooks (19)
 
 Automatic validations that run before/after file edits:
 
@@ -144,27 +146,49 @@ Automatic validations that run before/after file edits:
 | **Quality** | `standards-validator`, `design-validator`, `interface-validator`, `quality-gate` |
 | **Gates** | `policy-gate`, `contract-gate`, `risk-gate`, `docs-gate` |
 | **Sync** | `architecture-updater`, `changelog-recorder`, `cross-domain-notifier`, `task-sync` |
+| **Agent Teams** | `teammate-idle-gate`, `task-completed-gate` |
 
 ### Deployment Modes
 
 | Mode | When to use | Components |
 |------|-------------|------------|
 | **Lite** | MVP, startups | 3 agents, 2 hooks |
-| **Standard** | Most projects | 7 agents, 4 gates |
+| **Standard** | Most projects | 4 agents, 7 hooks |
 | **Full** | Regulated industries | All agents, all hooks |
+| **Team** | Agent Teams orchestration | 4 leads + workers, governance hooks |
 
 See `project-team/docs/MODES.md` for details.
 
-### What changed in the current `main`
+### Enabling Agent Teams
 
-- `--mode=wave` now uses the real worker pool path, emits `.claude/wave-plan.json`, and defaults to a 6-worker large-project profile.
-- Whitebox now opens a local web dashboard automatically from `orchestrate` and `whitebox status`, with `WHITEBOX_AUTO_OPEN_BROWSER=0` as the browser opt-out and `WHITEBOX_AUTO_OPEN_TUI=0` as the terminal fallback opt-out.
-- Whitebox approvals now surface typed intervention triggers such as `user_confirmation`, `agent_conflict`, and `risk_acknowledgement` across explain/status/task-board flows.
-- Escalated REQ conflicts now surface linked `DEC-*` ruling metadata in whitebox explain, task-board, and the TUI detail pane.
-- Writing a `FINAL` DEC for an `ESCALATED` REQ now auto-resolves that request through the canonical hook/event path instead of waiting for a separate manual sync step.
-- Layer failures now stop the run cleanly, report failed task IDs, and cancel same-layer sibling work instead of silently continuing.
-- Worker CLI routing now defaults in this order: `task.model` -> agent `cli_command` -> project/global `model-routing.yaml` -> heuristics -> Claude fallback, so users do not need to name the executor for common agent roles.
-- Project Team installs now include the hook support libraries required by `policy-gate` and `permission-checker`.
+Agent Teams requires the experimental feature flag. Install with `--mode=team` to auto-configure:
+
+```bash
+cd project-team
+./install.sh --local --mode=team
+```
+
+This adds to your `.claude/settings.json`:
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "hooks": {
+    "TeammateIdle": [...],
+    "TaskCompleted": [...]
+  }
+}
+```
+
+Or manually add the env flag to `.claude/settings.json` or `.claude/settings.local.json`:
+```json
+{
+  "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
+}
+```
+
+Agent definitions (`.claude/agents/team-lead.md`, `architecture-lead.md`, `qa-lead.md`, `design-lead.md`) are included in the repository and activated automatically when the flag is set.
 
 ---
 
@@ -181,8 +205,7 @@ Start
   │
   ├─ Implement (choose by scale)
   │   ├─ Small (≤30 tasks) ───── /agile auto
-  │   ├─ Medium (30-50) ──────── /orchestrate-standalone
-  │   └─ Large (50+) ─────────── /orchestrate-standalone
+  │   └─ Medium-Large (30+) ──── /team-orchestrate
   │
   ├─ Maintain
   │   ├─ Before editing ──────── /impact
@@ -202,22 +225,7 @@ Start
 | Task count | Recommended | Code written by | Agent team |
 |------------|-------------|-----------------|------------|
 | ≤ 30 | `/agile auto` | Claude directly | No |
-| 30-80 | `/orchestrate-standalone` | Specialist agents | Optional |
-| 80-200 | `/orchestrate --mode=wave` | Large-project wave profile | Recommended |
-| 200+ | Split into sub-projects | Domain-parallel agents | Required |
-
-**Wave mode (current CLI)**: For 80+ tasks, use `--mode=wave` for the large-project execution profile with whitebox board surfacing, typed intervention triggers, linked DEC detail for agent conflicts, and a 6-worker default.
-
-### Tested execution flows
-
-These are the flows validated against the current `main` branch:
-
-| Project size | Recommended flow |
-|--------------|------------------|
-| Small (<=30 tasks) | `/agile auto` |
-| Medium (30-80 tasks) | `/workflow` -> `/governance-setup` -> `project-team/install.sh --mode=standard` -> `/orchestrate-standalone --mode=standard` |
-| Large (80+ tasks) | `/workflow` -> `/governance-setup` -> `project-team/install.sh --mode=standard` -> `/orchestrate-standalone --mode=wave` |
-| Failure-path verification | Installed `--mode=wave` run with deterministic task failure -> fail-fast + blocked downstream tasks |
+| 30+ | `/team-orchestrate` | Agent Teams with Plan Approval | Yes |
 
 ---
 
@@ -231,10 +239,10 @@ claude-impl-tools/
 │   ├── agile/                 # Layered sprints
 │   ├── recover/               # Resume after interruption
 │   ├── quality-auditor/       # Pre-deploy audit
-│   ├── multi-ai-review/       # Consensus review
+│   ├── multi-ai-review/       # Universal consensus engine
 │   ├── security-review/       # Security scanning
 │   ├── multi-ai-run/          # Parallel execution
-│   ├── orchestrate-standalone/# Large-scale orchestration
+│   ├── team-orchestrate/      # Agent Teams orchestration
 │   ├── checkpoint/            # Progress management
 │   ├── tasks-init/            # Task generation
 │   ├── tasks-migrate/         # Task migration
@@ -243,19 +251,21 @@ claude-impl-tools/
 │   ├── changelog/             # Change history
 │   ├── coverage/              # Test coverage
 │   ├── architecture/          # Architecture map
-│   ├── whitebox/              # Execution state inspection and summaries
+│   ├── maintenance/           # ITIL production maintenance orchestrator
+│   ├── whitebox/              # Execution state inspection
 │   └── statusline/            # TASKS.md progress in status bar
 │
 ├── project-team/              # Agent team system
 │   ├── install.sh             # Installation script
-│   ├── agents/                # 13 role definitions and aliases
-│   ├── hooks/                 # 18 validation and helper hooks
-│   ├── scripts/               # Collaboration & conflict resolution scripts
-│   ├── references/            # Communication protocols & specs
-│   ├── skills/                # 5 maintenance skills
+│   ├── agents/                # Core worker agents
+│   ├── hooks/                 # 20 validation and governance hooks
+│   ├── scripts/               # Collaboration & conflict resolution
+│   ├── references/            # Communication protocols
 │   ├── templates/             # Protocols, ADR, contracts
 │   ├── examples/              # Sample projects
 │   └── docs/                  # Detailed guides
+│
+├── .claude/agents/            # Agent Teams leads (team-lead, architecture-lead, qa-lead, design-lead)
 │
 ├── scripts/                   # Installers
 │   ├── install-unix.sh
@@ -293,9 +303,22 @@ cd project-team
 Choose a mode:
 ```bash
 ./install.sh --mode=lite      # 3 agents, 2 hooks
-./install.sh --mode=standard  # 7 agents, 4 hooks (default)
+./install.sh --mode=standard  # 4 agents, 7 hooks (default)
 ./install.sh --mode=full      # All agents, all hooks
+./install.sh --mode=team      # Agent Teams + governance hooks + leads to ~/.claude/agents/
 ```
+
+`--mode=team` installs Agent Teams leads globally (`~/.claude/agents/`) since they're templates activated dynamically based on TASKS.md — not bound to a specific project.
+
+### Optional Multi-AI CLI Routing
+
+Subagents can optionally invoke Gemini or Codex CLI for specific subtasks while Claude stays in control. Set the `cli` field per teammate in `skills/team-orchestrate/config/team-topology.json`:
+
+```json
+{ "design-lead": { "cli": "gemini" } }
+```
+
+The subagent (Claude) decides when to call the external CLI, validates the output, and hooks still apply. Default is `null` (Claude only).
 
 ---
 
@@ -306,8 +329,8 @@ Choose a mode:
 | Skill | Requirements |
 |-------|--------------|
 | All skills | Claude Code CLI |
-| `/multi-ai-review` | `gemini` CLI, `codex` CLI (optional) |
-| `/agile`, `/audit` | `playwright` MCP (optional, for browser tests) |
+| `/multi-ai-review` | `gemini` CLI, `codex` CLI (optional) — 5 domain presets (code-review, market-regime, investment, risk-assessment, default) |
+| `/agile`, `/audit` | `agent-browser` CLI, `lighthouse` CLI (optional, for browser verification) |
 
 ### For Project Team Hooks
 
@@ -320,14 +343,13 @@ Choose a mode:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| **v3.8.0** | 2026-03-05 | Task Board skill (`/task-board`), Kanban visualization, task-board-sync hook, board-state.json infrastructure |
-| v3.7.0 | 2026-03-05 | Agile Sprint Mode (`--mode=sprint`), multi-ai-review zombie fix, hierarchical agent collaboration bus (REQ/DEC protocol, domain-boundary-enforcer, Wave Barrier scanner) |
-| v3.6.0 | 2026-03-03 | Hybrid Wave Architecture for 80-200 tasks (`/orchestrate --mode=wave`), Contract-First template |
-| v3.5.0 | 2026-03-03 | Context Optimize skill (`/compress`), install.sh fix, 18 skills, 9 agents, 16 hooks |
-| v3.4.0 | 2026-03-03 | Long Context optimization (H2O, Compressive Context, RAG Hybrid) |
+| **v4.1.0** | 2026-03-16 | Unified install.sh (skills + leads + project in one flow), prerequisite guards on core skills, workflow-guide simplified to pure router, playwright MCP → agent-browser + Lighthouse CLI, task-board removed |
+| v4.0.0 | 2026-03-16 | Agent Teams hierarchy (team-lead + 3 domain leads), native Agent Teams orchestration, TeammateIdle/TaskCompleted hooks, orchestrate-standalone removed |
+| v3.8.0 | 2026-03-05 | Task Board skill (`/task-board`), Kanban visualization, task-board-sync hook |
+| v3.7.0 | 2026-03-05 | Agile Sprint Mode, multi-ai-review zombie fix, REQ/DEC protocol |
+| v3.6.0 | 2026-03-03 | Hybrid Wave Architecture for 80-200 tasks |
+| v3.5.0 | 2026-03-03 | Context Optimize skill (`/compress`) |
 | v3.3.0 | 2026-03-03 | Standalone-first architecture |
-| v3.2.0 | 2026-02-21 | Tmux parallel mode, Progressive Disclosure |
-| v3.1.0 | 2026-02-11 | Governance setup, workflow continuity |
 | v3.0.0 | 2026-02-08 | Project Team system introduced |
 | v2.0.0 | 2026-01-27 | MCP dependency removed |
 
@@ -344,39 +366,6 @@ This project implements advanced techniques to minimize hallucination and inform
 | **H2O (Heavy-Hitter Oracle)** | Preserve critical info at the top | SKILL.md frontmatter, agent prompt headers |
 | **Compressive Context** | Summarize older/less important content | Agent Compressed Context sections |
 | **RAG Hybrid** | Retrieve → Prioritize → Compress → Synthesize | `project-team/services/contextOptimizer.js` |
-
-### Context Optimizer Service
-
-```bash
-# Extract heavy-hitter insights
-node project-team/services/contextOptimizer.js optimize <file>
-
-# Compress long content
-node project-team/services/contextOptimizer.js compress <file>
-
-# Build RAG hybrid query
-node project-team/services/contextOptimizer.js build "<query>" <files>
-```
-
-### MCP Server
-
-```json
-{
-  "mcpServers": {
-    "context-optimizer": {
-      "command": "node",
-      "args": ["project-team/services/mcp-context-server.js", "serve"]
-    }
-  }
-}
-```
-
-Available MCP tools:
-- `compress_context` - Compress using H2O pattern
-- `extract_heavy_hitters` - Extract key insights
-- `build_optimized_prompt` - Build optimized prompt
-
-See `docs/plan/long-context-optimization.md` for details.
 
 ---
 

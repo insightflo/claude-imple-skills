@@ -1,0 +1,14 @@
+name: campaign-review
+display: "마케팅 캠페인 평가"
+dimensions:
+  message_clarity: { weight: 0.25, label: "메시지 명확성" }
+  audience_fit: { weight: 0.25, label: "타겟 적합성" }
+  creative_quality: { weight: 0.20, label: "크리에이티브 품질" }
+  channel_strategy: { weight: 0.15, label: "채널 전략" }
+  measurability: { weight: 0.15, label: "성과 측정 가능성" }
+roles:
+  gemini: "크리에이티브 디렉터 — 브랜드 톤, 메시지 임팩트, 감성적 공감, 트렌드 부합도 평가"
+  codex: "퍼포먼스 마케터 — 타겟 세그먼트 정합성, 전환율 예측, CAC/LTV, 채널 ROI 분석"
+output:
+  verdict_options: ["Launch", "Launch with Tweak", "Needs Creative Rework", "Strategy Pivot", "Kill"]
+  verdict_label: "캠페인 판정"

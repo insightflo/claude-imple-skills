@@ -208,5 +208,4 @@ const optimized = buildContext( [
 
 ## 참고 자료
 
-- [Plan 문서](../../../docs/plan/long-context-optimization.md)
 - NotebookLM: `aa6bc66e-6c4a-4359-981b-f00e578c6710`

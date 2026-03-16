@@ -1,84 +1,84 @@
-# Phase 5: DBA 상세 가이드
+# Phase 5: DBA Detailed Guide
 
-## 역할
-데이터베이스 표준 정의, 명명 규칙
+## Role
+Define database standards, naming conventions
 
-## 산출물
+## Deliverable
 `database/standards.md`
 
-## Task 호출
+## Task Invocation
 
 ```
 Task({
   subagent_type: "database-specialist",
-  description: "DBA: 데이터베이스 표준 정의",
+  description: "DBA: Database standards definition",
   prompt: `
-## 역할: DBA
+## Role: DBA
 
-당신은 이 프로젝트의 DBA입니다. 데이터베이스 표준을 정의하세요.
+You are the DBA for this project. Define the database standards.
 
-## 입력 정보
-- TRD: docs/planning/02-trd.md (DB 기술 스택)
-- DB Design: docs/planning/04-database-design.md (있는 경우)
+## Input
+- TRD: docs/planning/02-trd.md (DB technology stack)
+- DB Design: docs/planning/04-database-design.md (if available)
 
-## 산출물: database/standards.md
+## Deliverable: database/standards.md
 
-다음 섹션을 포함하세요:
+Include the following sections:
 
-### 1. 테이블 명명 규칙
-- snake_case 사용
-- 복수형 사용 (users, orders)
-- 접두어 규칙 (없음 또는 도메인별)
-- 예약어 회피
+### 1. Table Naming Conventions
+- Use snake_case
+- Use plural nouns (users, orders)
+- Prefix rules (none or per domain)
+- Avoid reserved words
 
-### 2. 컬럼 명명 규칙
-- snake_case 사용
-- 외래키: {referenced_table}_id
-- Boolean: is_, has_, can_ 접두어
-- 타임스탬프: created_at, updated_at, deleted_at
+### 2. Column Naming Conventions
+- Use snake_case
+- Foreign keys: {referenced_table}_id
+- Booleans: is_, has_, can_ prefixes
+- Timestamps: created_at, updated_at, deleted_at
 
-### 3. 인덱스 정책
-- Primary Key 명명: pk_{table}
-- Foreign Key 명명: fk_{table}_{column}
-- Unique Index 명명: uq_{table}_{column}
-- 일반 Index 명명: idx_{table}_{column}
+### 3. Index Policy
+- Primary Key naming: pk_{table}
+- Foreign Key naming: fk_{table}_{column}
+- Unique Index naming: uq_{table}_{column}
+- Regular Index naming: idx_{table}_{column}
 
-### 4. 마이그레이션 규칙
-- 파일 명명: {timestamp}_{description}.sql
-- 롤백 스크립트 필수
-- 대용량 테이블 변경 시 주의사항
-- 무중단 마이그레이션 전략
+### 4. Migration Rules
+- File naming: {timestamp}_{description}.sql
+- Rollback scripts required
+- Considerations for large table changes
+- Zero-downtime migration strategy
 
-### 5. 쿼리 표준
-- N+1 쿼리 방지
-- 페이지네이션 필수 (cursor vs offset)
-- 트랜잭션 격리 수준
-- 타임아웃 설정
+### 5. Query Standards
+- Prevent N+1 queries
+- Pagination required (cursor vs offset)
+- Transaction isolation level
+- Timeout configuration
 
-### 6. 백업 및 복구
-- 백업 주기
-- 보존 기간
-- 복구 테스트 주기
+### 6. Backup & Recovery
+- Backup frequency
+- Retention period
+- Recovery test frequency
 
-### (필수) Governance Operationalization (Doc → Execution)
-- 단일 엔트리 검증 커맨드 제안: `scripts/verify_all.sh` 또는 `make verify`
-- DB 표준이 실제로 강제되는 지점 명시(예: migration lint, naming checks, CI jobs)
-- 체크별 실행 커맨드/산출물 경로/Block vs Warn 매핑 표
-- 업데이트 트리거(incident, 성능/락 이슈, 도메인 확장)
+### (Required) Governance Operationalization (Doc → Execution)
+- Propose a single-entry verification command: `scripts/verify_all.sh` or `make verify`
+- Specify where DB standards are actually enforced (e.g., migration lint, naming checks, CI jobs)
+- A mapping table of execution commands/artifact paths/Block vs Warn for each check
+- Update triggers (incidents, performance/lock issues, domain expansion)
 
-## 주의사항
-- 구현 코드 작성 금지 (SQL 예시만 포함)
-- 팀 전체가 따를 수 있는 명확한 규칙
+## Notes
+- Do not write implementation code (SQL examples only)
+- Define clear rules the entire team can follow
 `
 })
 ```
 
-## 완료 조건
-- [ ] `database/standards.md` 생성됨
-- [ ] 명명 규칙 예시 포함
-- [ ] 마이그레이션 절차 정의됨
+## Completion Criteria
+- [ ] `database/standards.md` created
+- [ ] Naming convention examples included
+- [ ] Migration procedure defined
 
-## 산출물 예시
+## Sample Deliverable
 
 ```markdown
 # Database Standards

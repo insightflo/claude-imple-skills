@@ -801,8 +801,8 @@ describe('resolveVerifiedRoleContext', () => {
   });
 
   test('maps legacy alias to canonical reviewer role', () => {
-    expect(resolveVerifiedRoleContext({ role: 'qa-manager' })).toMatchObject({
-      role: 'qa-manager',
+    expect(resolveVerifiedRoleContext({ role: 'maintenance-analyst' })).toMatchObject({
+      role: 'maintenance-analyst',
       canonicalRole: 'reviewer',
       domain: null
     });

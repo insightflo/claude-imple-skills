@@ -1,0 +1,14 @@
+name: product-review
+display: "기능 기획 평가"
+dimensions:
+  user_value: { weight: 0.25, label: "사용자 가치" }
+  feasibility: { weight: 0.25, label: "기술 실현성" }
+  completeness: { weight: 0.20, label: "명세 완성도" }
+  priority: { weight: 0.15, label: "우선순위 적절성" }
+  edge_cases: { weight: 0.15, label: "엣지케이스 대비" }
+roles:
+  gemini: "제품/UX 전략가 — 사용자 니즈, 시장 트렌드, 경쟁 제품 대비 차별점, UX 흐름 평가"
+  codex: "기술 실현 분석가 — 구현 복잡도, 기술 부채, 의존성, 테스트 가능성, 일정 리스크 분석"
+output:
+  verdict_options: ["Ship Now", "Ship with Minor Fix", "Needs Revision", "Major Rework", "Reject"]
+  verdict_label: "기획 판정"

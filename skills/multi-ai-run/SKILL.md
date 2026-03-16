@@ -1,6 +1,6 @@
 ---
 name: multi-ai-run
-description: 에이전트 역할별로 최적의 AI 모델(Claude/Gemini/Codex)을 라우팅하여 실행합니다. 코드 작성에 Codex, 디자인에 Gemini, 기획/조율에 Claude를 자동 배정합니다. "Codex로 코드 작성", "Gemini로 디자인", "다른 AI 사용", "모델 라우팅" 요청 시 반드시 사용하세요. /multi-ai-run 트리거.
+description: Routes each agent role to the optimal AI model (Claude/Gemini/Codex) and executes it. Automatically assigns Codex for code writing, Gemini for design, and Claude for planning and orchestration. Use this skill whenever you see "use Codex for code", "use Gemini for design", "use a different AI", or "model routing" requests. Triggers on /multi-ai-run.
 triggers:
   - /multi-ai-run
   - 멀티 AI 실행
@@ -13,95 +13,95 @@ version: 1.2.0
 
 # Multi-AI Run
 
-> **핵심 개념**: 에이전트는 **역할**, 모델은 **실행자**
+> **Core concept**: Agents are **roles**, models are **executors**.
 >
-> 각 에이전트 역할에 최적화된 AI 모델을 자동 라우팅하여 실행합니다.
+> Automatically routes and executes the AI model best suited for each agent role.
 
-## 아키텍처
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Claude (Orchestrator)                                      │
-│    ↓ 태스크 분석 + 에이전트 역할 결정                        │
-│    ↓ model_routing 조회                                     │
-│    ├── 코드 작성/리뷰 → Codex CLI                           │
-│    ├── 디자인/UI 작업 → Gemini CLI                          │
-│    └── 기획/조율/복잡한 추론 → Claude 직접                   │
+│    ↓ Task analysis + agent role decision                    │
+│    ↓ model_routing lookup                                   │
+│    ├── Code writing/review → Codex CLI                      │
+│    ├── Design/UI work      → Gemini CLI                     │
+│    └── Planning/orchestration/complex reasoning → Claude    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 모델별 강점
+## Model Strengths
 
-| 모델 | CLI | 강점 | 권장 역할 |
-|------|-----|------|-----------|
-| **Claude** | `claude` | 복잡한 추론, 장문 컨텍스트, 조율 | orchestrator, architect, pm |
-| **Codex** | `codex` | 코드 생성, 리팩토링, 테스트 | backend, test, api |
-| **Gemini** | `gemini` | 창의성, 디자인 감각, 멀티모달 | frontend, designer, ui |
+| Model | CLI | Strengths | Recommended Roles |
+|-------|-----|-----------|-------------------|
+| **Claude** | `claude` | Complex reasoning, long context, orchestration | orchestrator, architect, pm |
+| **Codex** | `codex` | Code generation, refactoring, tests | backend, test, api |
+| **Gemini** | `gemini` | Creativity, design sensibility, multimodal | frontend, designer, ui |
 
 ---
 
-## 설정 파일
+## Configuration Files
 
-### 🔧 CLI 모델 설정: `routing.config.yaml`
+### CLI Model Settings: `routing.config.yaml`
 
-각 CLI에서 사용할 모델을 직접 지정할 수 있습니다:
+You can directly specify which model each CLI uses:
 
 ```yaml
-# skills/multi-ai-run/routing.config.yaml (또는 .claude/routing.config.yaml)
+# skills/multi-ai-run/routing.config.yaml (or .claude/routing.config.yaml)
 cli_models:
   gemini:
     command: "gemini"
-    model: "gemini-3.1-pro-preview"  # ← 모델 변경
-    # model: "gemini-2.0-flash"      # 빠른 응답용
-    # model: "gemini-3-flash-preview" # 경량 작업용
+    model: "gemini-3.1-pro-preview"  # ← change model here
+    # model: "gemini-2.0-flash"      # for faster responses
+    # model: "gemini-3-flash-preview" # for lightweight tasks
     args: "--output-format text"
 
   codex:
     command: "codex exec"
-    model: "gpt-5.3-codex"           # ← 모델 변경
-    # model: "o3"                    # 추론 강화
-    # model: "gpt-4.1"               # 범용
+    model: "gpt-5.3-codex"           # ← change model here
+    # model: "o3"                    # for stronger reasoning
+    # model: "gpt-4.1"               # general purpose
 
   claude:
     command: "claude"
-    model: "opus"                    # ← 모델 변경
-    # model: "sonnet"                # 빠른 응답용
+    model: "opus"                    # ← change model here
+    # model: "sonnet"                # for faster responses
 ```
 
-**설정 파일 우선순위:**
-1. 프로젝트: `.claude/routing.config.yaml`
-2. 글로벌: `~/.claude/routing.config.yaml`
-3. 스킬 기본값: `skills/multi-ai-run/routing.config.yaml`
+**Configuration file precedence:**
+1. Project: `.claude/routing.config.yaml`
+2. Global: `~/.claude/routing.config.yaml`
+3. Skill default: `skills/multi-ai-run/routing.config.yaml`
 
 ---
 
-### 프로젝트별 설정: `.claude/model-routing.yaml`
+### Per-project Settings: `.claude/model-routing.yaml`
 
 ```yaml
 # .claude/model-routing.yaml
 version: 1.0
 
-# 기본 모델 (설정 없는 에이전트에 적용)
+# Default model (applied to agents without a specific routing entry)
 default: claude
 
-# 역할별 모델 오버라이드
+# Per-role model overrides
 routing:
-  # 정확한 역할명 매칭
+  # Exact role name matching
   backend-specialist: codex
   frontend-specialist: gemini
   test-specialist: codex
   api-designer: codex
 
-  # 와일드카드 패턴
-  design-*: gemini      # design-system, design-review 등
-  *-developer: codex    # auth-developer, payment-developer 등
+  # Wildcard patterns
+  design-*: gemini      # design-system, design-review, etc.
+  *-developer: codex    # auth-developer, payment-developer, etc.
 
-  # 도메인별 오버라이드
+  # Per-domain overrides
   domains:
-    auth: codex         # auth 도메인 모든 작업
-    ui: gemini          # ui 도메인 모든 작업
+    auth: codex         # all tasks in the auth domain
+    ui: gemini          # all tasks in the ui domain
 
-# 태스크 유형별 오버라이드 (역할보다 우선)
+# Per-task-type overrides (take priority over role routing)
 task_types:
   code_generation: codex
   code_review: codex
@@ -111,93 +111,93 @@ task_types:
   planning: claude
 ```
 
-### 글로벌 기본 설정: `~/.claude/model-routing.yaml`
+### Global Default Settings: `~/.claude/model-routing.yaml`
 
-프로젝트 설정이 없으면 글로벌 설정을 사용합니다.
+Used when no project-level configuration exists.
 
 ---
 
-## 실행 흐름
+## Execution Flow
 
-### Phase 1: 라우팅 결정
+### Phase 1: Routing Decision
 
 ```
-1. 태스크 분석 → 에이전트 역할 결정
-2. model-routing.yaml 조회 (프로젝트 > 글로벌 > 기본값)
-3. 매칭 우선순위:
-   a. task_types (태스크 유형)
-   b. routing (정확한 역할명)
-   c. routing 와일드카드
-   d. domains (도메인)
+1. Analyze task → determine agent role
+2. Look up model-routing.yaml (project > global > default)
+3. Matching precedence:
+   a. task_types (task type)
+   b. routing (exact role name)
+   c. routing wildcard
+   d. domains (domain)
    e. default
 ```
 
-### Phase 2: CLI 실행
+### Phase 2: CLI Execution
 
 ```bash
-# Codex로 코드 생성
+# Code generation with Codex
 codex -q "Implement the auth service based on: $(cat specs/auth-service.md)"
 
-# Gemini로 UI 구현
+# UI implementation with Gemini
 gemini -p "Create React component following design: $(cat design/button.md)"
 
-# Claude로 복잡한 조율 (직접 처리)
-# (orchestrator가 직접 수행)
+# Complex orchestration with Claude (handled directly)
+# (the orchestrator handles this itself)
 ```
 
-### Phase 3: 결과 통합
+### Phase 3: Result Integration
 
 ```
-1. 각 CLI 출력 수집
-2. 파일 생성/수정 적용
-3. 충돌 감지 시 Claude가 조율
-4. 품질 검증 (lint, type-check, test)
+1. Collect each CLI output
+2. Apply file creation/modification
+3. Claude mediates on conflict detection
+4. Quality validation (lint, type-check, test)
 ```
 
 ---
 
-## 사용법
+## Usage
 
-### 기본 실행
+### Basic Execution
 
 ```bash
 /multi-ai-run
-# → model-routing.yaml 기반으로 자동 라우팅
+# → auto-routes based on model-routing.yaml
 ```
 
-### 특정 태스크 실행
+### Run a Specific Task
 
 ```bash
 /multi-ai-run T1.2
-# → T1.2 태스크를 적절한 모델로 실행
+# → executes task T1.2 with the appropriate model
 ```
 
-### 모델 강제 지정
+### Force a Specific Model
 
 ```bash
 /multi-ai-run --model=gemini T1.2
-# → T1.2를 Gemini로 강제 실행
+# → forces task T1.2 to run with Gemini
 ```
 
-### 드라이런 (실행 계획만 확인)
+### Dry Run (preview execution plan only)
 
 ```bash
 /multi-ai-run --dry-run
-# → 어떤 태스크가 어떤 모델로 실행될지 미리 확인
+# → preview which tasks will run on which models
 ```
 
 ---
 
-## CLI 요구사항
+## CLI Requirements
 
 ```bash
-# 필수 CLI 설치 확인
-command -v claude  # Claude Code (호스트, 필수)
+# Verify required CLI installations
+command -v claude  # Claude Code (host, required)
 command -v codex   # OpenAI Codex CLI
 command -v gemini  # Google Gemini CLI
 ```
 
-### 설치 가이드
+### Installation Guide
 
 **Codex CLI:**
 ```bash
@@ -207,39 +207,39 @@ codex auth
 
 **Gemini CLI:**
 ```bash
-npm install -g @anthropic-ai/gemini-cli  # 또는 공식 설치 방법
+npm install -g @anthropic-ai/gemini-cli  # or official installation method
 gemini auth
 ```
 
-> 설치 상세: `references/cli-setup.md` 참조
+> For detailed installation instructions, see `references/cli-setup.md`
 
 ---
 
-## 예시 시나리오
+## Example Scenarios
 
-### 시나리오 1: 풀스택 기능 구현
+### Scenario 1: Full-stack Feature Implementation
 
 ```
 TASKS.md:
-- [ ] T1.1: 백엔드 API 구현 (auth)
-- [ ] T1.2: 프론트엔드 UI 구현 (login form)
-- [ ] T1.3: 통합 테스트 작성
+- [ ] T1.1: Implement backend API (auth)
+- [ ] T1.2: Implement frontend UI (login form)
+- [ ] T1.3: Write integration tests
 
-실행 결과:
-T1.1 → Codex (backend-specialist, auth 도메인)
+Execution result:
+T1.1 → Codex (backend-specialist, auth domain)
 T1.2 → Gemini (frontend-specialist)
 T1.3 → Codex (test-specialist)
 ```
 
-### 시나리오 2: 디자인 시스템 작업
+### Scenario 2: Design System Work
 
 ```
 TASKS.md:
-- [ ] T2.1: 디자인 토큰 정의
-- [ ] T2.2: 버튼 컴포넌트 구현
-- [ ] T2.3: 스토리북 작성
+- [ ] T2.1: Define design tokens
+- [ ] T2.2: Implement button component
+- [ ] T2.3: Write Storybook stories
 
-실행 결과:
+Execution result:
 T2.1 → Gemini (design-system)
 T2.2 → Gemini (frontend-specialist)
 T2.3 → Codex (code_generation)
@@ -247,66 +247,66 @@ T2.3 → Codex (code_generation)
 
 ---
 
-## 오케스트레이터 통합
+## Orchestrator Integration
 
-`/orchestrate` 또는 `/agile auto`와 함께 사용:
+Use with `/orchestrate` or `/agile auto`:
 
 ```bash
-# 기존: Claude만 사용
+# Existing: Claude only
 /orchestrate
 
-# 신규: 모델 라우팅 활성화
+# New: model routing enabled
 /orchestrate --multi-ai
 
-# 또는 설정 파일로 기본 활성화
+# Or enable by default via config file
 # .claude/model-routing.yaml
-enabled: true  # 모든 오케스트레이션에 자동 적용
+enabled: true  # auto-applies to all orchestration
 ```
 
 ---
 
-## 안전장치
+## Safeguards
 
-1. **CLI 미설치 시**: 해당 모델 fallback → Claude 직접 처리
-2. **CLI 실패 시**: 자동 재시도 (최대 2회) → 실패 시 Claude fallback
-3. **충돌 감지**: 여러 모델 출력이 같은 파일 수정 시 Claude가 병합
-4. **비용 경고**: 예상 토큰 사용량 표시 (dry-run 시)
+1. **CLI not installed**: fallback for that model → Claude handles it directly
+2. **CLI failure**: auto-retry (up to 2 times) → Claude fallback on persistent failure
+3. **Conflict detection**: Claude mediates when multiple model outputs target the same file
+4. **Cost warning**: estimated token usage displayed (in dry-run mode)
 
 ---
 
-## 관련 스킬
+## Related Skills
 
-| 스킬 | 관계 |
-|------|------|
-| `/multi-ai-review` | 리뷰 단계에서 멀티 AI 사용 |
-| `/orchestrate` | `--multi-ai` 플래그로 연동 |
-| `/cost-router` | 비용 기반 모델 선택과 조합 가능 |
+| Skill | Relationship |
+|-------|-------------|
+| `/multi-ai-review` | Uses multiple AIs during the review phase |
+| `/orchestrate` | Integrates via `--multi-ai` flag |
+| `/cost-router` | Can be combined with cost-based model selection |
 
 ---
 
 ## FAQ
 
-**Q: Claude 외 모델이 Claude Code 내에서 파일을 수정할 수 있나요?**
-A: Codex는 `--sandbox workspace-write` 옵션으로 프로젝트 폴더를 직접 읽고 쓸 수 있습니다. Gemini는 CLI 출력을 Claude가 받아 Edit/Write 도구로 적용합니다.
+**Q: Can models other than Claude modify files inside Claude Code?**
+A: Codex can read and write directly to the project folder with the `--sandbox workspace-write` option. For Gemini, Claude receives the CLI output and applies it using the Edit/Write tools.
 
-**Q: 특정 태스크만 다른 모델로 실행하고 싶어요**
-A: `--model=gemini T1.2` 또는 TASKS.md에 태그 추가: `- [ ] T1.2: UI 구현 [model:gemini]`
+**Q: I want only a specific task to run on a different model.**
+A: Use `--model=gemini T1.2`, or add a tag in TASKS.md: `- [ ] T1.2: UI implementation [model:gemini]`
 
-**Q: API 비용은 어떻게 되나요?**
-A: 각 CLI의 구독 플랜 또는 API 크레딧을 사용합니다. Claude Code 비용과 별도입니다.
+**Q: How does API cost work?**
+A: Each CLI uses its own subscription plan or API credits. This is separate from Claude Code costs.
 
 ---
 
-## 파일 구조
+## File Structure
 
 ```
 skills/multi-ai-run/
-├── SKILL.md                    # 이 파일
-├── routing.config.yaml         # CLI 모델 + 라우팅 설정
+├── SKILL.md                    # this file
+├── routing.config.yaml         # CLI model + routing configuration
 └── references/
-    └── cli-setup.md            # CLI 설치 가이드
+    └── cli-setup.md            # CLI installation guide
 ```
 
 ---
 
-**Last Updated**: 2026-03-04 (v1.1.0 - routing.config.yaml 추가)
+**Last Updated**: 2026-03-04 (v1.1.0 - routing.config.yaml added)

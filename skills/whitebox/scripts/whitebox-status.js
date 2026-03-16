@@ -53,14 +53,6 @@ function main() {
     if ((dashboardResult.status || 0) === 0) {
       process.exit(0);
     }
-
-    const boardShow = path.resolve(__dirname, '../../task-board/scripts/board-show.sh');
-    const args = [`--project-dir=${options.projectDir}`];
-    if (rebuild.rebuilt.length > 0) args.push('--rebuild');
-    const result = spawnSync(boardShow, args, {
-      stdio: 'inherit',
-    });
-    process.exit(result.status || 0);
   }
 
   if (!rebuild.ok) {

@@ -83,7 +83,7 @@ Install only specific components:
 ./install.sh --hooks-only --global
 ```
 
-Installs 10 JavaScript hooks that enforce standards:
+Installs 20 JavaScript hooks that enforce standards:
 - `permission-checker.js` - Role-based access control
 - `pre-edit-impact-check.js` - Change impact analysis
 - `risk-area-warning.js` - Security risk detection
@@ -93,7 +93,16 @@ Installs 10 JavaScript hooks that enforce standards:
 - `cross-domain-notifier.js` - Cross-domain change notifications
 - `architecture-updater.js` - Auto-update architecture docs
 - `changelog-recorder.js` - Auto-record change log
-- `quality-gate.js` - Quality gates (2 levels)
+- `quality-gate.js` - Quality gates
+- `contract-gate.js` - API contract enforcement
+- `docs-gate.js` - Documentation completeness gate
+- `domain-boundary-enforcer.js` - Domain boundary violations
+- `policy-gate.js` - Policy rule enforcement
+- `risk-gate.js` - Risk-level gating
+- `security-scan.js` - Security vulnerability scanning
+- `task-completed-gate.js` - Task completion verification
+- `task-sync.js` - Task state synchronization
+- `teammate-idle-gate.js` - Idle agent detection
 
 #### Skills Only
 
@@ -153,14 +162,19 @@ export CLAUDE_AGENT_ROLE="project-manager"
 export CLAUDE_PROJECT_DIR="$(pwd)"
 ```
 
-**Available Roles:**
-- `project-manager` - Full permissions
-- `chief-architect` - Architecture decisions
-- `chief-designer` - Design decisions
-- `dba` - Database changes
-- `qa-manager` - Test and quality
-- `maintenance-analyst` - Maintenance tasks
-- Domain-specific roles: `{domain}-developer`, `{domain}-designer`
+**Available Roles (project-team/agents/):**
+- `builder` - Implementation tasks
+- `reviewer` - Quality review and approval
+- `designer` - Design system and UX
+- `maintenance-analyst` - Maintenance and analysis tasks
+
+**Agent Teams Leads (.claude/agents/):**
+- `team-lead` - Overall team coordination
+- `architecture-lead` - Architecture decisions
+- `qa-lead` - Test and quality
+- `design-lead` - Design decisions
+
+Domain-specific roles: `{domain}-lead`, `{domain}-designer`, `{domain}-builder`
 
 ### Step 4: Initialize Project
 
@@ -452,8 +466,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Uninstal
 
 ### What Gets Removed
 
-- All hook files (10 JavaScript files)
-- All agent definitions (6 main + 3 templates)
+- All hook files (20 JavaScript files)
+- All agent definitions (4 project-team agents + templates + 4 Agent Teams leads)
 - All skills (4 skills)
 - All templates (ADR, protocols, interface contracts)
 

@@ -3,11 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-EVIDENCE_DIR="$ROOT_DIR/.sisyphus/evidence"
+EVIDENCE_DIR="$ROOT_DIR/.tmp/whitebox-evidence"
 
 mkdir -p "$EVIDENCE_DIR"
 
-FIXTURE_DIR="$(mktemp -d "$ROOT_DIR/.sisyphus/pass2-fixture.XXXXXX")"
+FIXTURE_DIR="$(mktemp -d "$ROOT_DIR/.tmp/pass2-fixture.XXXXXX")"
 mkdir -p "$FIXTURE_DIR/bin" "$FIXTURE_DIR/.claude/collab/requests"
 mkdir -p "$FIXTURE_DIR/.claude/collab/contracts" "$FIXTURE_DIR/.claude/collab/decisions" "$FIXTURE_DIR/.claude/collab/locks" "$FIXTURE_DIR/.claude/collab/archive"
 
@@ -29,7 +29,6 @@ exit 0
 EOF
 chmod +x "$FIXTURE_DIR/bin/claude" "$FIXTURE_DIR/bin/codex" "$FIXTURE_DIR/bin/gemini"
 
-node "$ROOT_DIR/skills/task-board/scripts/board-builder.js" --project-dir="$FIXTURE_DIR" > /dev/null
 node "$ROOT_DIR/project-team/scripts/collab-init.js" --project-dir="$FIXTURE_DIR" 2>&1 | tee "$EVIDENCE_DIR/pass-2-collab.txt"
 node "$ROOT_DIR/project-team/scripts/collab-init.js" --check --project-dir="$FIXTURE_DIR" 2>&1 | tee -a "$EVIDENCE_DIR/pass-2-collab.txt"
 node "$ROOT_DIR/skills/whitebox/scripts/whitebox-control-state.js" --project-dir="$FIXTURE_DIR" > /dev/null

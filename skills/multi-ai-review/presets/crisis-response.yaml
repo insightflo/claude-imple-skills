@@ -1,0 +1,14 @@
+name: crisis-response
+display: "위기 대응 계획 평가"
+dimensions:
+  threat_coverage: { weight: 0.25, label: "위협 커버리지" }
+  response_speed: { weight: 0.25, label: "대응 속도" }
+  communication: { weight: 0.20, label: "커뮤니케이션 계획" }
+  recovery: { weight: 0.15, label: "복구 계획" }
+  drill_readiness: { weight: 0.15, label: "훈련/준비 상태" }
+roles:
+  gemini: "위기 커뮤니케이션 전략가 — 이해관계자 소통, 미디어 대응, 평판 리스크, 시나리오 플래닝"
+  codex: "비즈니스 연속성 분석가 — RTO/RPO 충족, 프로세스 의존성, 자원 가용성, 훈련 이력 분석"
+output:
+  verdict_options: ["Battle Ready", "Adequate", "Gaps Identified", "Major Gaps", "Unprepared"]
+  verdict_label: "대응 준비도"

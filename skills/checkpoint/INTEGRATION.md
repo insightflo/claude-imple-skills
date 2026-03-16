@@ -75,11 +75,11 @@ Skin 레이어 진행
 
 ---
 
-## 3. `/orchestrate-standalone` 연동
+## 3. `/team-orchestrate` 연동
 
 ### Post-Task 게이트 추가
 
-**orchestrate-standalone/SKILL.md 게이트 체인 섹션 수정:**
+**team-orchestrate/SKILL.md 게이트 체인 섹션 수정:**
 
 ```javascript
 ### Post-Task Gate (v1.1.0 Updated)
@@ -216,7 +216,7 @@ fi
 │     ↓                                                        │
 │  2. 구현:                                                    │
 │     • ≤30개: /agile auto                                     │
-│     • 30~80개: /orchestrate-standalone                       │
+│     • 30~80개: /team-orchestrate                       │
 │     ↓                                                        │
 │  3. 태스크 완료 시: /checkpoint (자동)                       │
 │     ↓                                                        │
@@ -248,7 +248,7 @@ fi
 |--------|------|------|
 | 2.1 | checkpoint-review Hook | project-team/hooks/checkpoint-review.js |
 | 2.2 | agile SKILL.md 업데이트 | skills/agile/SKILL.md |
-| 2.3 | orchestrate-standalone SKILL.md 업데이트 | skills/orchestrate-standalone/SKILL.md |
+| 2.3 | team-orchestrate SKILL.md 업데이트 | skills/team-orchestrate/SKILL.md |
 | 2.4 | workflow-guide SKILL.md 업데이트 | skills/workflow-guide/SKILL.md |
 
 ### Phase 3: 템플릿 및 문서
@@ -269,7 +269,7 @@ fi
 |------|-----------|---------|-----------|
 | `/checkpoint` | 1.0.0 | 1.1.0 | 연동 기능 추가 |
 | `/agile` | 2.3.0 | 2.4.0 | checkpoint 연동 |
-| `/orchestrate-standalone` | 1.0.0 | 1.1.0 | post-task 게이트 |
+| `/team-orchestrate` | 1.0.0 | 1.1.0 | post-task 게이트 |
 | `/workflow-guide` | 4.0.0 | 4.1.0 | checkpoint 카탈로그 추가 |
 
 ---

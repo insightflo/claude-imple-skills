@@ -11,22 +11,22 @@ council:
       command: "claude -p"
       emoji: "🧠"
       color: "CYAN"
-      role: "spec-compliance"  # 명세 준수 중심
-      focus: ["Solid 원칙", "패턴 분석", "정확성", "최적화 가능성"]
+      role: "spec-compliance"  # Spec adherence focus
+      focus: ["SOLID principles", "Pattern analysis", "Correctness", "Optimization potential"]
 
     - name: codex
       command: "codex exec"
       emoji: "🤖"
       color: "BLUE"
-      role: "technical-depth"  # 기술적 깊이 검토
-      focus: ["아키텍처", "설계", "타당성", "기술적 부채"]
+      role: "technical-depth"  # Technical depth review
+      focus: ["Architecture", "Design", "Feasibility", "Technical debt"]
 
     - name: gemini
       command: "gemini"
       emoji: "💎"
       color: "GREEN"
-      role: "creative"  # 창의적 대안 제안
-      focus: ["사용자 경험", "UX", "접근성", "대안 아이디어"]
+      role: "creative"  # Creative alternative suggestions
+      focus: ["User experience", "UX", "Accessibility", "Alternative ideas"]
 
   # Chairman configuration
   chairman:
@@ -56,30 +56,30 @@ council:
     exclude_chairman_from_members: true  # host agent is excluded from members list by default
 ```
 
-## CLI 설치 참고
+## CLI Installation Reference
 
 - Google Gemini CLI: https://github.com/google-gemini/gemini-cli
 - OpenAI Codex CLI: https://github.com/openai/codex
-- GLM (Z.AI): 미지원
-- 기본 chairman: `claude` (기술적 깊이 담당)
+- GLM (Z.AI): Not supported
+- Default chairman: `claude` (handles technical depth)
 
-- 병렬로 멤버들의 의견을 수집합니다.
-- 결과는 `council` 폴더에 `.opinion.md` 파일에 저장합니다
-- `job.json`에 진행률 추적용
-- 호스트 CLI가 멤버들에게 완료 신호를 보냄 (예: "council 소집해줘", "council 소집 요청" 등)
+- Collects member opinions in parallel.
+- Results are saved as `.opinion.md` files in the `council` folder
+- `job.json` is used for progress tracking
+- The host CLI sends a completion signal to members (e.g., "convene the council", "council assembly request", etc.)
 
-- 멤버 중 name이 `done`인 항목이 있으면 종료 신호로 처리하며, 설정 오류 시 기본값 사용
-- **council.config.yaml**의 `role: auto` 사용 시 다양한 역할을 혼용할 수 있습니다
-    - `spec_compliance`: 명세 준수 중심 검토
-    - `architecture`: 구조 분석
-    - `planning`: 계획 검토
-    - `UX`: 사용자 경험 중심 평가
-    - `security`: 보안 취약점, 공격 벡터 방지
-    - `accessibility`: 접근성, i18n 지원
-    - `i18n`: 국제화 지원
-    - `creative`: 창의적 대안 제안
-    - `integration`: Claude 최종 통합
-- 출력 필드: `consensus_rate` (합의율 %), `consensus_reached` (합의 여부)
+- If a member entry with `name: done` exists, it is treated as a termination signal; defaults are used on configuration errors
+- When using `role: auto` in **council.config.yaml**, various roles can be mixed:
+    - `spec_compliance`: Spec adherence-focused review
+    - `architecture`: Structural analysis
+    - `planning`: Plan review
+    - `UX`: User experience-centered evaluation
+    - `security`: Security vulnerabilities and attack vector prevention
+    - `accessibility`: Accessibility and i18n support
+    - `i18n`: Internationalization support
+    - `creative`: Creative alternative suggestions
+    - `integration`: Claude final integration
+- Output fields: `consensus_rate` (consensus percentage %), `consensus_reached` (whether consensus was reached)
 
 ```
 

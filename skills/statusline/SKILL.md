@@ -1,51 +1,51 @@
 ---
 name: statusline
-description: TASKS.md 진행 상황을 Claude Code 상태바 Line 3에 실시간 표시합니다. 프로젝트 진행 현황을 한눈에 확인하고 싶을 때, 태스크 추적이 필요할 때 사용하세요. "진행률 보여줘", "상태바 설정", "태스크 현황" 요청 시 안내. /statusline 트리거.
+description: Displays TASKS.md progress in real time on Line 3 of the Claude Code status bar. Use this whenever you want a live view of project progress or need task tracking at a glance. Guides "show progress", "set up statusline", or "task status" requests. Triggered by /statusline.
 version: 1.1.0
 ---
 
 # Statusline — TASKS.md Progress
 
-Claude Code 상태바에 프로젝트 태스크 진행 상황을 실시간으로 표시합니다.
+Displays project task progress in real time on the Claude Code status bar.
 
 ```
 📋 12/34 ▓▓▓░░░░░░░  Phase 2  → T2.1: Build API
 ```
 
-## 설치
+## Installation
 
 ```bash
 ./skills/statusline/install.sh
 ```
 
-또는 root `install.sh`의 Step 5에서 자동 설치.
+Or installed automatically at Step 5 of the root `install.sh`.
 
-## 표시 정보
+## Displayed Information
 
-| 항목 | 설명 |
-|------|------|
-| `📋 12/34` | 완료/전체 태스크 수 |
-| `▓▓▓░░░░░░░` | 진행률 바 (10칸) |
-| `Phase 2` | 현재 진행 중인 Phase |
-| `→ T2.1: ...` | 다음 미완료 태스크 |
+| Field | Description |
+|-------|-------------|
+| `📋 12/34` | Completed / total task count |
+| `▓▓▓░░░░░░░` | Progress bar (10 segments) |
+| `Phase 2` | Currently active phase |
+| `→ T2.1: ...` | Next incomplete task |
 
-## 동작 방식
+## How It Works
 
-1. `statusline-segment.sh` — 상태바 호출 시 TASKS.md 파싱 (30초 캐시)
-2. `hooks/tasks-status-writer.js` — TASKS.md 편집 시 즉시 캐시 갱신
+1. `statusline-segment.sh` — Parses TASKS.md on each status bar refresh (30-second cache)
+2. `hooks/tasks-status-writer.js` — Immediately invalidates the cache whenever TASKS.md is edited
 
-## 파일 구조
+## File Structure
 
 ```
 skills/statusline/
 ├── SKILL.md
-├── install.sh              # 설치 스크립트
-├── statusline-segment.sh   # 상태바 Line 3 출력
+├── install.sh              # Installation script
+├── statusline-segment.sh   # Status bar Line 3 output
 └── hooks/
-    └── tasks-status-writer.js  # PostToolUse 훅
+    └── tasks-status-writer.js  # PostToolUse hook
 ```
 
-## 관련
+## Related
 
-- [simple-claude-board](https://github.com/insightflo/simple-claude-board) — 풀 TUI 대시보드
-- [awesome-claude-plugins](https://github.com/AwesomeJun/awesome-claude-plugins) — 상태바 플러그인
+- [simple-claude-board](https://github.com/insightflo/simple-claude-board) — Full TUI dashboard
+- [awesome-claude-plugins](https://github.com/AwesomeJun/awesome-claude-plugins) — Status bar plugins

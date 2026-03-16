@@ -27,13 +27,7 @@ const LEGACY_ALIAS_PATTERN = [
 ].join('|');
 const APPROVED_LEGACY_FILES = new Set([
   'README.md',
-  'agents/BackendSpecialist.md',
-  'agents/ChiefArchitect.md',
-  'agents/ChiefDesigner.md',
-  'agents/FrontendSpecialist.md',
   'agents/MaintenanceAnalyst.md',
-  'agents/ProjectManager.md',
-  'agents/QAManager.md',
   'agents/templates/DomainDesigner.md',
   'agents/templates/DomainDeveloper.md',
   'agents/templates/PartLeader.md',

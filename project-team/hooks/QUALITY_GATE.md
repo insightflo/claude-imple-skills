@@ -293,5 +293,5 @@ const QUALITY_THRESHOLDS = {
 
 ## See Also
 
-- **QA Manager Role**: `project-team/agents/QAManager.md`
+- **QA Lead Role**: `.claude/agents/qa-lead.md` (Agent Teams)
 - **Quality Standards**: `contracts/standards/quality-standards.md`

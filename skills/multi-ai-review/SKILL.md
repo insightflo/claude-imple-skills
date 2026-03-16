@@ -1,253 +1,316 @@
 ---
 name: multi-ai-review
-description: Claude + Gemini CLI + Codex CLI 멀티-AI 리뷰. 3단계 파이프라인으로 Initial Opinions → Cross-Review → Chairman Synthesis 수행. CLI 방식으로 추가 API 비용 없이 실행.
-trigger: "council 소집", "여러 AI 의견 물어봐", "심층 리뷰", "컨센서스 리뷰"
-version: 3.3.0
-updated: 2026-03-07
+description: |
+  Claude + Gemini CLI + Codex CLI multi-AI consensus engine.
+  3-Stage Pipeline (opinions → rebuttal → synthesis) automatically drives consensus
+  across any domain requiring an expert panel: code review, market assessment,
+  investment due diligence, risk analysis, and more.
+
+  Automatically detects the domain from the user's natural-language request
+  and applies the appropriate preset.
+
+  Triggers:
+  - "review this", "convene a council", "get multiple AI opinions", "deep review", "consensus"
+  - "evaluate the market", "determine the regime", "market analysis", "macro analysis"
+  - "review this investment", "deal due diligence", "valuation review"
+  - "risk assessment", "strategy review", "decision support"
+  - Any situation where the user needs consensus from multiple perspectives — trigger proactively
+version: 4.0.0
+updated: 2026-03-16
 ---
 
-# Multi-AI Review 스킬 (CLI 기반)
+# Multi-AI Review — Universal Consensus Engine
 
-> **🔥 Heavy-Hitter (즉시 실행)**
+> **Heavy-Hitter (execute immediately)**
 >
-> ```
-> "리뷰해줘" | "council 소집해줘" | "여러 AI 의견 들어보자"
-> ```
->
-> **3-Stage Pipeline**: Initial Opinions (병렬) → Cross-Review (반박) → Chairman Synthesis (종합)
-> **비용**: CLI 구독 플랜만으로 실행 (추가 API 비용 없음)
+> State the domain in natural language and the right panel is assembled automatically.
+> **Cost**: Runs on CLI subscription plans only — no additional API charges.
 
-> **v3.3.0**: Chairman Protocol - 미해결 쟁점 시 추가 Cross-Review 라운드 자동 판단
-> **v3.2.0**: Cross-Review 자동화 - Stage 2에서 멤버 간 상호 비평 자동 실행
-> **v3.1.0**: Long Context 최적화 - H2O 패턴으로 핵심 정보 상단 배치
-> **v3.0.0**: MCP 의존성 제거, agent-council 패턴 적용, CLI 직접 호출
+> **v4.0.0**: Expanded to a universal consensus engine — domain auto-routing, Score Card, presets system
+> **v3.3.0**: Chairman Protocol — automatically decides whether to run additional Cross-Review rounds when unresolved issues remain
 
 ---
 
-## ⚡ Quick Start (최우선)
+## Quick Start
 
-### 사용법
+No need to specify the domain. State it in natural language and it is detected automatically.
 
-```bash
-# 스킬 호출 (호스트 에이전트)
-"리뷰해줘" | "council 소집해줘" | "Gemini랑 Codex 의견 들어보자"
+```
+# Code review
+"Review this PR"
+"Please check this code"
 
-# 스크립트 직접 실행
-./skills/multi-ai-review/scripts/council.sh "리뷰 요청 내용"
+# Market analysis
+"How does the market look today?"
+"Determine the current regime"
+"Run a macro analysis"
+
+# Investment due diligence
+"Evaluate this investment opportunity"
+"Do a deal review"
+"Valuation check"
+
+# Risk assessment
+"Assess the risk in this strategy"
+"Analyze security vulnerabilities"
+
+# General consensus (auto-applied when domain is unclear)
+"Is this direction okay?"
+"Convene a council"
+"Let's hear from multiple AIs"
 ```
 
-### 전제 조건
+### Prerequisites
 
 ```bash
-command -v claude  # Claude Code (호스트) ✅
-command -v gemini  # Gemini CLI (선택사항)
-command -v codex   # Codex CLI (선택사항)
+command -v claude  # Claude Code (host) — Chairman role
+command -v gemini  # Gemini CLI (optional)
+command -v codex   # Codex CLI (optional)
 ```
 
 ---
-
-## 개요
-
-Claude(오케스트레이터) + Gemini CLI + Codex CLI가 **완전 자동화**된 리뷰를 수행합니다.
 
 ## 3-Stage Pipeline
 
-```
-Stage 1: Initial Opinions (병렬 실행)
-├── Gemini CLI → opinion.md (창의적 관점)
-└── Codex CLI → opinion.md (기술적 관점)
-
-Stage 2: Cross-Review (반박 단계)
-├── Gemini가 Codex 의견 검토
-└── Codex가 Gemini 의견 검토
-
-Stage 3: Chairman Synthesis (의장 종합)
-└── Claude가 모든 의견 종합 → 추가 리뷰 진행 여부 검토 → (Yes)추가 리뷰 진행, (No)최종 리포트
-```
-
-## CLI 요구사항
-
-```bash
-# CLI 설치 확인
-command -v claude  # Claude Code (호스트)
-command -v gemini  # Gemini CLI
-command -v codex   # Codex CLI
-
-# 설치 방법
-# Gemini CLI: https://github.com/google-gemini/gemini-cli
-# Codex CLI: https://github.com/openai/codex
-```
-
-## 사용법
-
-### 호스트 에이전트를 통한 사용
+The same pipeline applies regardless of domain.
 
 ```
-"리뷰해줘"
-"council 소집해줘"
-"여러 AI 의견 물어봐"
-"Gemini랑 Codex 의견 들어보자"
+Stage 1: Initial Opinions (parallel execution)
+├── Gemini CLI → opinion.md (perspective A per preset)
+└── Codex CLI  → opinion.md (perspective B per preset)
+
+Stage 2: Cross-Review (rebuttal stage)
+├── Gemini reviews and rebuts/supplements Codex's opinion
+└── Codex reviews and rebuts/supplements Gemini's opinion
+
+Stage 3: Chairman Synthesis
+└── Claude synthesizes all opinions → produces Score Card → decides if additional rounds are needed
+    → (Yes) Run additional Cross-Review (up to 2 extra rounds)
+    → (No)  Output final report
 ```
-
-### 스크립트 직접 실행
-
-```bash
-# 원샷 실행
-JOB_DIR=$(./skills/multi-ai-review/scripts/council.sh start "리뷰 요청 내용")
-./skills/multi-ai-review/scripts/council.sh wait "$JOB_DIR"
-./skills/multi-ai-review/scripts/council.sh results "$JOB_DIR"
-./skills/multi-ai-review/scripts/council.sh clean "$JOB_DIR"
-
-# 또는 간단히
-./skills/multi-ai-review/scripts/council.sh "리뷰 요청 내용"
-```
-
-### 수동 정리 (Cleanup)
-
-```bash
-# 고아 프로세스/잡 디렉토리 정리
-./skills/multi-ai-review/scripts/cleanup.sh
-```
-
-**자동 정리**: council.sh 실행 시 자동으로 1시간 이상 된 고아 잭을 정리합니다.
-
-## 설정 파일
-
-`council.config.yaml`에서 멤버 구성:
-
-```yaml
-council:
-    members:
-        - name: gemini
-          command: "gemini"
-          emoji: "💎"
-          color: "GREEN"
-
-        - name: codex
-          command: "codex exec"
-          emoji: "🤖"
-          color: "BLUE"
-
-    chairman:
-        role: "auto" # 호스트 CLI 자동 감지
-        description: "모든 의견을 종합하여 최종 추천 제시"
-
-    settings:
-        timeout: 120
-        exclude_chairman_from_members: true
-```
-
-## 리뷰 유형
-
-| 유형     | Gemini 역할       | Codex 역할       |
-| -------- | ----------------- | ---------------- |
-| 코드     | 가독성, 개선 제안 | SOLID, 패턴 분석 |
-| 아키텍처 | 창의적 대안       | 구조적 타당성    |
-| 기획서   | UX, 완전성        | 논리적 일관성    |
-| 보안     | 공격 벡터         | 취약점 분석      |
-
-## 실행 흐름
-
-1. **CLI 존재 확인**: `command -v`로 각 CLI 설치 여부 검증
-2. **멤버 필터링**: 설치된 CLI만 members에 포함
-3. **병렬 실행**: 각 멤버에게 동시에 리뷰 요청
-4. **결과 수집**: 응답을 포맷팅하여 표시
-5. **의장 종합**: Claude가 최종 판정 및 리포트 생성
 
 ---
 
-## 🎯 Chairman Protocol (Stage 3 — 필수 준수)
+## Domain Auto-Routing
 
-Stage 1 + Stage 2 결과를 받은 후, **Chairman(Claude)은 다음 프로토콜을 따른다:**
+Keywords in the user's request are detected and the appropriate preset is selected automatically.
+There is no need to explicitly name a preset.
 
-### Step 1: 합의 평가
+| Preset | Detected Keywords | Gemini Perspective | Codex Perspective |
+|--------|------------------|--------------------|-------------------|
+| `code-review` | review, PR, code check, merge | architecture/UX | technical/patterns |
+| `market-regime` | market, regime, stocks, macro, interest rate | macro/news | quant/indicators |
+| `investment` | investment, due diligence, valuation, IR, deal, M&A | market/strategy | finance/risk |
+| `risk-assessment` | risk, danger, security assessment, vulnerability | external threats | internal weaknesses |
+| `product-review` | planning, PRD, feature spec | user/market value | technical feasibility |
+| `architecture-review` | architecture, design, system structure, infrastructure | solutions/trends | failure modes/cost |
+| `business-plan` | business plan, viability, startup, pitch deck | market opportunity/strategy | finance/execution |
+| `campaign-review` | campaign, marketing, advertising, creative, performance | creative/brand | performance/ROI |
+| `portfolio-rebalance` | portfolio, rebalancing, asset allocation | macro strategy | quant analysis |
+| `paper-review` | paper, research, academic, methodology, peer review | academic contribution/logic | methodology/reproducibility |
+| `contract-review` | contract, NDA, SLA, terms, legal | business interests | legal risk |
+| `project-gate` | project review, Go/No-Go, gate, milestone | stakeholders/scope | schedule/resources |
+| `ml-model-review` | model evaluation, ML, AI model, bias, fairness | ethics/social impact | performance/deployment |
+| `crisis-response` | crisis response, contingency plan, BCP, DR | communication/reputation | continuity/recovery |
+| `default` | (auto-applied when none of the above are detected) | strategy/opportunity | execution/risk |
 
-Cross-Review 결과를 분석하여 다음을 판단:
+---
 
-- **합의 도달**: 멤버들이 대체로 동의하거나, 이견이 있어도 명확히 정리됨
-- **미해결 쟁점**: 핵심 이슈에 대해 상반된 의견이 충돌하며 추가 논의 필요
+## Score Card System
 
-### Step 2: 추가 라운드 결정
+In Stage 3, the Chairman tallies per-dimension scores from each member and produces a Score Card.
 
-```
-IF 미해결 쟁점 존재 AND 추가 논의가 가치 있음:
-    → 추가 Cross-Review 실행 (최대 2회까지)
-    → 쟁점을 명확히 한 focused question으로 재질의
-ELSE:
-    → 최종 종합으로 진행
-```
+### Grade Thresholds
 
-### Step 3: 추가 Cross-Review 실행 (필요시)
+| Grade | Minimum Score |
+|-------|--------------|
+| A | 90 |
+| B | 80 |
+| C | 70 |
+| D | 60 |
+| F | 0 |
+
+### Severity Labels
+
+| Label | Meaning |
+|-------|---------|
+| Critical | Immediate action required |
+| High | Priority resolution recommended |
+| Medium | Improvement recommended |
+| Low | For reference |
+
+### Evaluation Dimensions by Domain
+
+Each preset defines its dimensions and weights in `presets/*.yaml`.
+
+| Preset | Key Dimensions |
+|--------|---------------|
+| code-review | security (25%), performance (20%), maintainability (25%), correctness (20%), style (10%) |
+| market-regime | trend (25%), volatility (20%), liquidity (20%), sentiment (20%), valuation (15%) |
+| investment | marketability (25%), financial health (25%), team/execution (20%), risk (15%), timing (15%) |
+| risk-assessment | probability (25%), impact (30%), mitigation feasibility (20%), detectability (15%), urgency (10%) |
+| default | feasibility (25%), effectiveness (25%), risk (20%), cost-efficiency (15%), goal alignment (15%) |
+
+---
+
+## CI Quality Gate
+
+Activated only with the `--mode ci` flag. Disabled by default.
 
 ```bash
-# JOB_DIR은 이전 Stage의 디렉토리
+./skills/multi-ai-review/scripts/council.sh --mode ci "review request"
+```
+
+Quality Gate thresholds (adjustable in `council.config.yaml`):
+- Critical issues: fail if more than 0
+- High issues: fail if more than 3
+- Overall score: fail if below 70
+
+`on_fail: "block"` — returns a non-zero exit code when thresholds are not met.
+
+---
+
+## Chairman Protocol (Stage 3 — mandatory compliance)
+
+After receiving Stage 1 + Stage 2 results, **the Chairman (Claude) follows this protocol.**
+
+### Step 1: Consensus Evaluation
+
+Analyze Cross-Review results and determine:
+
+- **Consensus reached**: Members broadly agree, or disagreements are clearly resolved
+- **Unresolved issues**: Opposing views on a core issue are still clashing and need further discussion
+
+### Step 2: Additional Round Decision
+
+```
+IF unresolved issues exist AND additional discussion would add value:
+    → Run additional Cross-Review (up to 2 extra rounds)
+    → Re-query with a focused question that sharpens the point of contention
+ELSE:
+    → Proceed to final synthesis
+```
+
+### Step 3: Run Additional Cross-Review (if needed)
+
+```bash
+# JOB_DIR is the directory from the previous Stage
 ./skills/multi-ai-review/scripts/council.sh cross-review "$JOB_DIR"
 ```
 
-**Focused Question 예시:**
+**Focused Question example:**
 
-> "A는 X 접근법을, B는 Y 접근법을 주장합니다. 각각의 trade-off를 구체적으로 비교하고, 프로덕션 환경에서 어떤 것이 더 적합한지 근거를 제시하세요."
+> "A argues for approach X, while B argues for approach Y. Compare the trade-offs of each concretely,
+> and provide evidence for which is more suitable in a production environment."
 
-### Step 4: 최종 종합
+### Step 4: Final Synthesis (including Score Card)
 
-모든 라운드 완료 후, 다음 형식으로 **한국어**로 종합:
+After all rounds complete, synthesize in the following format.
 
 ```markdown
-## 🏛️ Chairman's Synthesis
+## Chairman's Synthesis
 
-### 핵심 결론
+### {{verdict_label}}: {{final_verdict}}
 
-[1-2문장 요약]
+### Score Card
 
-### 합의 사항
+| Dimension   | Weight | Gemini | Codex | Consensus | Grade |
+|-------------|--------|--------|-------|-----------|-------|
+| [dimension] | [x]%   | [score]| [score]| [consensus]| [grade]|
+| **Overall** | **100%** |      |       | **[score]** | **[grade]** |
 
-- [멤버들이 동의한 포인트들]
+### Severity Summary
 
-### 이견 및 해소
+- Critical: [n items] — [summary]
+- High: [n items] — [summary]
+- Medium: [n items]
+- Low: [n items]
 
-- [쟁점] → [Chairman 판단 + 근거]
+### Points of Consensus
 
-### 권고 사항
+- [Points the members agreed on]
 
-1. [우선순위 높은 액션]
-2. [추가 고려사항]
+### Disagreements and Resolution
 
-### 리뷰 메타
+- [Issue] → [Chairman judgment + rationale]
 
-- Rounds: [Stage 1 + Cross-Review 횟수]
-- Consensus Level: [Strong/Moderate/Divergent]
+### Recommendations
+
+1. [High-priority action]
+2. [Additional considerations]
+
+### Review Metadata
+
+- Domain: [preset name]
+- Rounds: [Stage 1 + number of Cross-Review rounds]
+- Consensus Level: [Strong / Moderate / Divergent]
+- Composite Score: [score]/100 ([grade])
 ```
 
-### 제약 조건
+### Constraints
 
-- **최대 라운드**: Cross-Review는 최대 3회 (Stage 2 + 추가 2회)
-- **추가 라운드 기준**: 단순 의견 차이가 아닌, 결정에 영향을 주는 핵심 쟁점만
-- **무한 루프 방지**: 3회 후에도 미해결이면 "의견 분분" 으로 정리하고 Chairman 판단 제시
+- **Maximum rounds**: Cross-Review runs at most 3 times total (Stage 2 + 2 additional)
+- **Additional round criteria**: Only core issues that affect the decision — not mere differences of opinion
+- **Infinite loop prevention**: After 3 rounds, if still unresolved, summarize as "divided opinion" and present the Chairman's judgment
 
-## 파일 구조
+---
+
+## Presets Reference
+
+Full definitions for each preset are in the `presets/` directory.
+
+| File | Domain | Verdict Options |
+|------|--------|----------------|
+| `presets/code-review.yaml` | Code review | (score-based grade) |
+| `presets/market-regime.yaml` | Market regime | Strong Bull / Bull / Neutral / Bear / Strong Bear |
+| `presets/investment.yaml` | Investment due diligence | Strong Buy / Buy / Hold / Pass / Strong Pass |
+| `presets/risk-assessment.yaml` | Risk assessment | Critical / High / Medium / Low / Negligible |
+| `presets/default.yaml` | General consensus | Strong Agree / Agree / Neutral / Disagree / Strong Disagree |
+
+---
+
+## CLI Requirements
+
+```bash
+# Verify CLI installation
+command -v claude  # Claude Code (host — Chairman role)
+command -v gemini  # Gemini CLI
+command -v codex   # Codex CLI
+
+# Installation
+# Gemini CLI: https://github.com/google-gemini/gemini-cli
+# Codex CLI:  https://github.com/openai/codex
+```
+
+---
+
+## File Structure
 
 ```
 skills/multi-ai-review/
-├── SKILL.md                    # 이 파일
-├── council.config.yaml         # 멤버 설정
+├── SKILL.md                    # this file
+├── council.config.yaml         # member config, routing, scoring, Quality Gate
+├── presets/
+│   ├── code-review.yaml        # code review preset
+│   ├── market-regime.yaml      # market regime preset
+│   ├── investment.yaml         # investment due diligence preset
+│   ├── risk-assessment.yaml    # risk assessment preset
+│   └── default.yaml            # general consensus preset (fallback)
 ├── scripts/
-│   ├── council.sh              # 메인 실행 스크립트
-│   ├── council-job.sh          # Job runner
-│   ├── council-job.js          # Job 구현
-│   └── council-job-worker.js   # 멤버별 워커
-├── templates/
-│   ├── review-prompt.md        # 리뷰 프롬프트 템플릿
-│   └── report.md               # 최종 리포트 템플릿
-└── references/
-    ├── overview.md             # 상세 개요
-    ├── config.md               # 설정 가이드
-    ├── examples.md             # 사용 예시
-    └── requirements.md         # 요구사항
+│   ├── council.sh              # main execution script
+│   ├── council-job.sh          # job runner
+│   ├── council-job.js          # job implementation
+│   ├── council-job-worker.js   # per-member worker
+│   ├── council-event-utils.js  # event utilities
+│   └── cleanup.sh              # orphan job cleanup
+└── templates/
+    ├── member-prompt.md        # common member prompt template (domain-agnostic)
+    └── report.md               # final report template
 ```
 
-## 참조
+---
 
-- `references/overview.md` — 워크플로우 상세
-- `references/config.md` — 멤버 설정 가이드
-- `references/examples.md` — 사용 예시
-- `../agent-council-overview.md` — agent-council 원본 참조
+## References
+
+- `council.config.yaml` — member, routing, scoring, and Quality Gate configuration
+- `presets/` — per-domain dimensions, weights, and role definitions

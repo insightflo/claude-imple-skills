@@ -1,4 +1,4 @@
-# Inflo Engineering Suite Installer for Windows
+# Claude Impl Tools Installer for Windows
 # This script creates Junctions from the repo to your .claude/skills directory.
 
 $sourceDir = Join-Path $PSScriptRoot ".." "skills"
@@ -21,5 +21,5 @@ foreach ($skill in $skills) {
     cmd /c mklink /j "$destPath" "$($skill.FullName)"| Out-Null
 }
 
-Write-Host "`nInflo Engineering Suite installed successfully!" -ForegroundColor Green
+Write-Host "`nClaude Impl Tools installed successfully!" -ForegroundColor Green
 Write-Host "Run 'claude config skills' to verify." -ForegroundColor Cyan

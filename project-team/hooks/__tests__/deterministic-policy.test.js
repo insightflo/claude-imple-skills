@@ -15,10 +15,17 @@ describe('resolveRoleIdentity', () => {
   });
 
   test('maps legacy agent aliases to canonical roles', () => {
-    expect(resolveRoleIdentity('project-manager')).toMatchObject({
+    expect(resolveRoleIdentity('maintenance-analyst')).toMatchObject({
       recognized: true,
-      canonicalRole: 'lead',
-      compatibilityAlias: 'project-manager'
+      canonicalRole: 'reviewer',
+      compatibilityAlias: 'maintenance-analyst'
+    });
+  });
+
+  test('removed legacy aliases are no longer recognized', () => {
+    expect(resolveRoleIdentity('project-manager')).toMatchObject({
+      recognized: false,
+      canonicalRole: null
     });
   });
 

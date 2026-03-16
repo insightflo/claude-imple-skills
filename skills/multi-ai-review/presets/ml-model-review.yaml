@@ -1,0 +1,14 @@
+name: ml-model-review
+display: "AI/ML 모델 평가"
+dimensions:
+  performance: { weight: 0.25, label: "모델 성능" }
+  fairness: { weight: 0.20, label: "공정성/편향" }
+  robustness: { weight: 0.20, label: "강건성" }
+  explainability: { weight: 0.20, label: "설명 가능성" }
+  deployment_readiness: { weight: 0.15, label: "배포 준비도" }
+roles:
+  gemini: "AI 윤리/제품 전략가 — 사회적 영향, 편향 시나리오, 사용자 신뢰, 규제 대응 평가"
+  codex: "ML 엔지니어 — 벤치마크 수치, 오버피팅, 데이터 누수, 레이턴시, 모니터링 체계 분석"
+output:
+  verdict_options: ["Deploy", "Deploy with Monitoring", "Needs Tuning", "Retrain Required", "Do Not Deploy"]
+  verdict_label: "모델 판정"

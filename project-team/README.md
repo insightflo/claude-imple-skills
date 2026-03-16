@@ -11,9 +11,9 @@
 
 Claude Project Team is a comprehensive framework for orchestrating AI agents across large-scale projects. It provides:
 
-- **Multi-tier governance**: Project-level controls with domain-level execution
-- **9 specialized AI agents** with clearly defined roles and permissions
-- **10 automated hooks** for standards enforcement, quality gates, and cross-domain notifications
+- **Multi-tier governance**: Agent Teams leads coordinate native Claude subagents with domain-level execution
+- **8 agents total**: 4 core worker agents + 4 Agent Teams leads with clearly defined roles and permissions
+- **19 automated hooks** for standards enforcement, quality gates, and cross-domain notifications
 - **Interface contracts** for safe multi-domain coordination
 - **AI context management** for consistent decision-making across distributed teams
 
@@ -24,22 +24,22 @@ Designed for projects where multiple AI agents work together while maintaining a
 ### Multi-Tier Architecture
 
 ```
-Project Level (5 agents)
-  ├── Project Manager      - Overall coordination
-  ├── Chief Architect      - Standards & VETO authority
-  ├── Chief Designer       - Design system & consistency
-  ├── QA Manager           - Quality gates & release approval
-  └── DBA                  - Database schema & standards
+Agent Teams Leads (.claude/agents/)          ← Orchestrate via native Task tool
+  ├── team-lead          - Overall coordination, task decomposition
+  ├── architecture-lead  - Technical standards & VETO authority
+  ├── qa-lead            - Quality gates & release approval
+  └── design-lead        - Design system & consistency
 
-Domain Level (per domain: 3 agents)
-  ├── Part Leader          - Domain management & decisions
-  ├── Domain Designer      - Domain-specific design
-  └── Domain Developer     - Implementation
+Worker Agents (project-team/agents/)         ← Executed as subagents
+  ├── Builder            - Implementation execution
+  ├── Reviewer           - Code review & quality assurance
+  ├── Designer           - Design specialist
+  └── MaintenanceAnalyst - System maintenance & refactoring
 ```
 
 ### Automated Governance
 
-10 hooks enforce standards automatically:
+19 hooks enforce standards automatically:
 
 | Hook | Purpose | Trigger |
 |------|---------|---------|
@@ -53,6 +53,15 @@ Domain Level (per domain: 3 agents)
 | **changelog-recorder** | Auto-generates changelog entries | Version changes |
 | **pre-edit-impact-check** | Previews change impacts before edit | Pre-edit analysis |
 | **risk-area-warning** | Highlights high-risk code areas | Risk assessment |
+| **contract-gate** | Enforces interface contract compliance | Contract changes |
+| **docs-gate** | Requires documentation updates | Code changes |
+| **domain-boundary-enforcer** | Blocks cross-domain boundary violations | Domain access |
+| **policy-gate** | Validates policy compliance | Policy-sensitive paths |
+| **risk-gate** | Gates high-risk operations | Risk assessment |
+| **security-scan** | Scans for security vulnerabilities | Security-sensitive code |
+| **task-sync** | Synchronizes task metadata | Task updates |
+| **teammate-idle-gate** | Prevents idle subagent handoffs | Agent Teams tasks |
+| **task-completed-gate** | Validates task completion criteria | Task completion |
 
 ### Domain Coordination
 
@@ -120,20 +129,24 @@ claude mcp list
 ## Project Structure
 
 ```
+.claude/agents/                      # Agent Teams leads (orchestrators)
+├── team-lead.md                     # Overall coordination & task decomposition
+├── architecture-lead.md             # Technical standards & VETO authority
+├── qa-lead.md                       # Quality gates & release approval
+└── design-lead.md                   # Design system & consistency
+
 project-team/
-├── agents/                      # 9 AI agent definitions
-│   ├── ProjectManager.md        # Project coordination
-│   ├── ChiefArchitect.md        # Architecture & standards
-│   ├── ChiefDesigner.md         # Design system
-│   ├── QAManager.md             # Quality management
-│   ├── DBA.md                   # Database management
-│   ├── MaintenanceAnalyst.md    # System maintenance
+├── agents/                      # Core worker agents (subagents)
+│   ├── Builder.md               # Implementation execution
+│   ├── Reviewer.md              # Code review & QA
+│   ├── Designer.md              # Design specialist
+│   ├── MaintenanceAnalyst.md    # System maintenance & refactoring
 │   └── templates/               # Domain agent templates
 │       ├── PartLeader.md
 │       ├── DomainDesigner.md
 │       └── DomainDeveloper.md
 │
-├── hooks/                       # 10 JavaScript hooks
+├── hooks/                       # 20 JavaScript hooks
 │   ├── permission-checker.js
 │   ├── standards-validator.js
 │   ├── design-validator.js
@@ -174,7 +187,7 @@ project-team/
 | `CLAUDE_HOOK_SECRET` | Shared secret for hook-to-hook communication | None | No |
 | `PERMISSION_CHECKER_SECRET` | Legacy secret for permission validation | None | No |
 | `CLAUDE_AGENT_ROLE` | Agent role identifier (legacy, for permission checker) | None | No |
-| `PROJECT_TEAM_MODE` | Deployment mode: `lite`, `standard`, or `full` | `standard` | No |
+| `PROJECT_TEAM_MODE` | Deployment mode: `lite`, `standard`, `full`, or `team` | `standard` | No |
 
 **⚠️ Security Note**: In production, always set `AGENT_JWT_SECRET` to a strong random value:
 
@@ -198,14 +211,22 @@ System-wide settings are stored in `~/.claude/settings.json`:
     "architecture-updater",
     "changelog-recorder",
     "pre-edit-impact-check",
-    "risk-area-warning"
+    "risk-area-warning",
+    "contract-gate",
+    "docs-gate",
+    "domain-boundary-enforcer",
+    "policy-gate",
+    "risk-gate",
+    "security-scan",
+    "task-sync",
+    "teammate-idle-gate",
+    "task-completed-gate"
   ],
   "permissions": {
-    "project-manager": ["read", "write:management/", "write:contracts/"],
-    "chief-architect": ["read", "veto:architecture"],
-    "chief-designer": ["read", "veto:design"],
-    "qa-manager": ["read", "veto:quality"],
-    "dba": ["read", "write:database/", "veto:schema"]
+    "team-lead": ["read", "write:management/", "write:contracts/"],
+    "architecture-lead": ["read", "veto:architecture"],
+    "design-lead": ["read", "veto:design"],
+    "qa-lead": ["read", "veto:quality"]
   }
 }
 ```
@@ -236,60 +257,52 @@ Local project settings in `.claude/settings.json`:
 
 ## Usage Guide
 
-### For Project Managers
+### For Team Orchestration (Agent Teams mode)
 
-Initialize a new project:
+Coordinate tasks via team-lead:
 
 ```bash
-claude @project-manager "Initialize project 'CustomerPlatform' with 3 domains"
+claude @team-lead "Implement the payment installment feature across all domains"
 ```
 
-Coordinate cross-domain tasks:
+Request architectural review:
 
 ```bash
-claude @project-manager "The orders domain needs to request new fields from accounts API"
-```
-
-### For Chief Architect
-
-Define architectural standards:
-
-```bash
-claude @chief-architect "Review the API design in contracts/interfaces/"
+claude @architecture-lead "Review the API design in contracts/interfaces/"
 ```
 
 Enforce standards via VETO:
 
 ```bash
-claude @chief-architect "I VETO: This change violates API versioning standards"
+claude @architecture-lead "I VETO: This change violates API versioning standards"
 ```
 
-### For QA Manager
+### For Quality Gates
 
 Set up quality gates:
 
 ```bash
-claude @qa-manager "Define quality gates for Phase 1 release"
+claude @qa-lead "Define quality gates for Phase 1 release"
 ```
 
 Approve or block release:
 
 ```bash
-claude @qa-manager "APPROVE release v1.0.0 - all QA criteria met"
+claude @qa-lead "APPROVE release v1.0.0 - all QA criteria met"
 ```
 
-### For Domain Teams
+### For Worker Agents (direct invocation)
 
-As Part Leader, coordinate your domain:
+Build a feature:
 
 ```bash
-claude @part-leader-accounts "Coordinate sprint planning with design team"
+claude @builder "Implement the accounts API endpoint per spec in contracts/"
 ```
 
-Request changes from other domains:
+Review code:
 
 ```bash
-claude @part-leader-accounts "Request: Add user_metadata field to Account API"
+claude @reviewer "Review the changes in src/payment/ for quality and standards"
 ```
 
 ## AI Context Management
@@ -385,22 +398,22 @@ endpoints:
 
 ### Scenario: New Feature Across Multiple Domains
 
-1. **Project Manager** receives request
-2. **Chief Architect** reviews technical feasibility
-3. **Part Leaders** coordinate their domain contributions
-4. **Domain Designers** ensure UI/UX consistency
-5. **Domain Developers** implement changes
-6. **QA Manager** verifies quality criteria
-7. **Cross-domain notifier** keeps stakeholders informed
+1. **team-lead** receives request and decomposes into tasks
+2. **architecture-lead** reviews technical feasibility
+3. **design-lead** ensures UI/UX consistency
+4. **Builder** workers implement changes in parallel (via Task tool)
+5. **Reviewer** workers perform code review
+6. **qa-lead** verifies quality criteria
+7. **Cross-domain notifier** hook keeps stakeholders informed
 
 ### Scenario: API Breaking Change
 
-1. **Orders Domain** proposes breaking change to Accounts API
+1. **Builder** proposes breaking change to an interface
 2. **Interface Validator** hook identifies impact
-3. **Cross-Domain Notifier** alerts Accounts team
-4. **Chief Architect** mediates resolution
-5. **DBA** validates any schema implications
-6. **All affected domains** coordinate deprecation timeline
+3. **Cross-Domain Notifier** hook alerts affected teams
+4. **architecture-lead** mediates resolution
+5. **Reviewer** validates implementation against updated contract
+6. **qa-lead** approves before merge
 
 ## Maintenance
 
@@ -510,8 +523,8 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 Part of the claude-impl-tools project.
 
-**Version**: 1.0.0
-**Last Updated**: 2026-03-03
+**Version**: 4.0.0
+**Last Updated**: 2026-03-16
 
 ---
 
@@ -520,23 +533,24 @@ Part of the claude-impl-tools project.
 ### Common Commands
 
 ```bash
-# Initialize a project with Project Manager
-claude @project-manager
+# Orchestrate a feature with Agent Teams
+claude @team-lead "Implement {feature} across affected domains"
 
 # Request architectural review
-claude @chief-architect "Review {file-path}"
+claude @architecture-lead "Review {file-path}"
 
 # Request design review
-claude @chief-designer "Review UI in {path}"
+claude @design-lead "Review UI in {path}"
 
 # Check QA readiness for release
-claude @qa-manager "Pre-release checklist for v1.0.0"
+claude @qa-lead "Pre-release checklist for v1.0.0"
 
-# Manage domain
-claude @part-leader-{domain} "Status update"
+# Direct worker invocation (standard/full modes)
+claude @builder "Implement {task}"
+claude @reviewer "Review {path}"
 
 # Get impact analysis
-claude @chief-architect "Impact analysis: changing {component}"
+claude @architecture-lead "Impact analysis: changing {component}"
 ```
 
 ### Key Files to Know
@@ -551,4 +565,4 @@ claude @chief-architect "Impact analysis: changing {component}"
 
 ---
 
-**Ready to get started?** Run `./install.sh` and initialize your first project with the Project Manager.
+**Ready to get started?** Run `./install.sh` and initialize your first project with `@team-lead` (team mode) or `@builder` (lite/standard/full modes).

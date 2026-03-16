@@ -1,0 +1,23 @@
+# 범용 합의 프리셋 (폴백)
+# 위 프리셋의 키워드가 감지되지 않을 때 자동 적용
+
+name: default
+display: "범용 합의"
+
+# 평가 차원 및 가중치 (합계 = 1.0)
+dimensions:
+  feasibility:  { weight: 0.25, label: "실현 가능성" }
+  effectiveness: { weight: 0.25, label: "효과성" }
+  risk:         { weight: 0.20, label: "리스크" }
+  cost:         { weight: 0.15, label: "비용 효율" }
+  alignment:    { weight: 0.15, label: "목표 정합성" }
+
+# 멤버별 역할 정의
+roles:
+  gemini: "전략/기회 분석가 — 기회 요인, 트렌드, 창의적 관점"
+  codex:  "실행/리스크 분석가 — 실행 가능성, 리스크 팩터, 정량 분석"
+
+# 판정 출력 설정
+output:
+  verdict_options: ["Strong Agree", "Agree", "Neutral", "Disagree", "Strong Disagree"]
+  verdict_label: "합의 판정"

@@ -1,75 +1,75 @@
-# Phase 3: Chief Designer 상세 가이드
+# Phase 3: Chief Designer Detailed Guide
 
-## 역할
-디자인 시스템 정의, UI/UX 가이드라인
+## Role
+Define the design system, UI/UX guidelines
 
-## 산출물
+## Deliverable
 `design/system/*.md`
 
-## Task 호출
+## Task Invocation
 
 ```
 Task({
   subagent_type: "frontend-specialist",
-  description: "Designer: 디자인 시스템 정의",
+  description: "Designer: Design system definition",
   prompt: `
-## 역할: Chief Designer
+## Role: Chief Designer
 
-당신은 이 프로젝트의 Chief Designer입니다. 디자인 시스템을 정의하세요.
+You are the Chief Designer for this project. Define the design system.
 
-## 입력 정보
-- PRD: docs/planning/01-prd.md (사용자 요구사항)
-- Screen Specs: specs/screens/*.yaml (있는 경우)
+## Input
+- PRD: docs/planning/01-prd.md (user requirements)
+- Screen Specs: specs/screens/*.yaml (if available)
 
-## 산출물: design/system/ 폴더
+## Deliverable: design/system/ folder
 
 ### design/system/tokens.md
-디자인 토큰 정의:
+Design token definitions:
 - Color Palette (Primary, Secondary, Neutral, Semantic)
 - Typography Scale (Font family, sizes, weights)
 - Spacing Scale (4px base grid)
 - Border Radius, Shadows
 
 ### design/system/components.md
-컴포넌트 규칙:
+Component rules:
 - Button variants (Primary, Secondary, Ghost, Danger)
 - Input fields (Text, Select, Checkbox, Radio)
 - Card, Modal, Toast
-- 상태별 스타일 (Default, Hover, Active, Disabled, Error)
+- State styles (Default, Hover, Active, Disabled, Error)
 
 ### design/system/layout.md
-레이아웃 규칙:
+Layout rules:
 - Grid system (12-column)
 - Breakpoints (Mobile, Tablet, Desktop)
 - Container widths
 - Page templates
 
 ### design/system/accessibility.md
-접근성 가이드:
+Accessibility guide:
 - Color contrast ratios (WCAG AA)
 - Focus indicators
-- ARIA labels 규칙
+- ARIA label rules
 - Keyboard navigation
 
-### (필수) Governance Operationalization (Doc → Execution)
-- 디자인 시스템이 실제 개발에 반영되도록 아래를 각 문서(또는 공통 섹션)로 포함:
-  - 단일 엔트리 검증 커맨드 제안: `scripts/verify_all.sh` 또는 `make verify`
-  - Tokens/Components/Visual regression/a11y에 대한 체크 도구/CI job/산출물 경로/Block vs Warn 매핑 표
-  - 업데이트 트리거(토큰 변경, a11y 위반, 신규 핵심 패턴 추가)
+### (Required) Governance Operationalization (Doc → Execution)
+- To ensure the design system is reflected in actual development, include the following in each document (or a shared section):
+  - Propose a single-entry verification command: `scripts/verify_all.sh` or `make verify`
+  - A mapping table of check tools/CI jobs/artifact paths/Block vs Warn for Tokens/Components/Visual regression/a11y
+  - Update triggers (token changes, a11y violations, new core patterns added)
 
-## 주의사항
-- 구현 코드 작성 금지 (CSS/Tailwind 예시만 포함)
-- 일관성 있는 디자인 언어 정의
+## Notes
+- Do not write implementation code (CSS/Tailwind examples only)
+- Define a consistent design language
 `
 })
 ```
 
-## 완료 조건
-- [ ] `design/system/` 폴더 생성됨
-- [ ] 최소 4개 문서 작성됨
-- [ ] Color palette에 최소 5가지 색상 정의됨
+## Completion Criteria
+- [ ] `design/system/` folder created
+- [ ] At least 4 documents written
+- [ ] At least 5 colors defined in the color palette
 
-## 디자인 토큰 예시
+## Design Token Example
 
 ```markdown
 # Design Tokens

@@ -1,462 +1,424 @@
 ---
 name: agile
-description: 사용자와의 정기적인 체크인과 스프린트 관리를 담당하는 애자일 마스터입니다. /agile, /sprint, "스프린트 시작", "체크포인트" 트리거.
+description: Agile Sprint Master for regular user check-ins and sprint management. Use this for /agile, /sprint, starting a sprint, checkpoint requests, or any time you are running structured iterative development. Triggers on "start sprint", "checkpoint", "sprint status", "run task", or whenever you need to manage layered build progress across Skeleton → Muscles → Skin.
 version: 2.6.0
 updated: 2026-03-03
 ---
 
-# 🏃 Agile Sprint Master
+# Agile Sprint Master
 
-> **🔥 Heavy-Hitter (즉시 실행)**
+> **Heavy-Hitter (execute immediately)**
 > ```
-> /agile auto   | 초기 빌드: 전체 레이어 자동 실행
-> /agile iterate "변경사항" | 변경/추가: 영향받는 레이어만 실행
-> /agile status | 현재 스프린트 진행 상황
+> /agile auto   | Initial build: auto-run all layers
+> /agile iterate "changes" | Change/add: run only affected layers
+> /agile status | Current sprint progress
 > ```
 >
-> **레이어**: Skeleton (뼈대) → Muscles (근육) → Skin (피부)
-> **목적**: 1~3일 단위 스프린트 + 사용자 검토로 만족도 향상
+> **Layers**: Skeleton (structure) → Muscles (logic) → Skin (polish)
+> **Purpose**: 1–3 day sprints + user review cycles to maximize satisfaction
 
-> **v2.6.0**: Long Context 최적화 - H2O 패턴으로 핵심 정보 상단 배치
-> **v2.5.0**: project-team 에이전트 팀 연동 (Project Manager, QA Manager)
-> **v2.4.0**: project-team Hook 시스템 연동 (task-sync, quality-gate)
+> **v3.0.0**: Agent Teams integration (team-lead, qa-lead), agent-browser + Lighthouse CLI
+> **v2.6.0**: Long Context optimization — H2O pattern places critical info at the top
 
 ---
 
-## ⚡ Quick Start (최우선)
+## Quick Start (Highest Priority)
 
 ### 3-Stage Pipeline
 ```
-1️⃣ 스프린트 계획   → Skeleton/Muscles/Skin 레이어 정의
-2️⃣ 스프린트 수행   → 집중 개발 + 태스크 동기화
-3️⃣ 체크포인트     → 스크린샷 캡처 + 사용자 승인
+1. Sprint Planning   → Define Skeleton/Muscles/Skin layers
+2. Sprint Execution  → Focused development + task sync
+3. Checkpoint        → Screenshot capture + user approval
 ```
 
-### 품질 게이트
-| 레이어 | 검증 기준 |
-|-------|-----------|
-| 🦴 Skeleton | 린트 통과 + 빌드 성공 |
-| 💪 Muscles | 린트 + 빌드 + 단위 테스트 + /checkpoint |
-| ✨ Skin | 전체 테스트 + /trinity → /audit |
+### Quality Gates
+| Layer | Validation Criteria |
+|-------|---------------------|
+| Skeleton | Lint pass + build success |
+| Muscles | Lint + build + unit tests + /checkpoint |
+| Skin | Full tests + /trinity → /audit |
 
 ---
 
-## 🎯 핵심 원칙 (INVEST)
+## Prerequisites (Auto-run on skill trigger)
 
-- **I**ndependent: 각 태스크는 독립적 완료/검토 가능
-- **N**egotiable: 요구사항은 사용자와 협의 가능
-- **V**aluable: 각 스프린트 결과물은 실질적 가치 제공
-- **E**stimatable: 작업 규모 예측 가능
-- **S**mall: 1~3일 내 완료 가능
-- **T**estable: 완료 여부 명확히 검증 가능
+When the skill is triggered, check the following in order before starting implementation.
+Stop and display the relevant message if any check fails.
+
+1. **TASKS.md exists**: A `TASKS.md` file must be present in the project root.
+   - If missing: "TASKS.md not found. Please create it first with `/tasks-init`."
+
+2. **TASKS.md format**: Must contain task IDs in the format `- [ ] T1.1:`.
+   - If invalid: "TASKS.md format is incorrect. Convert it with `/tasks-migrate`."
+
+3. **`/agile auto` + Agent Teams**: Check whether `.claude/agents/team-lead.md` exists.
+   - If missing and TASKS.md has 30+ tasks: "30+ tasks detected — `/team-orchestrate` is recommended. Install Agent Teams: `project-team/install.sh --local --mode=team`"
+   - If missing and fewer than 30 tasks: continue in standalone mode (skip agent delegation).
 
 ---
 
-## 🏗️ 실행 프로세스
+## Core Principles (INVEST)
 
-### 1. 스프린트 계획 (점진적 전체 완성 - Horizontal Slicing)
+- **I**ndependent: Each task can be completed and reviewed independently
+- **N**egotiable: Requirements can be discussed and adjusted with the user
+- **V**aluable: Each sprint deliverable provides real, tangible value
+- **E**stimable: Work scope is small enough to be estimated
+- **S**mall: Can be completed within 1–3 days
+- **T**estable: Completion can be verified clearly
 
-- **철학**: 기능을 하나씩 완성하는 것이 아니라, **전체 시스템의 모습(Whole)을 유지하며 수준을 높여가는 방식**을 취합니다.
-- **레이어 별 스프린트 정의**:
-  1. **Skeleton (뼈대)**: 전체 레이아웃, 더미 데이터, 주요 네비게이션 구조화. (Review 목표: "전체적인 틀이 맞는가?")
-  2. **Muscles (근육)**: 실제 데이터 연동, 핵심 비즈니스 로직, 인터랙션 구현. (Review 목표: "실제로 잘 작동하는가?")
-  3. **Skin & Polish (피부)**: 디자인 시스템 정밀 적용, 애니메이션, 예외 처리, 프리미엄 감성 추가. (Review 목표: "사용감이 훌륭한가?")
-- **요구사항 재기술(Restatement)**: "이번 스프린트에서는 [전체 페이지]의 [Skeleton/Muscles/Skin] 레이어를 완성하여 [어떤 가치]를 보여드릴 예정입니다."
+---
 
-### 2. 스프린트 수행 (Execution)
+## Execution Process
 
-- 정해진 스프린트 범위 내에서 집중적으로 개발을 진행합니다.
-- 작업 중 발견된 새로운 아이디어나 변경 사항은 즉시 **스프린트 백로그**에 기록하고 사용자에게 공유합니다.
-- **[필수] 태스크 동기화**: 매 태스크 실행 시 TASKS 파일(`TASKS.md` 우선, 없으면 `docs/planning/06-tasks.md`)을 즉시 업데이트합니다. (TEAM-CHARTER 준수)
-- **[필수] 문서 동기화**: 코드 변경 시 관련 기획 문서를 즉시 최신화합니다.
+### 1. Sprint Planning (Progressive Wholeness — Horizontal Slicing)
 
-### 3. 체크포인트 (Sprint Review)
+- **Philosophy**: Rather than completing features one by one, **raise the quality of the entire system (Whole) progressively**.
+- **Layer-based sprint definition**:
+  1. **Skeleton (Structure)**: Full layout, dummy data, primary navigation. (Review goal: "Does the overall structure look right?")
+  2. **Muscles (Logic)**: Real data integration, core business logic, interactions. (Review goal: "Does it actually work correctly?")
+  3. **Skin & Polish**: Precise design system application, animations, edge case handling, premium feel. (Review goal: "Does it feel great to use?")
+- **Requirement Restatement**: "In this sprint, I will complete the [Skeleton/Muscles/Skin] layer of [all pages] to demonstrate [what value]."
 
-- **시각적 현황 캡처 (Visual Status)**: `notify_user` 호출 전, `chrome-browser` 스킬(또는 `agent-browser`)을 사용하여 현재 구현된 기능의 화면을 캡처합니다.
-  - `agent-browser open` -> `agent-browser wait` -> `agent-browser screenshot`
-- **반드시 `notify_user` 호출**: 각 스프린트 목표 달성 시 또는 마일스톤 종료 시, 코드와 함께 **시각적 결과물(캡처 이미지)**을 제공하고 승인을 요청합니다.
-- 사용자의 피드백을 수집하여 즉시 다음 작업에 반영합니다.
+### 2. Sprint Execution
 
-### 4. 품질 게이트 (Quality Gate) - v2.4.0
+- Develop intensively within the agreed sprint scope.
+- New ideas or changes discovered during work are immediately logged in the **sprint backlog** and shared with the user.
+- **[Required] Task sync**: Update the TASKS file (`TASKS.md` preferred, fallback to `docs/planning/06-tasks.md`) immediately upon each task execution. (Per TEAM-CHARTER)
+- **[Required] Document sync**: Update relevant planning documents immediately when code changes.
 
-각 레이어 완료 시 **품질 검증**을 수행합니다:
+### 3. Checkpoint (Sprint Review)
+
+- **Visual Status Capture**: Before calling `notify_user`, use the `agent-browser` CLI to capture a screenshot of the current implementation.
+  - `agent-browser open <url>` → `agent-browser wait` → `agent-browser screenshot checkpoint.png`
+  - Lighthouse audit (optional): `npx lighthouse <url> --output=json --quiet`
+- **Must call `notify_user`**: Upon completing each sprint goal or milestone, provide the code along with **visual output (screenshot)** and request approval.
+- Collect user feedback and incorporate it immediately into the next work cycle.
+
+### 4. Quality Gate (v2.4.0)
+
+Perform **quality validation** on each layer completion:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  레이어 완료 → 품질 게이트 체크                              │
+│  Layer complete → Quality gate check                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  🦴 Skeleton 완료 시:                                       │
-│  └── 린트 통과 + 빌드 성공 확인                             │
+│  Skeleton complete:                                         │
+│  └── Lint pass + build success                              │
 │                                                             │
-│  💪 Muscles 완료 시:                                        │
-│  └── 린트 + 빌드 + 단위 테스트 통과                         │
-│  └── /checkpoint (2단계 리뷰) ← v2.4.0 NEW                 │
+│  Muscles complete:                                          │
+│  └── Lint + build + unit test pass                          │
+│  └── /checkpoint (2-stage review) ← v2.4.0 NEW             │
 │                                                             │
-│  ✨ Skin 완료 시:                                           │
-│  └── 전체 테스트 + /trinity → /audit 실행                   │
-│  └── /verification-before-completion 필수                   │
+│  Skin complete:                                             │
+│  └── Full tests + /trinity → /audit                         │
+│  └── /verification-before-completion required               │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🎯 핵심 원칙 (INVEST)
+## Core Principles (INVEST)
 
-태스크를 정의하거나 스프린트를 쪼갤 때 항상 다음 원칙을 준수합니다.
+Always follow these principles when defining tasks or splitting sprints.
 
-- **I**ndependent: 각 태스크는 다른 태스크와 독립적으로 완료/검토될 수 있어야 합니다.
-- **N**egotiable: 요구사항은 고정된 것이 아니며 사용자와 협의 가능합니다.
-- **V**aluable: 각 스프린트 결과물은 사용자에게 실질적인 가치를 제공해야 합니다.
-- **E**stimatable: 작업 규모를 예측할 수 있을 만큼 작아야 합니다.
-- **S**mall: 1~3일 내에 완료될 수 있는 크기여야 합니다.
-- **T**estable: 완료 여부를 명확하게 검증할 수 있어야 합니다.
-
----
-
-## 🛠️ 주요 명령어 대응
-
-| 명령어                          | 설명                                                     |
-| :------------------------------ | :------------------------------------------------------- |
-| `/agile start`                  | 새로운 스프린트 계획을 제안합니다.                       |
-| `/agile status`                 | 현재 스프린트 진행 상황과 남은 작업을 요약합니다.        |
-| `/agile review`                 | 현재까지의 성과를 요약하여 사용자에게 검토를 요청합니다. |
-| `/agile run {task-id}`          | 특정 태스크 실행을 시작합니다.                           |
-| `/agile done {task-id}`         | 특정 태스크 완료를 처리합니다.                           |
-| **`/agile auto`**               | **초기 빌드: 전체 레이어 자동 실행 + 체크포인트**        |
-| **`/agile iterate "변경사항"`** | **변경/추가: 영향받는 레이어만 선택적 실행**             |
+- **I**ndependent: Each task must be completable and reviewable independently from others.
+- **N**egotiable: Requirements are not fixed and can be negotiated with the user.
+- **V**aluable: Each sprint deliverable must provide real value to the user.
+- **E**stimable: Work must be small enough that its scope can be estimated.
+- **S**mall: Must be completable within 1–3 days.
+- **T**estable: Completion must be clearly verifiable.
 
 ---
 
-## 🔄 반복 작업 모드 (`/agile iterate`)
+## Command Reference
 
-> **목적**: 이미 완성된 코드베이스에서 **디자인 변경, 새 기능 추가, 업무 로직 수정** 등을 처리합니다.
+| Command | Description |
+| :------------------------------- | :------------------------------------------------------- |
+| `/agile start` | Propose a new sprint plan. |
+| `/agile status` | Summarize current sprint progress and remaining work. |
+| `/agile review` | Summarize results so far and request user review. |
+| `/agile run {task-id}` | Begin execution of a specific task. |
+| `/agile done {task-id}` | Mark a specific task as complete. |
+| **`/agile auto`** | **Initial build: auto-run all layers + checkpoints** |
+| **`/agile iterate "changes"`** | **Change/add: selectively run only affected layers** |
 
-### 사용 예시
+---
+
+## Iteration Mode (`/agile iterate`)
+
+> **Purpose**: Handle **design changes, new feature additions, and business logic updates** in an already-built codebase.
+
+### Usage Examples
 
 ```bash
-# 디자인 변경
-/agile iterate "메인 페이지 디자인 리뉴얼"
+# Design change
+/agile iterate "Main page design renewal"
 
-# 새 기능 추가
-/agile iterate "결제 시스템 추가"
+# New feature addition
+/agile iterate "Add payment system"
 
-# 업무 로직 변경
-/agile iterate "할인 로직 변경: 쿠폰 중복 적용 허용"
+# Business logic change
+/agile iterate "Update discount logic: allow coupon stacking"
 ```
 
-### 실행 흐름
+### Execution Flow
 
 ```
-/agile iterate "변경사항 설명" 실행
+/agile iterate "change description"
     ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  1️⃣ 변경 범위 분석                                           │
-│  - 변경 요청 해석                                             │
-│  - 기존 코드베이스 스캔 (영향받는 파일 파악)                   │
-│  - 영향받는 레이어 자동 판별                                  │
+│  1. Analyze change scope                                    │
+│  - Interpret the change request                             │
+│  - Scan existing codebase (identify affected files)         │
+│  - Auto-determine affected layers                           │
 ├─────────────────────────────────────────────────────────────┤
-│  📋 분석 결과 → 사용자 확인                                   │
-│  "이 변경은 [Muscles], [Skin] 레이어에 영향을 줍니다.         │
-│   영향받는 파일: 5개. 진행할까요?"                            │
-│  [승인] → 실행 / [조정] → 범위 수정                           │
+│  Analysis result → User confirmation                        │
+│  "This change affects [Muscles], [Skin] layers.             │
+│   Affected files: 5. Proceed?"                              │
+│  [Approve] → Execute / [Adjust] → Revise scope              │
 └─────────────────────────────────────────────────────────────┘
-    ↓ (사용자 승인)
+    ↓ (User approval)
 ┌─────────────────────────────────────────────────────────────┐
-│  2️⃣ 영향받는 레이어만 선택적 실행                             │
+│  2. Selectively run only affected layers                    │
 │                                                             │
-│  [건너뜀] 🦴 Skeleton (영향 없음)                             │
+│  [SKIP] Skeleton (not affected)                             │
 │                                                             │
-│  💪 MUSCLES 레이어 실행 → 완료 시 사용자 확인                 │
-│  ✨ SKIN 레이어 실행 → 완료 시 사용자 확인                    │
+│  MUSCLES layer → User confirmation on completion            │
+│  SKIN layer → User confirmation on completion               │
 └─────────────────────────────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  3️⃣ 최종 검증 및 보고                                        │
-│  - 변경 전/후 비교 (가능 시 스크린샷)                         │
-│  - 테스트 실행 결과                                          │
-│  - Git diff 요약                                             │
+│  3. Final validation and report                             │
+│  - Before/after comparison (screenshots if possible)        │
+│  - Test run results                                         │
+│  - Git diff summary                                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 변경 유형별 영향 레이어 자동 판별
+### Auto Layer Detection by Change Type
 
-| 변경 유형          | 영향 레이어           | 예시                                       |
-| :----------------- | :-------------------- | :----------------------------------------- |
-| **디자인 변경**    | ✨ Skin               | 색상, 폰트, 애니메이션, 레이아웃 미세 조정 |
-| **UI 구조 변경**   | 🦴 Skeleton + ✨ Skin | 페이지 구조, 네비게이션 변경               |
-| **새 기능 추가**   | 🦴 + 💪 + ✨ 전체     | 새로운 화면/API/DB 모델 추가               |
-| **업무 로직 변경** | 💪 Muscles            | API 로직, 유효성 검증, 계산 로직           |
-| **버그 수정**      | 해당 레이어만         | 문제가 있는 레이어만 타겟팅                |
+| Change Type | Affected Layers | Examples |
+| :------------------ | :-------------------- | :---------------------------------------- |
+| **Design change** | Skin | Colors, fonts, animations, layout tweaks |
+| **UI structure change** | Skeleton + Skin | Page structure, navigation changes |
+| **New feature** | Skeleton + Muscles + Skin | New screens/APIs/DB models |
+| **Business logic change** | Muscles | API logic, validation, calculation logic |
+| **Bug fix** | Affected layer only | Target only the problematic layer |
 
-### `/agile auto` vs `/agile iterate` 비교
+### `/agile auto` vs `/agile iterate` Comparison
 
-| 항목            | `/agile auto`                       | `/agile iterate`            |
-| :-------------- | :---------------------------------- | :-------------------------- |
-| **용도**        | 초기 빌드                           | 변경/추가 작업              |
-| **실행 범위**   | 전체 레이어 (Skeleton→Muscles→Skin) | 영향받는 레이어만           |
-| **태스크 생성** | TASKS.md 전체 실행                  | 새 태스크 자동 생성 후 실행 |
-| **체크포인트**  | 각 레이어 완료 시                   | 각 레이어 완료 시           |
+| Item | `/agile auto` | `/agile iterate` |
+| :------------ | :----------------------------------- | :-------------------------- |
+| **Purpose** | Initial build | Changes / additions |
+| **Scope** | All layers (Skeleton→Muscles→Skin) | Affected layers only |
+| **Task creation** | Run full TASKS.md | Auto-create new tasks then run |
+| **Checkpoint** | On each layer completion | On each layer completion |
 
 ---
 
-## 🤖 레이어별 자동 실행 (`/agile auto`)
+## Auto Layer Execution (`/agile auto`)
 
-> **목적**: 뼈대 → 근육 → 스킨 각 레이어를 자동으로 실행하되, **각 레이어 완료 시 반드시 사용자 확인**을 받아 수정 사항을 즉시 반영합니다.
+> **Purpose**: Automatically execute each layer (Skeleton → Muscles → Skin), **requesting user confirmation after every layer** to immediately incorporate feedback.
 
-### 실행 흐름
+### Execution Flow
 
 ```
-/agile auto 실행
+/agile auto
     ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  🦴 SKELETON (뼈대) 레이어                                   │
-│  - 전체 레이아웃, 더미 데이터, 네비게이션 구조                 │
-│  - 관련 태스크 자동 실행                                      │
+│  SKELETON layer                                             │
+│  - Full layout, dummy data, navigation structure            │
+│  - Auto-run related tasks                                   │
 ├─────────────────────────────────────────────────────────────┤
-│  ✅ 레이어 완료 → 스크린샷 캡처 → notify_user                 │
-│  "뼈대가 완성되었습니다. 전체적인 틀이 맞는지 확인해주세요."   │
-│  [승인] → 다음 레이어 / [수정 요청] → 즉시 반영 후 재확인      │
+│  Layer complete → Screenshot → notify_user                  │
+│  "Skeleton is done. Please check if the overall             │
+│   structure matches your expectations."                     │
+│  [Approve] → Next layer / [Request changes] → Apply + recheck│
 └─────────────────────────────────────────────────────────────┘
-    ↓ (사용자 승인)
+    ↓ (User approval)
 ┌─────────────────────────────────────────────────────────────┐
-│  💪 MUSCLES (근육) 레이어                                    │
-│  - 실제 데이터 연동, 핵심 비즈니스 로직, 인터랙션              │
-│  - 관련 태스크 자동 실행                                      │
+│  MUSCLES layer                                              │
+│  - Real data integration, core business logic, interactions │
+│  - Auto-run related tasks                                   │
 ├─────────────────────────────────────────────────────────────┤
-│  ✅ 레이어 완료 → 스크린샷 캡처 → notify_user                 │
-│  "기능이 구현되었습니다. 실제로 잘 작동하는지 확인해주세요."   │
-│  [승인] → 다음 레이어 / [수정 요청] → 즉시 반영 후 재확인      │
+│  Layer complete → Screenshot → notify_user                  │
+│  "Features are implemented. Please verify everything        │
+│   works correctly."                                         │
+│  [Approve] → Next layer / [Request changes] → Apply + recheck│
 └─────────────────────────────────────────────────────────────┘
-    ↓ (사용자 승인)
+    ↓ (User approval)
 ┌─────────────────────────────────────────────────────────────┐
-│  ✨ SKIN (스킨) 레이어                                       │
-│  - 디자인 시스템 정밀 적용, 애니메이션, 예외 처리              │
-│  - 관련 태스크 자동 실행                                      │
+│  SKIN layer                                                 │
+│  - Precise design system, animations, edge case handling    │
+│  - Auto-run related tasks                                   │
 ├─────────────────────────────────────────────────────────────┤
-│  ✅ 레이어 완료 → 스크린샷 캡처 → notify_user                 │
-│  "완성되었습니다. 사용감이 훌륭한지 최종 확인해주세요."        │
+│  Layer complete → Screenshot → notify_user                  │
+│  "Done. Please do a final review of the look and feel."     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 태스크-레이어 매핑 규칙
+### Task-to-Layer Mapping Rules
 
-TASKS 파일(`TASKS.md` 우선, 없으면 `docs/planning/06-tasks.md`)에서 태스크를 레이어별로 분류합니다:
+Classify tasks from the TASKS file (`TASKS.md` preferred, fallback to `docs/planning/06-tasks.md`) by layer:
 
-| 태스크 패턴                     | 레이어      | 예시                       |
-| :------------------------------ | :---------- | :------------------------- |
-| `T0.*`, `T1.1~T1.3` (초기 구조) | 🦴 Skeleton | 라우팅, 레이아웃, 더미 UI  |
-| `T1.4~T2.*` (핵심 기능)         | 💪 Muscles  | API 연동, 상태관리, CRUD   |
-| `T3.*` (폴리싱)                 | ✨ Skin     | 애니메이션, 반응형, 접근성 |
+| Task Pattern | Layer | Examples |
+| :----------------------------- | :---------- | :------------------------- |
+| `T0.*`, `T1.1–T1.3` (initial structure) | Skeleton | Routing, layout, dummy UI |
+| `T1.4–T2.*` (core features) | Muscles | API integration, state management, CRUD |
+| `T3.*` (polish) | Skin | Animations, responsive, accessibility |
 
-> **참고**: 태스크에 `[Skeleton]`, `[Muscles]`, `[Skin]` 태그가 있으면 해당 태그를 우선 사용합니다.
+> **Note**: If a task has a `[Skeleton]`, `[Muscles]`, or `[Skin]` tag, that tag takes precedence.
 
-### 체크포인트 메시지 형식
+### Checkpoint Message Format
 
 ```markdown
-## 🦴 Skeleton 레이어 완료!
+## Skeleton Layer Complete!
 
-**완료된 태스크**: T0.1, T0.2, T1.1
-**스크린샷**: [첨부]
+**Completed Tasks**: T0.1, T0.2, T1.1
+**Screenshot**: [attached]
 
-### 확인 요청
+### Review Request
 
-> 전체적인 틀이 맞는지 확인해주세요.
+> Please check that the overall structure matches expectations.
 >
-> - 레이아웃이 의도한 대로인가요?
-> - 네비게이션 구조가 올바른가요?
+> - Is the layout as intended?
+> - Is the navigation structure correct?
 
-**다음 단계**: Muscles 레이어 (API 연동, 핵심 로직 구현)
+**Next Step**: Muscles layer (API integration, core logic implementation)
 
-[1] 승인하고 다음 레이어 진행
-[2] 수정 요청 (피드백 입력)
+[1] Approve and continue to next layer
+[2] Request changes (enter feedback)
 ```
 
 ---
 
-## 📊 태스크 실행 추적 (Task Execution Tracking)
+## Task Execution Tracking
 
-개별 태스크를 시작하고 완료할 때 **자동으로 문서화하고 진행 상황을 추적**합니다.
+**Automatically document and track progress** when starting and completing individual tasks.
 
-### `/agile run {task-id}` - 태스크 시작
+### `/agile run {task-id}` — Start a Task
 
-**실행 시 수행할 작업:**
+**Actions to perform:**
 
-1. **TASKS 파일에서 해당 태스크 정보 추출** (`TASKS.md` 우선)
-2. **실행 계획서 생성**: `docs/reports/{task-id}-plan.md`
+1. **Extract task info from the TASKS file** (`TASKS.md` preferred)
+2. **Generate execution plan**: `docs/reports/{task-id}-plan.md`
 
    ```markdown
    # Execution Plan: {task-id}
 
-   **시작 시각**: {timestamp}
-   **목표**: {task 설명}
+   **Started**: {timestamp}
+   **Goal**: {task description}
 
-   ## 실행 단계
+   ## Execution Steps
 
    1. ...
    2. ...
 
-   ## 예상 산출물
+   ## Expected Deliverables
 
    - ...
    ```
 
-3. **TASKS 파일 업데이트**: 해당 태스크를 `[/]` (진행 중)로 표시
-4. **사용자에게 계획 보고** 후 작업 시작
+3. **Update TASKS file**: Mark the task as `[/]` (in progress)
+4. **Report the plan to the user** before starting work
 
-### `/agile done {task-id}` - 태스크 완료
+### `/agile done {task-id}` — Complete a Task
 
-**실행 시 수행할 작업:**
+**Actions to perform:**
 
-1. **완료 보고서 생성**: `docs/reports/{task-id}-report.md`
+1. **Generate completion report**: `docs/reports/{task-id}-report.md`
 
    ```markdown
    # Completion Report: {task-id}
 
-   **완료 시각**: {timestamp}
-   **소요 시간**: {duration}
+   **Completed**: {timestamp}
+   **Duration**: {duration}
 
-   ## 완료된 작업
+   ## Work Completed
 
    - ...
 
-   ## 생성된 파일
+   ## Files Created
 
    - `path/to/file1.ts`
    - `path/to/file2.tsx`
 
-   ## 테스트 결과
+   ## Test Results
 
-   - ✅ 단위 테스트 통과
-   - ✅ 빌드 성공
+   - Unit tests passed
+   - Build succeeded
 
-   ## 다음 단계
+   ## Next Steps
 
-   - 다음 태스크: {next-task-id}
+   - Next task: {next-task-id}
    ```
 
-2. **TASKS 파일 업데이트**: 해당 태스크를 `[x]` (완료)로 표시
-3. **Git 커밋 제안** (선택적)
+2. **Update TASKS file**: Mark the task as `[x]` (done)
+3. **Suggest a Git commit** (optional)
 
 ---
 
-## 🔗 스킬 연동 (v2.6.0)
+## Skill Integration (v2.6.0)
 
-| 상황 | 연동 스킬 | 설명 |
-|------|-----------|------|
-| **시작 전** | `/workflow` | 현재 상태에 맞는 스킬 추천 |
-| **긴 기획 문서** | `/compress` | H2O 패턴으로 핵심 추출 후 시작 |
-| **태스크 필요** | `/tasks-init` | TASKS.md 스캐폴딩 |
-| **대규모 자동화** | `/orchestrate-standalone` | 30~80개 태스크 병렬 실행 |
-| **결핍/가정 검증** | `/eros` → `/the-fool` | 결핍 분석 + 비판적 검증 |
-| **기획 재검토** | `/poietes` | 에로스 기획 v2 |
-| **Muscles 레이어 완료 시** | `/checkpoint` | 2단계 코드 리뷰 **(v2.4.0 NEW)** |
-| **Skin 레이어 완료 시** | `/trinity` → `/audit` | 五柱 평가 + 종합 감사 |
-| **버그 발생 시** | `/systematic-debugging` | 근본 원인 분석 |
-| **테스트 자동화** | `/powerqa` | QA 사이클링 |
-| **중단 시** | `/recover` | 작업 복구 |
-| **컨텍스트 과부하** | `/compress` | 긴 문서/코드 압축 후 재시도 |
+| Situation | Linked Skill | Description |
+|-----------|--------------|-------------|
+| **Before starting** | `/workflow` | Recommend skill based on current state |
+| **Long planning docs** | `/compress` | Extract essentials via H2O pattern before starting |
+| **Need tasks** | `/tasks-init` | Scaffold TASKS.md |
+| **Large-scale automation** | `/team-orchestrate` | Parallel execution of 30–80 tasks |
+| **Gap/assumption validation** | `/eros` → `/the-fool` | Gap analysis + critical validation |
+| **Planning review** | `/poietes` | Eros planning v2 |
+| **After Muscles layer** | `/checkpoint` | 2-stage code review **(v2.4.0 NEW)** |
+| **After Skin layer** | `/trinity` → `/audit` | Five-pillar evaluation + full audit |
+| **On bug** | `/systematic-debugging` | Root cause analysis |
+| **Test automation** | `/powerqa` | QA cycling |
+| **On interruption** | `/recover` | Work recovery |
+| **Context overload** | `/compress` | Compress long docs/code and retry |
 
-### 🪝 Hook 연동 (v1.9.2)
+### Agent Teams Integration
 
-| Hook | 효과 |
-|------|------|
-| `skill-router` | `/agile` 키워드 자동 감지 → 스킬 즉시 로드 |
-| `session-memory-loader` | 이전 스프린트 상태 자동 복원 |
-| `error-recovery-advisor` | 레이어 실패 시 복구 제안 |
-
-### 🤖 Agent Team 연동 (v2.5.0)
-
-project-team 에이전트들과 협업하여 스프린트를 관리합니다.
-
-#### 스프린트 시작 시 에이전트 협업
+When Agent Teams are active, delegate sprint coordination to team-lead.
 
 ```
-/agile start 또는 /agile auto 실행 시:
+/agile start or /agile auto:
     ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  1️⃣ Project Manager 에이전트에게 태스크 분배 요청           │
-│  - Agent tool 사용: subagent_type="project-manager"         │
-│  - 스프린트 범위와 일정 전달                                 │
-│  - PM이 태스크를 도메인별로 분배                            │
+│  1. Request sprint plan from team-lead                      │
+│  - Pass sprint scope and schedule                           │
+│  - team-lead distributes tasks to domain team members       │
 ├─────────────────────────────────────────────────────────────┤
-│  2️⃣ Domain Specialist 에이전트들에게 병렬 할당              │
-│  - backend-specialist: API/데이터 로직                      │
-│  - frontend-specialist: UI/상태 관리                        │
-│  - security-specialist: 보안 검증 (Muscles 완료 시)          │
+│  2. Parallel execution per team member                      │
+│  - architecture-lead → Task(builder): API/data logic        │
+│  - design-lead → Task(builder): UI/state management         │
+│  - qa-lead → Task(reviewer): security review (on Muscles)   │
 ├─────────────────────────────────────────────────────────────┤
-│  3️⃣ 체크포인트 시 QA Manager에게 품질 검증 요청            │
-│  - SendMessage tool로 승인 요청                             │
-│  - 품질 게이트 통과 시 다음 레이어 진행                     │
+│  3. Request quality validation from qa-lead at checkpoint   │
+│  - Proceed to next layer after quality gate passes          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### 에이전트 호출 패턴
+| Agent | Invocation Point | Role |
+|-------|------------------|------|
+| **team-lead** | Sprint start | Task distribution, Plan Approval |
+| **architecture-lead** | Muscles layer | Delegate API/DB logic |
+| **design-lead** | Skin layer | Delegate UI/UX implementation |
+| **qa-lead** | Each layer completion | Quality gate approval |
 
-**1) Project Manager에게 스프린트 계획 요청:**
-
-```javascript
-// Agent tool로 PM 호출
-Agent({
-  subagent_type: "project-manager",
-  prompt: `스프린트 계획을 수립해주세요:
-  - 범위: ${레이어} 레이어
-  - 태스크: ${태스크_목록}
-  - 일정: ${예상_기간}`
-})
-```
-
-**2) QA Manager에게 품질 승인 요청:**
-
-```javascript
-// SendMessage tool로 승인 요청
-SendMessage({
-  type: "message",
-  recipient: "qa-manager",
-  content: `품질 검증 요청:
-  - 레이어: ${레이어_명}
-  - 완료 태스크: ${태스크_ID_목록}
-  - 테스트 결과: ${결과_요약}`,
-  summary: "Quality gate approval request"
-})
-```
-
-#### 에이전트별 역할 분담
-
-| 에이전트 | 호출 시점 | 역할 |
-|---------|-----------|------|
-| **project-manager** | 스프린트 시작 | 태스크 분배, 일정 관리 |
-| **backend-specialist** | Muscles 레이어 | API/DB 로직 구현 가이드 |
-| **frontend-specialist** | Skin 레이어 | UI/UX 구현 가이드 |
-| **security-specialist** | Muscles 완료 시 | 보안 취약점 검증 |
-| **qa-manager** | 각 레이어 완료 시 | 품질 게이트 승인 |
-
-#### project-team 연동 전제 조건
-
-```bash
-# project-team이 설치되어 있어야 합니다
-ls project-team/agents/*.md
-
-# governance-setup이 실행된 프로젝트여야 합니다
-ls management/mini-prd.md
-```
-
-**project-team 미설치 시 동작:**
-- 에이전트 호출을 스킵하고 standalone 모드로 동작
-- 사용자에게 "project-team 설치 권장" 메시지 표시
+**When Agent Teams are inactive:** operate in standalone mode (skip agent delegation)
 
 ---
 
-## ⚠️ 실패 시 대응
+## Failure Response
 
-| 실패 유형 | 권장 조치 |
-|-----------|-----------|
-| **테스트 실패** | `/systematic-debugging` → 수정 → 재실행 |
-| **빌드 실패** | 에러 메시지 분석 → `/agile iterate "빌드 에러 수정"` |
-| **리뷰 실패** | `/code-review` 피드백 반영 → 재리뷰 |
-| **CLI 중단** | `/recover` → `/agile status` → 재개 |
+| Failure Type | Recommended Action |
+|--------------|-------------------|
+| **Test failure** | `/systematic-debugging` → fix → re-run |
+| **Build failure** | Analyze error message → `/agile iterate "fix build error"` |
+| **Review failure** | Apply `/code-review` feedback → re-review |
+| **CLI interruption** | `/recover` → `/agile status` → resume |
 
 ---
 
-**Last Updated**: 2026-03-03 (v2.5.0 - project-team 에이전트 팀 연동)
+**Last Updated**: 2026-03-16 (v3.0.0 - Agent Teams integration, agent-browser + Lighthouse CLI)

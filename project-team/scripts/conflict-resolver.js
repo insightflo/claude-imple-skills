@@ -3,14 +3,14 @@
  * conflict-resolver.js
  *
  * Wave Barrier gate: scans .claude/collab/requests/ for unresolved REQ files
- * and escalates stalled negotiations to ChiefArchitect.
+ * and escalates stalled negotiations to architecture-lead.
  *
  * Called by orchestrate.sh at each Wave Barrier gate.
  *
  * Exit codes:
  *   0 — all REQs resolved (or no REQs), safe to proceed to next wave
  *   1 — error reading collab directory
- *   2 — ESCALATED REQs found (ChiefArchitect must mediate before continuing)
+ *   2 — ESCALATED REQs found (architecture-lead must mediate before continuing)
  *
  * Usage:
  *   node conflict-resolver.js [--project-dir=/path] [--auto-escalate] [--json]
@@ -198,7 +198,7 @@ function buildReport(opts, reqs) {
           escalateREQ(req, `negotiation_count (${count}) >= max_negotiation (${max})`);
           report.escalated.push(meta.id || req.file);
         } else {
-          // Not auto-escalating: keep open so ChiefArchitect can decide manually
+          // Not auto-escalating: keep open so architecture-lead can decide manually
           report.open.push(meta.id || req.file);
         }
         continue;
@@ -262,11 +262,11 @@ function main() {
     log(`  Escalated         : ${report.escalated.length}`);
 
     if (report.escalated.length > 0) {
-      log('\n[conflict-resolver] ESCALATED REQs require ChiefArchitect mediation:');
+      log('\n[conflict-resolver] ESCALATED REQs require architecture-lead mediation:');
       for (const id of report.escalated) {
         log(`  - ${id}`);
       }
-      log('\n[conflict-resolver] ChiefArchitect must create DEC files in .claude/collab/decisions/ before next wave.');
+      log('\n[conflict-resolver] architecture-lead must create DEC files in .claude/collab/decisions/ before next wave.');
     }
 
     if (report.open.length > 0) {
@@ -277,7 +277,7 @@ function main() {
     }
   }
 
-  // Exit 2: ESCALATED REQs — ChiefArchitect must mediate before next wave
+  // Exit 2: ESCALATED REQs — architecture-lead must mediate before next wave
   if (report.escalated.length > 0) {
     process.exit(2);
   }

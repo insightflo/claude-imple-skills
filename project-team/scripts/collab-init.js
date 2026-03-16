@@ -11,9 +11,9 @@
  *
  * Directories created:
  *   .claude/collab/
- *   ├── contracts/        ChiefArchitect-only write (Wave 0 outputs)
+ *   ├── contracts/        architecture-lead-only write (Wave 0 outputs)
  *   ├── requests/         REQ-*.md files (cross-domain change requests)
- *   ├── decisions/        DEC-*.md files (ChiefArchitect rulings)
+ *   ├── decisions/        DEC-*.md files (architecture-lead rulings)
  *   ├── locks/            JSON lock files (TTL: 10 min)
  *   ├── archive/          Wave-end archival of completed REQ/DEC files
  *   ├── control.ndjson    Canonical operator-intent log (append-only)
@@ -24,7 +24,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const childProcess = require('child_process');
 
 // Status messages go to stderr; stdout is reserved for JSON output
 function log(msg) {
@@ -37,7 +36,7 @@ File-based communication bus for the hierarchical agent collaboration system.
 
 ## Directories
 
-- **contracts/**: ChiefArchitect-only write, all agents read-only.
+- **contracts/**: architecture-lead-only write, all agents read-only.
   Created during Wave 0 before Domain Workers begin.
   Contains: api-schema.yaml, types.ts, error-codes.md
 
@@ -45,7 +44,7 @@ File-based communication bus for the hierarchical agent collaboration system.
   Any agent can create REQ files here.
   Status flow: OPEN → PENDING → RESOLVED/REJECTED/ESCALATED
 
-- **decisions/**: DEC-*.md files issued by ChiefArchitect.
+- **decisions/**: DEC-*.md files issued by architecture-lead.
   Created when a REQ is ESCALATED (max_negotiation exceeded).
   Final rulings that all agents must follow.
 
@@ -67,7 +66,6 @@ File-based communication bus for the hierarchical agent collaboration system.
 
 - **board-state.json**: Current kanban board snapshot (Backlog / In Progress / Blocked / Done).
   Derived from TASKS.md + orchestrate-state.json + requests/. Never edit directly.
-  Rebuild: \`node skills/task-board/scripts/board-builder.js\`
 
 - **events.ndjson**: Append-only board event log.
   One JSON event per line: task_claimed, task_started, task_done, task_blocked,
@@ -78,7 +76,7 @@ File-based communication bus for the hierarchical agent collaboration system.
 - \`/whitebox\` is the only product boundary.
 - The TUI is the interactive renderer/operator shell for \`/whitebox\`.
 - The CLI mutation surface is the shared mutation path and headless/scriptable surface.
-- \`task-board\` is a renderer inside the whitebox product surface, not a separate product.
+- The whitebox surface handles all board rendering and state visualization.
 
 ## REQ File Format
 
@@ -86,8 +84,8 @@ File-based communication bus for the hierarchical agent collaboration system.
 ---
 id: REQ-YYYYMMDD-NNN
 thread_id: thread-{domain}-{topic}
-from: BackendSpecialist
-to: FrontendSpecialist
+from: architecture-lead
+to: design-lead
 task_ref: T2.3
 status: OPEN
 max_negotiation: 2
@@ -181,14 +179,6 @@ function init(projectDir) {
       ) + '\n'
     );
   }
-
-  const boardBuilderPath = path.resolve(__dirname, '..', '..', 'skills', 'task-board', 'scripts', 'board-builder.js');
-  if (!fs.existsSync(boardBuilderPath)) {
-    throw new Error(`board builder missing: ${boardBuilderPath}`);
-  }
-  childProcess.execFileSync(process.execPath, [boardBuilderPath, `--project-dir=${projectDir}`], {
-    stdio: 'ignore',
-  });
 
   log(`collab initialized: ${collabDir}`);
   for (const sub of SUBDIRS) {

@@ -5,9 +5,7 @@
     "lead",
     "builder",
     "reviewer",
-    "designer",
-    "dba",
-    "security-specialist"
+    "designer"
   ],
   "compatibility": {
     "window": "one-release",
@@ -22,8 +20,9 @@
       "displayName": "Lead",
       "kind": "core",
       "artifacts": [
-        "agents/Lead.md"
-      ]
+        "agents/Builder.md"
+      ],
+      "note": "Lead.md removed — use .claude/agents/team-lead.md (Agent Teams)"
     },
     "builder": {
       "displayName": "Builder",
@@ -45,58 +44,14 @@
       "artifacts": [
         "agents/Designer.md"
       ]
-    },
-    "dba": {
-      "displayName": "DBA",
-      "kind": "specialist",
-      "artifacts": [
-        "agents/DBA.md"
-      ]
-    },
-    "security-specialist": {
-      "displayName": "Security Specialist",
-      "kind": "specialist",
-      "artifacts": [
-        "agents/SecuritySpecialist.md"
-      ]
     }
   },
   "legacyAliases": {
     "agents": [
       {
-        "alias": "project-manager",
-        "canonicalRole": "lead",
-        "artifact": "agents/ProjectManager.md"
-      },
-      {
-        "alias": "chief-architect",
-        "canonicalRole": "lead",
-        "artifact": "agents/ChiefArchitect.md"
-      },
-      {
-        "alias": "qa-manager",
-        "canonicalRole": "reviewer",
-        "artifact": "agents/QAManager.md"
-      },
-      {
         "alias": "maintenance-analyst",
         "canonicalRole": "reviewer",
         "artifact": "agents/MaintenanceAnalyst.md"
-      },
-      {
-        "alias": "backend-specialist",
-        "canonicalRole": "builder",
-        "artifact": "agents/BackendSpecialist.md"
-      },
-      {
-        "alias": "frontend-specialist",
-        "canonicalRole": "builder",
-        "artifact": "agents/FrontendSpecialist.md"
-      },
-      {
-        "alias": "chief-designer",
-        "canonicalRole": "designer",
-        "artifact": "agents/ChiefDesigner.md"
       }
     ],
     "profiles": [
@@ -134,12 +89,6 @@
         "artifact": "hooks/security-scan.js",
         "event": "PostToolUse",
         "matcher": "Edit|Write",
-        "installType": "active"
-      },
-      "task-board-sync": {
-        "artifact": "hooks/task-board-sync.js",
-        "event": "PostToolUse",
-        "matcher": "Edit|Write|TaskUpdate",
         "installType": "active"
       },
       "quality-gate": {
@@ -225,6 +174,16 @@
         "matcher": "Edit|Write",
         "installType": "helper",
         "matcherListKey": "risk-area-warning"
+      },
+      "teammate-idle-gate": {
+        "artifact": "hooks/teammate-idle-gate.js",
+        "event": "TeammateIdle",
+        "installType": "active"
+      },
+      "task-completed-gate": {
+        "artifact": "hooks/task-completed-gate.js",
+        "event": "TaskCompleted",
+        "installType": "active"
       }
     },
     "matcherLists": {
@@ -247,8 +206,7 @@
       "hookNames": [
         "permission-checker",
         "policy-gate",
-        "security-scan",
-        "task-board-sync"
+        "security-scan"
       ],
       "compatibilityProfiles": []
     },
@@ -258,15 +216,12 @@
         "lead",
         "builder",
         "reviewer",
-        "designer",
-        "dba",
-        "security-specialist"
+        "designer"
       ],
       "hookNames": [
         "permission-checker",
         "policy-gate",
         "security-scan",
-        "task-board-sync",
         "quality-gate",
         "contract-gate",
         "pre-edit-impact-check"
@@ -279,15 +234,12 @@
         "lead",
         "builder",
         "reviewer",
-        "designer",
-        "dba",
-        "security-specialist"
+        "designer"
       ],
       "hookNames": [
         "permission-checker",
         "policy-gate",
         "security-scan",
-        "task-board-sync",
         "quality-gate",
         "contract-gate",
         "pre-edit-impact-check",
@@ -307,6 +259,31 @@
         "domain-designer",
         "domain-developer"
       ]
+    },
+    "team": {
+      "description": "Native Agent Teams mode — team-lead + domain teammates with Plan Approval",
+      "note": "Uses .claude/agents/team-lead.md, architecture-lead.md, qa-lead.md, design-lead.md",
+      "canonicalRoles": [
+        "lead",
+        "builder",
+        "reviewer",
+        "designer"
+      ],
+      "hookNames": [
+        "permission-checker",
+        "policy-gate",
+        "security-scan",
+        "quality-gate",
+        "contract-gate",
+        "teammate-idle-gate",
+        "task-completed-gate"
+      ],
+      "compatibilityProfiles": [],
+      "agentTeams": {
+        "leader": "team-lead",
+        "teammates": ["architecture-lead", "qa-lead", "design-lead"],
+        "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
+      }
     }
   },
   "installerOwnership": {
@@ -333,13 +310,7 @@
   "migrationInventory": {
     "legacyRuntimeRestoration": false,
     "currentLegacyAgentFiles": [
-      "agents/ProjectManager.md",
-      "agents/ChiefArchitect.md",
-      "agents/QAManager.md",
-      "agents/MaintenanceAnalyst.md",
-      "agents/BackendSpecialist.md",
-      "agents/FrontendSpecialist.md",
-      "agents/ChiefDesigner.md"
+      "agents/MaintenanceAnalyst.md"
     ],
     "currentCompatibilityProfileFiles": [
       "agents/templates/PartLeader.md",

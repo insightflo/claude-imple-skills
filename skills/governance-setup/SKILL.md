@@ -1,134 +1,136 @@
 ---
 name: governance-setup
-description: 대규모 프로젝트의 거버넌스 팀(PM, Architect, Designer, QA, DBA) 또는 Mini-PRD(소규모)를 지원합니다.
-trigger: /governance-setup, "거버넌스 구성", "프로젝트 팀 셋업"
+description: Sets up Agent Teams governance (team-lead + architecture/qa/design leads) for large projects, or a Mini-PRD for small ones. Use this skill at project kickoff, whenever a team structure is needed, or on requests like "set up governance", "configure project team", or "create agent team" — do not skip it.
 version: 1.4.0
 updated: 2026-03-03
 ---
 
-> **v1.4.0**: **Mini-PRD 지원** (Progressive Disclosure + `/audit` 호환), `/project-bootstrap` 의존 제거, 거버넌스 완료 후 **프로젝트 팀 로컬 초기화(standalone)** 경로 추가
+> **v1.4.0**: **Mini-PRD support** (Progressive Disclosure + `/audit` compatible), removed `/project-bootstrap` dependency, added **local project team initialization (standalone)** path after governance completion
 
-# 🏛️ Governance Setup (Phase 0)
+# Governance Setup (Phase 0)
 
-> **목적**: 대규모 프로젝트에서 구현 전에 거버넌스 팀이 표준과 품질 기준을 확립합니다.
+> **Purpose**: Before implementation begins on a large project, the governance team establishes standards and quality baselines.
 >
-> **🎯 Standalone 목표(중요)**: 이 프로젝트는 **구현을 돕는 스킬 + 에이전트 팀(Project Team)**을 제공하며, **standalone으로 완전히 독립 동작**하는 것을 목표로 합니다.
+> **Standalone Goal (important)**: This project provides **implementation-assist skills + an Agent Team (Project Team)** and is designed to **operate fully standalone without external dependencies**.
 >
-> **⚠️ 핵심 원칙**: 이 스킬은 **구현 코드를 작성하지 않습니다**. 오직 **거버넌스 문서와 표준**만 생성합니다.
+> **Core Principle**: This skill **does not write implementation code**. It produces only **governance documents and standards**.
 >
-> **전제 조건**: TASKS.md가 있으면 좋습니다. 없다면 (1) 거버넌스 완료 후 **프로젝트 팀 로컬 초기화(standalone)** 단계에서 **TASKS 스캐폴딩**을 먼저 수행하거나, (선택) 외부 도구/스킬로 TASKS를 생성하세요.
+> **Prerequisites**: Having a TASKS.md is ideal. If absent, either (1) after governance completes, run **TASKS scaffolding** in the **local project team initialization (standalone)** step, or (optionally) generate TASKS with an external tool/skill.
 >
-> **v1.2.1**: Frontmatter `trigger` 정리, `/audit` 연동 보강, Phase 실행 템플릿 구체화 (v1.3.0에서 standalone 경로 강화)
+> **v1.2.1**: Cleaned up frontmatter `trigger`, strengthened `/audit` integration, detailed Phase execution templates (standalone path reinforced in v1.3.0)
 
 ---
 
-## ⛔ 절대 금지 사항
+## Absolute Prohibitions
 
-1. ❌ **구현 코드 작성 금지** - 표준/정책 문서만 작성
-2. ❌ **에이전트 순서 무시 금지** - PM → Architect → Designer → QA → DBA 순서 필수
-3. ❌ **사용자 확인 없이 진행 금지** - 각 에이전트 완료 후 사용자 승인 필요
+1. **No implementation code** — only standards and policy documents
+2. **Do not skip agent order** — PM → Architect → Designer → QA → DBA sequence is mandatory
+3. **Do not proceed without user confirmation** — user approval is required after each agent completes
 
 ---
 
-## ✅ 즉시 실행 행동
+## Immediate Actions on Trigger
 
-### (중요) 문서 → 실행 연결고리
-- 이 스킬은 구현 코드를 작성하지 않지만, 산출물이 실제로 효력을 가지려면 **문서가 실행 가능한 강제 장치(게이트/테스트/타입/CI)**로 내려가야 합니다.
-- 따라서 `management/quality-gates.md`와 `ADR-*.md`에는 **"어디에서 어떻게 강제되는지"(예: 단일 검증 엔트리 커맨드, CI job, 테스트 스위트, 산출물 경로)**를 반드시 포함하세요.
-- 예: `scripts/verify_all.sh` 또는 `make verify` 같은 **단일 엔트리 검증 커맨드**를 정의하고, quality gates 항목을 그 커맨드 하위 단계로 매핑.
+### (Important) Document → Execution Link
+- This skill does not write implementation code, but for its outputs to carry real effect, **documents must be translated into enforceable mechanisms (gates/tests/types/CI)**.
+- Therefore `management/quality-gates.md` and `ADR-*.md` must include **"where and how it is enforced"** (e.g., a single verification entry command, CI job, test suite, artifact path).
+- Example: define a **single entry verification command** like `scripts/verify_all.sh` or `make verify`, and map each quality gate item as a sub-step under that command.
 
 
-### 0단계: 전제 조건 확인
+### Step 0: Prerequisite Check
 
 ```bash
-# TASKS 파일은 프로젝트에 따라 루트(TASKS.md) 또는 docs/planning/06-tasks.md에 있을 수 있습니다.
+# The TASKS file may be at root (TASKS.md) or at docs/planning/06-tasks.md depending on the project.
 ls docs/planning/06-tasks.md 2>/dev/null || ls TASKS.md 2>/dev/null
 ls management/project-plan.md management/decisions/ADR-*.md 2>/dev/null
 ls management/mini-prd.md 2>/dev/null
 ```
 
-**TASKS.md가 없으면**:
-- 레거시 파일(`docs/planning/06-tasks.md`)만 있으면 → `/tasks-migrate` 먼저 안내 (TASKS.md로 통합)
-- 태스크 파일 자체가 없으면 → `/tasks-init` 먼저 안내 (스캐폴딩 생성)
+**If TASKS.md is absent**:
+- Only a legacy file (`docs/planning/06-tasks.md`) exists → guide `/tasks-migrate` first (consolidate into TASKS.md)
+- No task file at all → continue governance, then guide `/tasks-init` as the next step after completion
 
-**Mini-PRD vs Full Governance 선택**:
-- 소규모 프로젝트 (1~5인) → **Mini-PRD** (`references/mini-prd/`)
-- 대규모 프로젝트 (6인 이상) → **Full Governance** (5단계 에이전트 팀)
+**If TASKS.md exists**: check the task count.
+- 30 or more tasks → after governance, recommend `/team-orchestrate` for parallel execution
+
+**Mini-PRD vs Full Governance selection**:
+- Small project (1–5 people) → **Mini-PRD** (`references/mini-prd/`)
+- Large project (6+ people) → **Full Governance** (5-phase agent team)
 
 ---
 
-## 🎯 Mini-PRD (Lightweight Alternative)
+## Mini-PRD (Lightweight Alternative)
 
-> **빠른 시작**: 대규모 거버넌스 팀이 필요 없는 소규모 프로젝트용
+> **Fast start**: For small projects that do not need a full governance team
 
-**파일**: `management/mini-prd.md`
+**File**: `management/mini-prd.md`
 
-### Mini-PRD 생성
+### Creating a Mini-PRD
 
 ```bash
-# 템플릿 참조
+# Template reference
 references/mini-prd/mini-prd-template.md
 
-# Progressive Disclosure 질문 세트
+# Progressive Disclosure question set
 references/mini-prd/progressive-disclosure.md
 
-# /audit 호환성 매핑
+# /audit compatibility mapping
 references/mini-prd/audit-mapping.md
 ```
 
-### Phase별 질문
+### Phase-by-Phase Questions
 
-| Phase | 시점 | 질문 |
-|-------|------|------|
-| **Phase 1** | 초기 | purpose, features, tech-stack |
-| **Phase 2** | Skeleton 완료 후 | business-logic, data-model, api-contract |
-| **Phase 3** | Muscles 진행 중 | error-handling, edge-cases, performance |
+| Phase | Timing | Questions |
+|-------|--------|-----------|
+| **Phase 1** | Initial | purpose, features, tech-stack |
+| **Phase 2** | After skeleton complete | business-logic, data-model, api-contract |
+| **Phase 3** | During muscles phase | error-handling, edge-cases, performance |
 
-### /audit 호환성
+### /audit Compatibility
 
-Mini-PRD는 `/audit`의 기획 정합성 검사를 통과합니다:
+A Mini-PRD passes `/audit`'s planning-conformance check:
 
 ```bash
-# Mini-PRD만 있어도 통과
-management/mini-prd.md  # Phase 1+2 필수
+# Mini-PRD alone is sufficient to pass
+management/mini-prd.md  # Phase 1+2 required
 
-# /audit 실행 시
+# When /audit runs
 /audit
-  → ✅ Mini-PRD 감지
-  → ✅ 기획 정합성 확인
-  → ✅ 아키텍처 확인
-  → ✅ DDD 확인 (data-model)
+  → ✅ Mini-PRD detected
+  → ✅ Planning conformance verified
+  → ✅ Architecture verified
+  → ✅ DDD verified (data-model)
 ```
 
 ---
 
-## 🔄 거버넌스 팀 5단계 순차 실행
+## Governance Team — 5-Phase Sequential Execution
 
-| Step | 에이전트 | 산출물 | 상세 가이드 |
-|------|----------|--------|-------------|
+| Step | Agent | Artifact | Detailed Guide |
+|------|-------|----------|----------------|
 | 1 | **PM** | `management/project-plan.md` | `references/phase-1-pm.md` |
 | 2 | **Architect** | `management/decisions/ADR-*.md` | `references/phase-2-architect.md` |
 | 3 | **Designer** | `design/system/*.md` | `references/phase-3-designer.md` |
 | 4 | **QA Manager** | `management/quality-gates.md` | `references/phase-4-qa.md` |
 | 5 | **DBA** | `database/standards.md` | `references/phase-5-dba.md` |
 
-### 각 Phase 진입 시
-1. 해당 `references/phase-N-*.md` 파일을 Read
-2. 아래 템플릿으로 Task 호출 (예시)
+### On Entering Each Phase
+1. Read the corresponding `references/phase-N-*.md` file
+2. Invoke a Task using the template below (example):
    ```js
    Task({
-     subagent_type: "orchestrator", // phase 파일의 안내에 따름
-     description: "PM: 프로젝트 계획 수립",
-     prompt: "`references/phase-1-pm.md` 지침에 따라 `management/project-plan.md`를 작성하세요. 필요한 입력 정보는 사용자에게 질문하세요."
+     subagent_type: "orchestrator", // follow the guidance in the phase file
+     description: "PM: Draft project plan",
+     prompt: "Follow instructions in `references/phase-1-pm.md` and write `management/project-plan.md`. Ask the user for any required input."
    })
    ```
-3. 완료 조건 확인 후 다음 단계로
+3. Confirm completion conditions before moving to the next phase
 
-> 주의: Phase별 `subagent_type`은 `references/phase-N-*.md`에 정의된 값을 우선합니다.
+> Note: The `subagent_type` per phase takes its value from what is defined in `references/phase-N-*.md`.
 
 ---
 
-## 📋 거버넌스 완료 체크리스트
+## Governance Completion Checklist
 
 ```
 management/
@@ -149,64 +151,68 @@ database/
 
 ---
 
-## 🔗 다음 단계 (CRITICAL)
+## Next Steps (CRITICAL)
 
-> **이 섹션은 스킬 완료 후 반드시 실행합니다.**
+> **This section must be executed after the skill completes.**
 
-거버넌스 완료 후 **AskUserQuestion**으로 다음 단계 안내:
+After governance completes, present next-step options via **AskUserQuestion**:
 
 ```json
 {
   "questions": [{
-    "question": "✅ 거버넌스 셋업 완료! 다음 단계를 선택하세요:",
-    "header": "다음 단계",
+    "question": "Governance setup complete! Choose your next step:",
+    "header": "Next Steps",
     "options": [
-      {"label": "⭐ 프로젝트 팀 로컬 초기화 (권장)", "description": "(standalone) project-team install + .claude/project-team.yaml 생성 + 도메인 에이전트 + TASKS 스캐폴딩"},
-      {"label": "거버넌스 품질 초기 감사", "description": "/audit - 설정된 표준과 품질 게이트를 종합 점검"},
-      {"label": "결핍 분석 먼저", "description": "/eros - 숨겨진 가정과 결핍 검증 (v1.10.0)"},
-      {"label": "직접 구현 시작", "description": "/agile auto - Claude가 직접 코드 작성 (소규모만)"}
+      {"label": "Local project team initialization (recommended)", "description": "(standalone) project-team install + .claude/project-team.yaml creation + domain agents + TASKS scaffolding"},
+      {"label": "Initial governance quality audit", "description": "/audit — comprehensive check of configured standards and quality gates"},
+      {"label": "Deficit analysis first", "description": "/eros — validate hidden assumptions and gaps (v1.10.0)"},
+      {"label": "Start implementing directly", "description": "/agile auto — Claude writes code directly (small projects only)"}
     ],
     "multiSelect": false
   }]
 }
 ```
 
-### 선택에 따른 자동 실행
+> **Conditional guidance (auto-inserted)**:
+> - If TASKS.md was absent → prepend "TASKS.md is missing. Run `/tasks-init` first in the next step." to the top of the options.
+> - If TASKS.md has 30 or more tasks → prepend "You have 30+ tasks. `/team-orchestrate` is recommended for parallel execution." to the top of the options.
 
-| 선택 | 실행 |
-|------|------|
-| "프로젝트 팀 로컬 초기화" | 아래 **Standalone Init** 섹션 수행 |
-| "거버넌스 품질 초기 감사" | `Skill({ skill: "quality-auditor" })` |
-| "결핍 분석 먼저" | `Skill({ skill: "eros" })` |
-| "직접 구현 시작" | `Skill({ skill: "agile" })` |
+### Auto-execution by Selection
 
----
-
-## ⚙️ Hook 연동
-
-| 산출물 | Hook | 동작 |
-|--------|------|------|
-| ADR-*.md | `standards-validator` | ADR 위반 시 경고 |
-| quality-gates.md | `quality-gate` | 품질 미달 시 차단 |
-| design/system/*.md | `design-validator` | 디자인 위반 감지 |
-| database/standards.md | `standards-validator` | DB 명명 규칙 검사 |
+| Selection | Action |
+|-----------|--------|
+| "Local project team initialization" | Execute **Standalone Init** section below |
+| "Initial governance quality audit" | `Skill({ skill: "quality-auditor" })` |
+| "Deficit analysis first" | `Skill({ skill: "eros" })` |
+| "Start implementing directly" | `Skill({ skill: "agile" })` |
 
 ---
 
-## 🆘 FAQ
+## Hook Integration
 
-**Q: TASKS.md가 없어요**
-→ `/tasks-init` 먼저 실행 (스캐폴딩 생성)
-
-**Q: 특정 단계만 다시 실행하고 싶어요**
-→ 해당 `references/phase-N-*.md`를 Read 후 Task 호출
-
-**Q: 에이전트 호출 실패**
-→ `ls ~/.claude/agents/` 확인 (Claude Project Team 필요)
-
-**Q: 기획 문서가 너무 길어요**
-→ `/compress optimize docs/planning/*.md` 실행 (H2O 패턴으로 핵심 추출)
+| Artifact | Hook | Behavior |
+|----------|------|----------|
+| ADR-*.md | `standards-validator` | Warns on ADR violations |
+| quality-gates.md | `quality-gate` | Blocks on quality shortfalls |
+| design/system/*.md | `design-validator` | Detects design violations |
+| database/standards.md | `standards-validator` | Checks DB naming conventions |
 
 ---
 
-**Last Updated**: 2026-03-03 (v1.4.1 - Context Optimize 연동)
+## FAQ
+
+**Q: I don't have a TASKS.md**
+→ Run `/tasks-init` first (generates scaffolding)
+
+**Q: I want to re-run a specific phase only**
+→ Read the corresponding `references/phase-N-*.md` then invoke the Task
+
+**Q: Agent invocation failed**
+→ Check `ls ~/.claude/agents/` (Claude Project Team required)
+
+**Q: Planning documents are too long**
+→ Run `/compress optimize docs/planning/*.md` (extracts key content with the H2O pattern)
+
+---
+
+**Last Updated**: 2026-03-03 (v1.4.1 - Context Optimize integration)

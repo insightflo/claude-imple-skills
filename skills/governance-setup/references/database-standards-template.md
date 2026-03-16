@@ -258,29 +258,6 @@ WHERE o.user_id = 1;
 | Passwords | Hash (bcrypt/argon2) | Never store plaintext |
 | PII | Encrypt at rest | AES-256 |
 | Payment data | Tokenize | Use payment processor |
-
----
-
-## 8. Governance Operationalization (Doc → Execution)
-
-> DB 표준이 실제로 지켜지도록, 실행 경로(로컬/CI)와 산출물을 명시합니다.
-
-### 8.1 Single Entry 검증 커맨드
-- Recommended: `scripts/verify_all.sh` 또는 `make verify`
-
-### 8.2 Standards ↔ Checks 매핑
-
-| Standard Area | Check Tool/Job | Command | Output Artifact | Enforcement |
-|---------------|----------------|---------|-----------------|-------------|
-| Naming (tables/columns/indexes) | {{TOOL}} | {{COMMAND}} | {{PATH}} | Block/Warn |
-| Migrations safety | {{TOOL}} | {{COMMAND}} | {{PATH}} | Block |
-| Query anti-patterns | {{TOOL}} | {{COMMAND}} | {{PATH}} | Warn |
-| Secrets/PII handling | {{TOOL}} | {{COMMAND}} | {{PATH}} | Block |
-
-### 8.3 Update Triggers
-- Schema/migration 관련 incident 발생
-- 도메인/멀티테넌시 확장으로 naming 규칙 변경 필요
-- 성능/락 이슈로 migration 전략 변경 필요
 | API keys | Hash or vault | Not in DB if possible |
 
 ### 7.3 Audit Trail
@@ -300,9 +277,32 @@ CREATE TABLE audit_log (
 
 ---
 
-## 8. Monitoring & Alerts
+## 8. Governance Operationalization (Doc → Execution)
 
-### 8.1 Key Metrics
+> Defines the execution paths (local/CI) and artifacts to ensure DB standards are actually followed.
+
+### 8.1 Single Entry Verification Command
+- Recommended: `scripts/verify_all.sh` or `make verify`
+
+### 8.2 Standards ↔ Checks Mapping
+
+| Standard Area | Check Tool/Job | Command | Output Artifact | Enforcement |
+|---------------|----------------|---------|-----------------|-------------|
+| Naming (tables/columns/indexes) | {{TOOL}} | {{COMMAND}} | {{PATH}} | Block/Warn |
+| Migrations safety | {{TOOL}} | {{COMMAND}} | {{PATH}} | Block |
+| Query anti-patterns | {{TOOL}} | {{COMMAND}} | {{PATH}} | Warn |
+| Secrets/PII handling | {{TOOL}} | {{COMMAND}} | {{PATH}} | Block |
+
+### 8.3 Update Triggers
+- Schema/migration-related incident occurs
+- Domain/multi-tenancy expansion requires naming convention changes
+- Performance/lock issues require migration strategy changes
+
+---
+
+## 9. Monitoring & Alerts
+
+### 9.1 Key Metrics
 
 | Metric | Warning | Critical |
 |--------|---------|----------|
@@ -311,7 +311,7 @@ CREATE TABLE audit_log (
 | Disk usage | > 70% | > 85% |
 | Replication lag | > 1s | > 10s |
 
-### 8.2 Slow Query Logging
+### 9.2 Slow Query Logging
 
 ```sql
 -- PostgreSQL

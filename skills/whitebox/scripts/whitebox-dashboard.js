@@ -10,11 +10,14 @@ const { spawn } = require('child_process');
 const { ensureWhiteboxArtifacts } = require('./whitebox-refresh');
 const { buildExplain } = require('./whitebox-explain');
 const { applyCommand } = require('./whitebox-control');
+const { readEvents } = require('../../../project-team/scripts/lib/whitebox-events');
 
 const DASHBOARD_STATE_REL_PATH = '.claude/collab/whitebox-dashboard.json';
 const BOARD_STATE_REL_PATH = '.claude/collab/board-state.json';
 const SUMMARY_REL_PATH = '.claude/collab/whitebox-summary.json';
 const CONTROL_STATE_REL_PATH = '.claude/collab/control-state.json';
+const LAUNCHER_STATE_REL_PATH = '.claude/collab/launcher-state.json';
+const EVENTS_REL_PATH = '.claude/collab/events.ndjson';
 
 function parseArgs(argv = process.argv.slice(2)) {
   const options = {
@@ -133,12 +136,209 @@ function classifyDecision(decision = {}) {
   return 'decision';
 }
 
+function readLauncherState(projectDir) {
+  return readJsonIfExists(path.join(projectDir, LAUNCHER_STATE_REL_PATH), null);
+}
+
+function readEventLog(projectDir) {
+  const parsed = readEvents({ projectDir, file: EVENTS_REL_PATH, tolerateTrailingPartialLine: true });
+  return Array.isArray(parsed.events) ? parsed.events : [];
+}
+
+function latestByKey(events, keyFn) {
+  const index = new Map();
+  for (const event of events) {
+    const key = keyFn(event);
+    if (!key) continue;
+    const current = index.get(key);
+    if (!current || String(current.ts || '') <= String(event.ts || '')) {
+      index.set(key, event);
+    }
+  }
+  return index;
+}
+
+function eventSummary(event) {
+  if (!event) {
+    return { label: 'no activity', detail: 'No matching event observed yet.', at: null };
+  }
+
+  const data = event && event.data && typeof event.data === 'object' ? event.data : {};
+  if (event.type === 'hook.decision') {
+    return {
+      label: data.hook || event.producer || event.type,
+      detail: data.summary || `${data.decision || 'decision'} from ${data.hook || event.producer || 'hook'}`,
+      at: event.ts || null,
+    };
+  }
+
+  if (event.type === 'orchestrate.task.status_changed') {
+    return {
+      label: 'task status',
+      detail: `${data.from || 'unknown'} -> ${data.to || 'unknown'}`,
+      at: event.ts || null,
+    };
+  }
+
+  if (event.type === 'approval_required' || event.type === 'execution_paused' || event.type === 'execution_resumed') {
+    return {
+      label: event.type.replace(/_/g, ' '),
+      detail: data.gate_id ? `gate ${data.gate_id}` : event.type,
+      at: event.ts || null,
+    };
+  }
+
+  if (event.type && event.type.startsWith('supervisor.session.')) {
+    return {
+      label: event.type.replace('supervisor.session.', ''),
+      detail: data.command ? `${data.command}${Array.isArray(data.args) && data.args.length ? ` ${data.args.join(' ')}` : ''}` : 'supervisor lifecycle event',
+      at: event.ts || null,
+    };
+  }
+
+  return {
+    label: event.type || 'event',
+    detail: data.reason || data.summary || data.message || event.producer || 'whitebox event',
+    at: event.ts || null,
+  };
+}
+
+function buildRunningSessions(board, launcher, events) {
+  const inProgress = Array.isArray(board.columns && board.columns['In Progress']) ? board.columns['In Progress'] : [];
+  const taskEvents = latestByKey(events, (event) => {
+    const data = event && event.data && typeof event.data === 'object' ? event.data : {};
+    return data.task_id ? `task:${data.task_id}` : null;
+  });
+
+  const sessions = inProgress.map((card) => {
+    const event = taskEvents.get(`task:${card.id}`) || null;
+    const summary = eventSummary(event);
+    return {
+      id: card.id,
+      title: card.title || card.task_title || card.id,
+      owner: card.agent || null,
+      run_id: card.run_id || launcher && launcher.session_id || null,
+      status: 'running',
+      session_id: launcher && launcher.session_id || card.run_id || null,
+      executor: launcher && launcher.command ? launcher.command.program : null,
+      supervisor_status: launcher && launcher.status ? launcher.status : null,
+      last_event: summary.label,
+      last_message: summary.detail,
+      last_event_at: summary.at,
+    };
+  });
+
+  if (sessions.length > 0 || !launcher) return sessions;
+
+  return [{
+    id: launcher.session_id,
+    title: 'Whitebox supervisor session',
+    owner: 'whitebox-launcher',
+    run_id: launcher.session_id,
+    status: launcher.status || 'running',
+    session_id: launcher.session_id,
+    executor: launcher.command && launcher.command.program ? launcher.command.program : null,
+    supervisor_status: launcher.status || null,
+    last_event: launcher.status || 'starting',
+    last_message: launcher.command && launcher.command.program
+      ? `${launcher.command.program}${Array.isArray(launcher.command.args) && launcher.command.args.length ? ` ${launcher.command.args.join(' ')}` : ''}`
+      : 'launcher session',
+    last_event_at: launcher.finished_at || launcher.started_at || null,
+  }];
+}
+
+function buildInterventionQueue(pendingApprovals, readOnlyDecisions, blockedCards) {
+  const approvals = pendingApprovals.map((approval) => ({
+    kind: 'approval',
+    id: approval.gate_id,
+    title: approval.gate_name || approval.gate_id,
+    task_id: approval.task_id || null,
+    badge: approval.trigger_type || 'user_confirmation',
+    reason: approval.trigger_reason || approval.preview || approval.gate_id,
+    recommendation: approval.recommendation || null,
+    actionable: true,
+    gate_id: approval.gate_id,
+  }));
+
+  const decisions = readOnlyDecisions.map((decision) => ({
+    kind: 'decision',
+    id: decision.id,
+    title: decision.title || decision.id,
+    task_id: decision.task_id || decision.req_id || null,
+    badge: decision.decision_class || 'decision',
+    reason: decision.reason || 'Pending decision',
+    recommendation: decision.recommendation || null,
+    actionable: false,
+    explain: decision.task_id ? { taskId: decision.task_id } : decision.req_id ? { reqId: decision.req_id } : { gate: decision.id },
+  }));
+
+  const blocked = blockedCards.map((card) => ({
+    kind: 'blocked',
+    id: card.id,
+    title: card.title || card.id,
+    task_id: card.id,
+    badge: 'blocked',
+    reason: card.blocker_reason || 'Blocked task',
+    recommendation: card.remediation || null,
+    actionable: false,
+    explain: { taskId: card.id },
+  }));
+
+  return [...approvals, ...decisions, ...blocked];
+}
+
+function buildRecentEvents(events) {
+  return [...events]
+    .filter((event) => event && typeof event.type === 'string')
+    .filter((event) => (
+      event.type.startsWith('supervisor.session.')
+      || event.type === 'approval_required'
+      || event.type === 'execution_paused'
+      || event.type === 'execution_resumed'
+      || event.type === 'hook.decision'
+      || event.type === 'orchestrate.task.status_changed'
+    ))
+    .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')))
+    .slice(0, 12)
+    .map((event) => {
+      const summary = eventSummary(event);
+      return {
+        type: event.type,
+        producer: event.producer || null,
+        at: event.ts || null,
+        label: summary.label,
+        detail: summary.detail,
+      };
+    });
+}
+
+function buildRuntimeSummary(projectDir, rebuild, summary, launcher, events) {
+  return {
+    project_dir: projectDir,
+    gate_status: summary && summary.gate_status ? summary.gate_status : 'unknown',
+    rebuild,
+    launcher: launcher ? {
+      session_id: launcher.session_id || null,
+      status: launcher.status || null,
+      command: launcher.command || null,
+      started_at: launcher.started_at || null,
+      finished_at: launcher.finished_at || null,
+      supervisor_pid: launcher.supervisor_pid || null,
+      executor_pid: launcher.executor_pid || null,
+    } : null,
+    event_count: Array.isArray(events) ? events.length : 0,
+  };
+}
+
 function collectDashboardState(projectDir, options = {}) {
   const rebuild = ensureWhiteboxArtifacts({ projectDir, force: Boolean(options.forceRefresh) });
   const summary = readSummary(projectDir) || readJsonIfExists(path.join(projectDir, SUMMARY_REL_PATH), {});
   const board = readBoardState(projectDir);
   const controlState = readControlState(projectDir);
+  const launcher = readLauncherState(projectDir);
+  const events = readEventLog(projectDir);
   const pendingApprovals = Array.isArray(controlState.pending_approvals) ? controlState.pending_approvals : [];
+  const blockedCards = Array.isArray(board.columns && board.columns.Blocked) ? board.columns.Blocked : [];
   const readOnlyDecisions = Array.isArray(board.decisions)
     ? board.decisions.filter((entry) => entry && entry.status === 'decision_pending' && (!Array.isArray(entry.allowed_actions) || entry.allowed_actions.length === 0))
       .map((entry) => ({
@@ -155,6 +355,10 @@ function collectDashboardState(projectDir, options = {}) {
         decision_path: entry.decision_path || null,
       }))
     : [];
+  const sessions = buildRunningSessions(board, launcher, events);
+  const interventionQueue = buildInterventionQueue(pendingApprovals, readOnlyDecisions, blockedCards);
+  const recentEvents = buildRecentEvents(events);
+  const runtime = buildRuntimeSummary(projectDir, rebuild, summary, launcher, events);
 
   return {
     ok: rebuild.ok,
@@ -164,8 +368,13 @@ function collectDashboardState(projectDir, options = {}) {
     summary,
     board,
     control_state: controlState,
+    launcher,
     approvals: pendingApprovals,
     read_only_decisions: readOnlyDecisions,
+    sessions,
+    intervention_queue: interventionQueue,
+    recent_events: recentEvents,
+    runtime,
   };
 }
 
@@ -209,200 +418,212 @@ function buildDashboardHtml() {
   <title>Whitebox Dashboard</title>
   <style>
     :root {
-      --bg: #f5f1e8;
-      --panel: rgba(255, 252, 245, 0.92);
-      --panel-strong: #fffdf8;
-      --ink: #1f1a17;
-      --muted: #6d6257;
-      --line: rgba(62, 47, 38, 0.12);
-      --accent: #0f766e;
-      --accent-soft: rgba(15, 118, 110, 0.12);
+      color-scheme: light;
+      --page: #f7f7f8;
+      --page-soft: #fbfbfc;
+      --card: rgba(255,255,255,0.94);
+      --card-muted: #f3f4f6;
+      --ink: #202123;
+      --muted: #6e6e80;
+      --line: #ececf1;
+      --line-strong: #d9d9e3;
+      --accent: #10a37f;
+      --accent-ink: #0f513f;
+      --accent-soft: #e8faf4;
       --warn: #b45309;
+      --warn-soft: #fff7ed;
       --danger: #b42318;
-      --danger-soft: rgba(180, 35, 24, 0.1);
-      --shadow: 0 20px 50px rgba(46, 33, 24, 0.12);
-      --radius: 20px;
+      --danger-soft: #fef3f2;
+      --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+      --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.08);
     }
     * { box-sizing: border-box; }
+    html { background: var(--page); }
     body {
       margin: 0;
-      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--ink);
-      background: radial-gradient(circle at top left, rgba(15,118,110,0.14), transparent 34%),
-                  radial-gradient(circle at top right, rgba(180,83,9,0.12), transparent 32%),
-                  linear-gradient(180deg, #fbf8f2 0%, #f2ece0 100%);
       min-height: 100vh;
+      background:
+        radial-gradient(circle at top, rgba(16, 163, 127, 0.12) 0%, rgba(16, 163, 127, 0) 30%),
+        linear-gradient(180deg, var(--page-soft) 0%, var(--page) 24%, #f3f4f6 100%);
+      color: var(--ink);
+      font-family: "Sohne", "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+      line-height: 1.5;
     }
-    header {
-      padding: 32px 24px 16px;
-      display: flex;
-      gap: 16px;
-      align-items: flex-end;
-      justify-content: space-between;
-      flex-wrap: wrap;
-    }
-    h1 { margin: 0; font-size: clamp(28px, 4vw, 48px); line-height: 0.95; }
-    p { margin: 0; color: var(--muted); }
-    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
     button {
       appearance: none;
-      border: 1px solid var(--line);
-      background: var(--panel-strong);
-      color: var(--ink);
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: white;
       border-radius: 999px;
-      padding: 10px 16px;
-      font: inherit;
+      padding: 0.72rem 1.08rem;
       cursor: pointer;
-      transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+      font: inherit;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      box-shadow: 0 8px 20px rgba(16, 163, 127, 0.18);
+      transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
     }
-    button:hover { transform: translateY(-1px); border-color: rgba(15,118,110,0.3); }
-    button.primary { background: var(--accent); color: white; border-color: transparent; }
-    button.warn { background: #fff3e8; color: var(--warn); }
-    button.danger { background: #fff1f0; color: var(--danger); }
-    main {
-      display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-      gap: 18px;
-      padding: 0 24px 24px;
-    }
-    .stack { display: grid; gap: 18px; }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-      backdrop-filter: blur(10px);
-    }
-    .panel header, .panel .content { padding: 18px 20px; }
-    .panel header { border-bottom: 1px solid var(--line); }
-    .panel h2 { margin: 0; font-size: 18px; }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      padding: 0 24px 18px;
-    }
-    .stat {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: var(--shadow);
-    }
-    .stat .label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
-    .stat strong { font-size: 28px; }
-    .columns {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      padding: 20px;
-    }
-    .column {
-      background: rgba(255,255,255,0.58);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      min-height: 180px;
-      padding: 12px;
-    }
-    .column h3 { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
-    .card {
-      background: white;
-      border: 1px solid rgba(62,47,38,0.08);
-      border-radius: 14px;
-      padding: 12px;
-      margin-bottom: 10px;
-      box-shadow: 0 10px 20px rgba(48,38,29,0.06);
-    }
-    .card:last-child { margin-bottom: 0; }
-    .card .title { font-weight: 700; margin-bottom: 4px; }
-    .card .meta { font-size: 13px; color: var(--muted); }
-    .list { display: grid; gap: 12px; padding: 18px 20px 20px; }
-    .item {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 14px;
-      background: rgba(255,255,255,0.78);
-    }
-    .item header {
-      padding: 0;
-      border: 0;
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-    .item h3 { margin: 0; font-size: 16px; }
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      padding: 4px 8px;
-      font-size: 12px;
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .empty { color: var(--muted); font-style: italic; }
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
-    }
-    .split { display: grid; gap: 18px; }
-    .status-line { color: var(--muted); font-size: 13px; }
+    button:hover { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(16, 163, 127, 0.22); }
+    button.secondary { background: var(--card); color: var(--ink); border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+    button.danger { background: white; color: var(--danger); border-color: rgba(180, 35, 24, 0.18); box-shadow: none; }
+    button.subtle { background: rgba(255,255,255,0.72); color: var(--muted); border-color: var(--line-strong); box-shadow: none; padding: 0.42rem 0.78rem; font-size: 0.84rem; }
+    code, pre, .mono { font-family: "Sohne Mono", "SFMono-Regular", "SF Mono", Consolas, monospace; }
+    .mono, .numeric { font-variant-numeric: tabular-nums slashed-zero; font-feature-settings: "tnum" 1, "zero" 1; }
+    .app-shell { max-width: 1320px; margin: 0 auto; padding: 2rem 1rem 3.5rem; }
+    .dashboard-shell { display: grid; gap: 1rem; }
+    .hero-card, .section-card, .metric-card { background: var(--card); border: 1px solid rgba(217,217,227,0.82); box-shadow: var(--shadow-sm); backdrop-filter: blur(18px); }
+    .hero-card { border-radius: 28px; padding: clamp(1.25rem, 3vw, 2rem); box-shadow: var(--shadow-lg); }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.25rem; align-items: start; }
+    .eyebrow { margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.76rem; font-weight: 600; }
+    .hero-title { margin: 0.35rem 0 0; font-size: clamp(2rem, 4vw, 3.3rem); line-height: 0.98; letter-spacing: -0.04em; }
+    .hero-copy { margin: 0.75rem 0 0; max-width: 46rem; color: var(--muted); font-size: 1rem; }
+    .hero-actions { margin-top: 1.1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .status-stack { display: grid; justify-items: end; align-content: start; gap: 0.65rem; min-width: min(100%, 12rem); }
+    .status-badge { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2rem; padding: 0.35rem 0.78rem; border-radius: 999px; border: 1px solid var(--line); background: var(--card-muted); color: var(--muted); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+    .status-badge-dot { width: 0.52rem; height: 0.52rem; border-radius: 999px; background: currentColor; opacity: 0.9; }
+    .status-badge-live { background: var(--accent-soft); border-color: rgba(16,163,127,0.18); color: var(--accent-ink); }
+    .status-badge-warning { background: var(--warn-soft); border-color: rgba(180,83,9,0.18); color: var(--warn); }
+    .status-badge-danger { background: var(--danger-soft); border-color: rgba(180,35,24,0.18); color: var(--danger); }
+    .metric-grid { display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .metric-card { border-radius: 22px; padding: 1rem 1.05rem 1.1rem; }
+    .metric-label { margin: 0; color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+    .metric-value { margin: 0.35rem 0 0; font-size: clamp(1.6rem, 2vw, 2.1rem); line-height: 1.05; letter-spacing: -0.03em; }
+    .metric-detail { margin: 0.45rem 0 0; color: var(--muted); font-size: 0.88rem; }
+    .main-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.95fr); gap: 1rem; }
+    .stack { display: grid; gap: 1rem; }
+    .section-card { border-radius: 24px; padding: 1.15rem; }
+    .section-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+    .section-title { margin: 0; font-size: 1.08rem; line-height: 1.2; letter-spacing: -0.02em; }
+    .section-copy { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.94rem; }
+    .table-wrap { overflow-x: auto; margin-top: 1rem; }
+    .data-table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    .data-table th { padding: 0 0.5rem 0.75rem 0; text-align: left; color: var(--muted); font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .data-table td { padding: 0.95rem 0.5rem 0.95rem 0; border-top: 1px solid var(--line); vertical-align: top; font-size: 0.94rem; }
+    .issue-stack, .detail-stack, .queue-stack { display: grid; gap: 0.22rem; }
+    .issue-id { font-weight: 700; letter-spacing: -0.01em; }
+    .muted { color: var(--muted); }
+    .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.3rem 0.68rem; font-size: 0.78rem; border: 1px solid var(--line); background: var(--card-muted); color: var(--muted); width: fit-content; }
+    .pill.approval, .pill.running, .pill.live, .pill.user_confirmation { background: var(--accent-soft); border-color: rgba(16,163,127,0.18); color: var(--accent-ink); }
+    .pill.blocked, .pill.conflict, .pill.danger, .pill.failed, .pill.agent_conflict { background: var(--danger-soft); border-color: rgba(180,35,24,0.18); color: var(--danger); }
+    .pill.validation, .pill.warning, .pill.risk_acknowledgement, .pill.stale, .pill.decision { background: var(--warn-soft); border-color: rgba(180,83,9,0.18); color: var(--warn); }
+    .empty-state { margin: 1rem 0 0; color: var(--muted); font-style: italic; }
+    .queue-list { display: grid; gap: 0.75rem; margin-top: 1rem; }
+    .queue-card { border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,0.78); padding: 0.95rem; }
+    .queue-head { display: flex; justify-content: space-between; gap: 0.75rem; align-items: flex-start; }
+    .queue-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.85rem; }
+    .columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.85rem; margin-top: 1rem; }
+    .column { background: rgba(255,255,255,0.58); border: 1px solid var(--line); border-radius: 18px; min-height: 180px; padding: 0.85rem; }
+    .column h3 { margin: 0 0 0.7rem; font-size: 0.82rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .board-card { background: white; border: 1px solid rgba(62,47,38,0.08); border-radius: 14px; padding: 0.8rem; margin-bottom: 0.65rem; box-shadow: 0 10px 20px rgba(48,38,29,0.06); }
+    .board-card:last-child { margin-bottom: 0; }
+    .board-card .title { font-weight: 700; margin-bottom: 0.28rem; }
+    .board-card .meta { font-size: 0.82rem; color: var(--muted); }
+    .runtime-card { background: #10131a; color: #dce7f7; border-radius: 18px; padding: 1rem; overflow: auto; max-height: 360px; }
+    .runtime-card pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 13px/1.55 "Sohne Mono", "SFMono-Regular", monospace; }
+    .status-line { color: var(--muted); font-size: 0.84rem; margin-top: 0.8rem; }
+    .event-log { display: grid; gap: 0.7rem; margin-top: 1rem; }
+    .event-item { border-top: 1px solid var(--line); padding-top: 0.7rem; }
+    .event-item:first-child { border-top: 0; padding-top: 0; }
     @media (max-width: 1040px) {
-      main { grid-template-columns: 1fr; }
-      .stats, .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .main-grid, .hero-grid { grid-template-columns: 1fr; }
+      .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .status-stack { justify-items: start; }
     }
     @media (max-width: 720px) {
-      header, main, .stats { padding-left: 16px; padding-right: 16px; }
-      .stats, .columns { grid-template-columns: 1fr; }
+      .app-shell { padding-left: 0.85rem; padding-right: 0.85rem; }
+      .columns { grid-template-columns: 1fr; }
+      .data-table { min-width: 640px; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <p>Ambient execution visibility</p>
-      <h1>Whitebox Dashboard</h1>
-    </div>
-    <div class="actions">
-      <button class="primary" id="refreshButton">Refresh now</button>
-      <button id="copyUrlButton">Copy API URL</button>
-    </div>
-  </header>
-  <section class="stats" id="stats"></section>
-  <main>
-    <div class="stack">
-      <section class="panel">
-        <header><h2>Board</h2></header>
-        <div class="columns" id="columns"></div>
-      </section>
-      <section class="panel">
-        <header><h2>Pending Approvals</h2></header>
-        <div class="list" id="approvals"></div>
-      </section>
-      <section class="panel">
-        <header><h2>Read-only Decisions</h2></header>
-        <div class="list" id="decisions"></div>
-      </section>
-    </div>
-    <div class="split">
-      <section class="panel">
-        <header><h2>Explain</h2></header>
-        <div class="content"><pre id="explain">Select a blocker, approval, or decision to inspect.</pre></div>
-      </section>
-      <section class="panel">
-        <header><h2>Runtime</h2></header>
-        <div class="content">
-          <pre id="runtime"></pre>
-          <p class="status-line" id="statusLine"></p>
+  <div class="app-shell">
+    <section class="dashboard-shell">
+      <header class="hero-card">
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">Whitebox supervisor</p>
+            <h1 class="hero-title">Operations Dashboard</h1>
+            <p class="hero-copy">Symphony-inspired control surface for execution visibility, intervention queues, and deterministic resume-or-abort decisions.</p>
+            <div class="hero-actions">
+              <button id="refreshButton">Refresh now</button>
+              <button class="secondary" id="copyUrlButton">Copy API URL</button>
+            </div>
+          </div>
+          <div class="status-stack" id="heroStatus"></div>
         </div>
-      </section>
-    </div>
-  </main>
+      </header>
+
+      <section class="metric-grid" id="stats"></section>
+
+      <div class="main-grid">
+        <div class="stack">
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Running sessions</h2>
+                <p class="section-copy">Current execution rows, owning session, and latest observed activity.</p>
+              </div>
+            </div>
+            <div class="table-wrap" id="sessions"></div>
+          </section>
+
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Intervention queue</h2>
+                <p class="section-copy">Approvals, decisions, and blocked tasks waiting on an operator action.</p>
+              </div>
+            </div>
+            <div class="queue-list" id="interventionQueue"></div>
+          </section>
+
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Board</h2>
+                <p class="section-copy">Task topology remains visible, but operational control stays above it.</p>
+              </div>
+            </div>
+            <div class="columns" id="columns"></div>
+          </section>
+        </div>
+
+        <div class="stack">
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Explain</h2>
+                <p class="section-copy">Why the run paused or blocked, plus evidence for the next decision.</p>
+              </div>
+            </div>
+            <div class="runtime-card"><pre id="explain">Select a running row, queue item, or blocked task to inspect.</pre></div>
+          </section>
+
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Runtime</h2>
+                <p class="section-copy">Supervisor session, rebuild health, and current control-plane snapshot.</p>
+              </div>
+            </div>
+            <div class="runtime-card"><pre id="runtime"></pre></div>
+            <p class="status-line" id="statusLine"></p>
+          </section>
+
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Recent events</h2>
+                <p class="section-copy">Latest supervisor, gate, and task events affecting the run.</p>
+              </div>
+            </div>
+            <div class="event-log" id="recentEvents"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </div>
   <script>
     const columnsOrder = ['Backlog', 'In Progress', 'Blocked', 'Done'];
     let latestState = null;
@@ -413,120 +634,151 @@ function buildDashboardHtml() {
       return String(value);
     }
 
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function pillClass(value) {
+      const normalized = text(value, '').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+      return normalized ? 'pill ' + normalized : 'pill';
+    }
+
+    function renderHeroStatus(state) {
+      const summary = state.summary || {};
+      const launcher = state.launcher || {};
+      const items = [];
+      items.push('<span class="status-badge status-badge-live"><span class="status-badge-dot"></span>dashboard live</span>');
+      const gateClass = summary.gate_status === 'approval_required' || summary.gate_status === 'blocked'
+        ? 'status-badge-danger'
+        : summary.gate_status === 'decision_pending' || summary.gate_status === 'stale'
+          ? 'status-badge-warning'
+          : 'status-badge-live';
+      items.push('<span class="status-badge ' + gateClass + '"><span class="status-badge-dot"></span>' + escapeHtml(text(summary.gate_status, 'idle')) + '</span>');
+      if (launcher.status) {
+        const launcherClass = launcher.status === 'running' || launcher.status === 'completed'
+          ? 'status-badge-live'
+          : launcher.status === 'failed'
+            ? 'status-badge-danger'
+            : 'status-badge-warning';
+        items.push('<span class="status-badge ' + launcherClass + '"><span class="status-badge-dot"></span>' + escapeHtml('launcher ' + launcher.status) + '</span>');
+      }
+      document.getElementById('heroStatus').innerHTML = items.join('');
+    }
+
     function renderStats(state) {
       const summary = state.summary || {};
       const items = [
-        ['Gate', text(summary.gate_status)],
-        ['Approvals', text(summary.pending_approval_count, '0')],
-        ['Decisions', text(summary.pending_decision_count, '0')],
-        ['Blocked', text(summary.blocked_count, '0')],
+        ['Running', text((state.sessions || []).length, '0'), 'Active sessions currently visible to whitebox.'],
+        ['Interventions', text((state.intervention_queue || []).length, '0'), 'Approvals, decisions, and blocked tasks waiting on action.'],
+        ['Blocked', text(summary.blocked_count, '0'), 'Cards already in a blocked state.'],
+        ['Approvals', text(summary.pending_approval_count, '0'), 'Explicit approve-or-reject gates.'],
+        ['Decisions', text(summary.pending_decision_count, '0'), 'Read-only interventions that still require review.'],
+        ['Next', text(summary.next_remediation_target && summary.next_remediation_target.type, 'none'), 'Most urgent next remediation target from the whitebox summary.'],
       ];
-      document.getElementById('stats').innerHTML = items.map(([label, value]) => (
-        '<div class="stat">'
-          + '<span class="label">' + label + '</span>'
-          + '<strong>' + value + '</strong>'
-        + '</div>'
+      document.getElementById('stats').innerHTML = items.map(([label, value, detail]) => (
+        '<article class="metric-card">'
+          + '<p class="metric-label">' + escapeHtml(label) + '</p>'
+          + '<p class="metric-value numeric">' + escapeHtml(value) + '</p>'
+          + '<p class="metric-detail">' + escapeHtml(detail) + '</p>'
+        + '</article>'
       )).join('');
+    }
+
+    function renderSessions(state) {
+      const sessions = Array.isArray(state.sessions) ? state.sessions : [];
+      const target = document.getElementById('sessions');
+      if (sessions.length === 0) {
+        target.innerHTML = '<p class="empty-state">No active sessions.</p>';
+        return;
+      }
+      target.innerHTML = '<table class="data-table"><thead><tr><th>Task</th><th>Status</th><th>Session</th><th>Executor</th><th>Latest activity</th></tr></thead><tbody>'
+        + sessions.map((session) => (
+          '<tr>'
+            + '<td><div class="issue-stack"><span class="issue-id">' + escapeHtml(text(session.id)) + '</span><span class="muted">' + escapeHtml(text(session.title)) + '</span></div></td>'
+            + '<td><span class="' + pillClass(session.status || session.supervisor_status || 'running') + '">' + escapeHtml(text(session.status || session.supervisor_status || 'running')) + '</span></td>'
+            + '<td><div class="detail-stack"><span class="mono">' + escapeHtml(text(session.session_id, 'n/a')) + '</span><span class="muted">' + escapeHtml(text(session.run_id, 'n/a')) + '</span></div></td>'
+            + '<td><div class="detail-stack"><span>' + escapeHtml(text(session.executor, 'n/a')) + '</span><span class="muted">' + escapeHtml(text(session.owner, 'unassigned')) + '</span></div></td>'
+            + '<td><div class="detail-stack"><button class="subtle" data-explain="' + encodeURIComponent(JSON.stringify({ taskId: session.id })) + '">Explain</button><span>' + escapeHtml(text(session.last_message)) + '</span><span class="muted mono">' + escapeHtml(text(session.last_event_at, 'n/a')) + '</span></div></td>'
+          + '</tr>'
+        )).join('')
+        + '</tbody></table>';
     }
 
     function renderColumns(state) {
       const board = state.board || { columns: {} };
       document.getElementById('columns').innerHTML = columnsOrder.map((column) => {
         const cards = Array.isArray(board.columns && board.columns[column]) ? board.columns[column] : [];
-        const body = cards.length === 0 ? '<p class="empty">Nothing here.</p>' : cards.map((card) => (
-          '<div class="card">'
-            + '<div class="title">' + text(card.id) + '</div>'
-            + '<div class="meta">' + text(card.title || card.task_title || card.id) + '</div>'
-            + '<div class="meta">' + (card.agent ? 'agent: ' + card.agent : '') + (card.run_id ? ' | run: ' + card.run_id : '') + '</div>'
+        const body = cards.length === 0 ? '<p class="empty-state">Nothing here.</p>' : cards.map((card) => (
+          '<div class="board-card">'
+            + '<div class="title">' + escapeHtml(text(card.id)) + '</div>'
+            + '<div class="meta">' + escapeHtml(text(card.title || card.task_title || card.id)) + '</div>'
+            + '<div class="meta">' + escapeHtml((card.agent ? 'owner: ' + card.agent : '') + (card.run_id ? (card.agent ? ' · ' : '') + 'run: ' + card.run_id : '')) + '</div>'
           + '</div>'
         )).join('');
-        return (
-          '<section class="column">'
-            + '<h3>' + column + ' (' + cards.length + ')' + '</h3>'
-            + body
-          + '</section>'
-        );
+        return '<section class="column"><h3>' + column + ' (' + cards.length + ')</h3>' + body + '</section>';
       }).join('');
     }
 
     function explainButton(label, params) {
       const encoded = encodeURIComponent(JSON.stringify(params));
-      return '<button data-explain="' + encoded + '">' + label + '</button>';
+      return '<button class="subtle" data-explain="' + encoded + '">' + label + '</button>';
     }
 
-    function renderApprovals(state) {
-      const approvals = Array.isArray(state.approvals) ? state.approvals : [];
-      const target = document.getElementById('approvals');
-      if (approvals.length === 0) {
-        target.innerHTML = '<p class="empty">No pending approvals.</p>';
+    function renderInterventionQueue(state) {
+      const queue = Array.isArray(state.intervention_queue) ? state.intervention_queue : [];
+      const target = document.getElementById('interventionQueue');
+      if (queue.length === 0) {
+        target.innerHTML = '<p class="empty-state">No interventions waiting right now.</p>';
         return;
       }
-      target.innerHTML = approvals.map((approval) => (
-        '<article class="item">'
-          + '<header>'
-            + '<div>'
-              + '<h3>' + text(approval.gate_name || approval.gate_id) + '</h3>'
-              + '<p>' + text(approval.trigger_reason || approval.preview || approval.gate_id) + '</p>'
-            + '</div>'
-            + '<span class="pill">' + text(approval.trigger_type, 'user_confirmation') + '</span>'
-          + '</header>'
-          + '<p class="status-line">task: ' + text(approval.task_id) + ' | gate: ' + text(approval.gate_id) + '</p>'
-          + '<div class="actions">'
-            + '<button class="primary" data-control="approve" data-gate-id="' + approval.gate_id + '">Approve</button>'
-            + '<button class="danger" data-control="reject" data-gate-id="' + approval.gate_id + '">Reject</button>'
-            + explainButton('Explain', approval.task_id ? { taskId: approval.task_id } : { gate: approval.gate_id })
+      target.innerHTML = queue.map((entry) => (
+        '<article class="queue-card">'
+          + '<div class="queue-head">'
+            + '<div class="queue-stack"><strong>' + escapeHtml(text(entry.title || entry.id)) + '</strong><span class="muted">' + escapeHtml(text(entry.reason)) + '</span><span class="muted">target: ' + escapeHtml(text(entry.task_id || entry.id)) + '</span></div>'
+            + '<span class="' + pillClass(entry.badge || entry.kind) + '">' + escapeHtml(text(entry.badge || entry.kind)) + '</span>'
+          + '</div>'
+          + (entry.recommendation ? '<p class="status-line">' + escapeHtml(entry.recommendation) + '</p>' : '')
+          + '<div class="queue-actions">'
+            + (entry.actionable ? '<button data-control="approve" data-gate-id="' + escapeHtml(entry.gate_id) + '">Approve</button><button class="danger" data-control="reject" data-gate-id="' + escapeHtml(entry.gate_id) + '">Reject</button>' : '')
+            + explainButton('Explain', entry.explain || (entry.task_id ? { taskId: entry.task_id } : { gate: entry.id }))
           + '</div>'
         + '</article>'
       )).join('');
     }
 
-    function renderDecisions(state) {
-      const decisions = Array.isArray(state.read_only_decisions) ? state.read_only_decisions : [];
-      const target = document.getElementById('decisions');
-      if (decisions.length === 0) {
-        target.innerHTML = '<p class="empty">No read-only decisions.</p>';
+    function renderRecentEvents(state) {
+      const events = Array.isArray(state.recent_events) ? state.recent_events : [];
+      const target = document.getElementById('recentEvents');
+      if (events.length === 0) {
+        target.innerHTML = '<p class="empty-state">No recent supervisor or gate events.</p>';
         return;
       }
-      target.innerHTML = decisions.map((decision) => (
-        '<article class="item">'
-          + '<header>'
-            + '<div>'
-              + '<h3>' + text(decision.title) + '</h3>'
-              + '<p>' + text(decision.reason) + '</p>'
-            + '</div>'
-            + '<span class="pill">' + text(decision.decision_class) + '</span>'
-          + '</header>'
-          + '<p class="status-line">task: ' + text(decision.task_id) + ' | req: ' + text(decision.req_id) + ' | trigger: ' + text(decision.trigger_type) + '</p>'
-          + '<div class="actions">'
-            + explainButton('Explain', decision.task_id ? { taskId: decision.task_id } : decision.req_id ? { reqId: decision.req_id } : { gate: decision.id })
-          + '</div>'
-        + '</article>'
+      target.innerHTML = events.map((event) => (
+        '<article class="event-item"><div class="queue-stack"><strong>' + escapeHtml(text(event.label || event.type)) + '</strong><span>' + escapeHtml(text(event.detail)) + '</span><span class="muted mono">' + escapeHtml(text(event.at, 'n/a')) + ' · ' + escapeHtml(text(event.producer, 'system')) + '</span></div></article>'
       )).join('');
     }
 
     function renderRuntime(state) {
-      const summary = state.summary || {};
-      document.getElementById('runtime').textContent = JSON.stringify({
-        generated_at: state.generated_at,
-        project_dir: state.project_dir,
-        run_id: summary.run_id,
-        gate_status: summary.gate_status,
-        rebuild: state.rebuild,
-      }, null, 2);
+      document.getElementById('runtime').textContent = JSON.stringify(state.runtime || {}, null, 2);
       document.getElementById('statusLine').textContent = 'Auto-refresh every 2s. Last update: ' + new Date().toLocaleTimeString();
     }
 
     async function loadState(force = false) {
       const response = await fetch('/api/state' + (force ? '?force=1' : ''), { cache: 'no-store' });
       latestState = await response.json();
+      renderHeroStatus(latestState);
       renderStats(latestState);
+      renderSessions(latestState);
       renderColumns(latestState);
-      renderApprovals(latestState);
-      renderDecisions(latestState);
+      renderInterventionQueue(latestState);
+      renderRecentEvents(latestState);
       renderRuntime(latestState);
-      if (explainTarget) {
-        await loadExplain(explainTarget);
-      }
+      if (explainTarget) await loadExplain(explainTarget);
     }
 
     async function loadExplain(target) {
@@ -717,7 +969,7 @@ async function ensureDashboardServer(options = {}) {
 
 function helpText() {
   return [
-    'whitebox-dashboard - browser surface for whitebox/task-board state',
+    'whitebox-dashboard - browser surface for whitebox state',
     '',
     'Usage:',
     '  node skills/whitebox/scripts/whitebox-dashboard.js [open|serve] [options]',

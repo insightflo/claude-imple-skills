@@ -1,6 +1,6 @@
 ---
 name: tasks-migrate
-description: 레거시 태스크 파일을 root TASKS.md로 통합
+description: Consolidates legacy task files (docs/planning/06-tasks.md, etc.) into the root TASKS.md. Use this whenever task files are scattered across multiple locations. Invoke immediately on "migrate tasks", "move 06-tasks to TASKS", or "consolidate tasks" requests.
 triggers:
   - /tasks-migrate
   - 태스크 마이그레이션
@@ -12,57 +12,57 @@ version: 1.0.0
 
 # Tasks Migrate Skill
 
-레거시 태스크 파일(docs/planning/06-tasks.md, task.md 등)을 스캔하여 root `TASKS.md`로 통합합니다.
+Scans legacy task files (docs/planning/06-tasks.md, task.md, etc.) and consolidates them into the root `TASKS.md`.
 
-## 역할
+## Role
 
-- 여러 위치에 흩어진 태스크 파일을 탐지
-- 체크박스 항목과 Task ID를 추출
-- root `TASKS.md`로 병합 (중복 제거)
-- 레거시 파일은 수정하지 않음 (안전)
+- Detect task files scattered across multiple locations
+- Extract checkbox items and Task IDs
+- Merge into root `TASKS.md` (with deduplication)
+- Never modifies the original legacy files (safe)
 
-## 워크플로우
+## Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. 탐지 Phase                                               │
+│ 1. Detection Phase                                          │
 ├─────────────────────────────────────────────────────────────┤
-│  • TASKS.md 존재 여부 확인                                  │
-│  • 레거시 파일 스캔 (우선순위순)                            │
-│  • 발견된 체크박스 항목 집계                                │
+│  • Check whether TASKS.md exists                            │
+│  • Scan for legacy files (in priority order)                │
+│  • Count discovered checkbox items                          │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. 분석 Phase                                               │
+│ 2. Analysis Phase                                           │
 ├─────────────────────────────────────────────────────────────┤
-│  • Task ID 추출 (P*-T*, T*.*)                               │
-│  • 레이어 분류 (T0-T3, P*)                                  │
-│  • 중복 감지                                                │
+│  • Extract Task IDs (P*-T*, T*.*)                           │
+│  • Classify by layer (T0–T3, P*)                            │
+│  • Detect duplicates                                        │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. 사용자 확인                                              │
+│ 3. User Confirmation                                        │
 ├─────────────────────────────────────────────────────────────┤
-│  • Migration summary 출력                                   │
-│  • 생성/병합/취소 선택                                      │
+│  • Output migration summary                                 │
+│  • User chooses: create / merge / cancel                    │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. 출력 Phase                                               │
+│ 4. Output Phase                                             │
 ├─────────────────────────────────────────────────────────────┤
-│  • TASKS.md 생성 또는 병합                                  │
-│  • Migration report 섹션 추가                               │
+│  • Create or merge TASKS.md                                 │
+│  • Append Migration Report section                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 실행 단계
+## Execution Stages
 
-### Phase 1: 탐지
+### Phase 1: Detection
 
-다음 순서로 태스크 파일 존재 여부를 확인합니다:
+Check for task files in the following priority order:
 
 ```bash
-# 우선순위 순서
+# Priority order
 ls -la TASKS.md 2>/dev/null
 ls -la docs/planning/06-tasks.md 2>/dev/null
 ls -la docs/planning/tasks.md 2>/dev/null
@@ -72,26 +72,26 @@ ls -la .tasks.md 2>/dev/null
 ls -la task.md 2>/dev/null
 ```
 
-**Fallback**: 위 파일이 없으면 `*tasks*.md` 패턴으로 검색
+**Fallback**: If none of the above are found, search using the `*tasks*.md` pattern.
 
-### Phase 2: 분석
+### Phase 2: Analysis
 
-발견된 파일에서 체크박스 항목을 추출합니다:
+Extract checkbox items from discovered files:
 
-**추출 대상:**
+**Extracted targets:**
 ```markdown
-- [ ] 미완료 태스크
-- [x] 완료된 태스크
-- [/] 진행 중 (optional: - [ ] (in progress)로 normalize)
+- [ ] Incomplete task
+- [x] Completed task
+- [/] In progress (optional: normalize to - [ ] (in progress))
 ```
 
-**Task ID 패턴:**
+**Task ID patterns:**
 ```
 P\d+(?:-[A-Z]\d+)?(?:-T\d+)?   # P1-T1, P2-S1-T3
 T\d+(?:\.\d+)+                  # T0.1, T1.12, T3.4
 ```
 
-**분류 기준:**
+**Classification criteria:**
 | ID Pattern | Layer | Section |
 |------------|-------|---------|
 | `T0.*` | Skeleton | `## T0 — Skeleton` |
@@ -101,40 +101,40 @@ T\d+(?:\.\d+)+                  # T0.1, T1.12, T3.4
 | `P*-*` | Phase-based | `## P* — Project/Phase tasks` |
 | (no ID) | Uncategorized | `## Uncategorized` |
 
-### Phase 3: 사용자 확인
+### Phase 3: User Confirmation
 
-Migration summary를 출력하고 사용자에게 확인을 요청합니다:
+Output the migration summary and ask the user to confirm:
 
 ```markdown
 ## Migration Summary
 
-### 발견된 파일
+### Discovered Files
 | File | Tasks | Checked | Unchecked |
 |------|-------|---------|-----------|
 | docs/planning/06-tasks.md | 25 | 20 | 5 |
 | task.md | 3 | 1 | 2 |
 
-### ID 분포
-- T0.* (Skeleton): 5개
-- T1.* (Muscles): 12개
-- T2.* (Advanced): 3개
-- T3.* (Skin): 5개
-- P*-T* (Phase): 3개
-- 무ID: 0개
+### ID Distribution
+- T0.* (Skeleton): 5
+- T1.* (Muscles): 12
+- T2.* (Advanced): 3
+- T3.* (Skin): 5
+- P*-T* (Phase): 3
+- No ID: 0
 
-### 예상 결과
-- TASKS.md 생성/병합: 28개 항목
-- 중복 제거: 2개
+### Expected Result
+- TASKS.md create/merge: 28 items
+- Duplicates removed: 2
 ```
 
-**AskUserQuestion으로 확인:**
-- 생성 (TASKS.md 새로 생성)
-- 병합 (기존 TASKS.md에 추가)
-- 취소 (아무것도 하지 않음)
+**Confirm via AskUserQuestion:**
+- Create (generate new TASKS.md)
+- Merge (append to existing TASKS.md)
+- Cancel (do nothing)
 
-### Phase 4: 출력
+### Phase 4: Output
 
-**TASKS.md 구조:**
+**TASKS.md structure:**
 ```markdown
 # TASKS.md
 
@@ -143,28 +143,28 @@ Migration summary를 출력하고 사용자에게 확인을 요청합니다:
 
 ## T0 — Skeleton
 
-- [ ] T0.1: 프로젝트 구조 설정
-- [x] T0.2: 라우팅 설정
+- [ ] T0.1: Project structure setup
+- [x] T0.2: Routing configuration
 
 ## T1 — Muscles
 
-- [ ] T1.1: 인증 기능 구현
-- [ ] T1.2: API 연동
+- [ ] T1.1: Authentication feature implementation
+- [ ] T1.2: API integration
 
 ## T2 — Muscles (advanced)
 
-- [ ] T2.1: 캐싱 레이어
-- [ ] T2.2: 에러 핸들링
+- [ ] T2.1: Caching layer
+- [ ] T2.2: Error handling
 
 ## T3 — Skin
 
-- [ ] T3.1: 애니메이션 적용
-- [ ] T3.2: 반응형 디자인
+- [ ] T3.1: Apply animations
+- [ ] T3.2: Responsive design
 
 ## P* — Project/Phase tasks
 
-- [x] P1-T1: 설계 문서 완료
-- [ ] P2-T1: Hook 구현
+- [x] P1-T1: Design document complete
+- [ ] P2-T1: Hook implementation
 
 ---
 
@@ -179,25 +179,25 @@ Migration summary를 출력하고 사용자에게 확인을 요청합니다:
 **Date**: 2026-03-03
 ```
 
-## 안전장치
+## Safety Guarantees
 
-1. **레거시 파일 미수정**: 원본 파일을 절대 삭제하거나 수정하지 않음
-2. **중복 제거**: 동일 ID가 있으면 기존 항목 유지
-3. **사용자 확인 필수**: 생성/병합 전 반드시 AskUserQuestion으로 확인
-4. **Dry-run 지원**: `--dry-run` 옵션으로 미리보기만 가능
+1. **Legacy files are never modified**: Original files are never deleted or edited
+2. **Deduplication**: If the same ID already exists, the existing item is preserved
+3. **User confirmation required**: Always confirm via AskUserQuestion before creating or merging
+4. **Dry-run support**: Use `--dry-run` to preview without making changes
 
-## 사용 예시
+## Usage Examples
 
 ```
 /tasks-migrate
 
-# 또는
-"06-tasks.md를 TASKS.md로 마이그레이션해줘"
-"레거시 태스크 파일 통합"
+# or
+"Migrate 06-tasks.md to TASKS.md"
+"Consolidate legacy task files"
 ```
 
-## 관련 스킬
+## Related Skills
 
-- `/workflow-guide` — 마이그레이션 필요 여부 진단
-- `/agile` — 마이그레이션 후 스프린트 실행
-- `/recover` — 태스크 파일 복구 시 참조
+- `/workflow-guide` — Diagnose whether migration is needed
+- `/agile` — Run a sprint after migration
+- `/recover` — Reference when recovering task files
