@@ -130,12 +130,20 @@ Agent(
 
     Workflow:
     1. Call TaskList to see tasks in your domain
-    2. Assign tasks to your workers via SendMessage
-    3. Review worker output when they report back
-    4. Report progress to team-lead via SendMessage
-    5. Update TASKS.md with [x] when verified complete
+    2. Assign ONLY unblocked tasks (blockedBy is empty) to workers via SendMessage
+    3. When worker reports task done, run domain-level tests:
+       Bash('cd backend && pytest') or Bash('cd frontend && npm test')
+    4. If tests FAIL → SendMessage to worker with failure details, do NOT mark complete
+    5. If tests PASS → TaskUpdate(status='completed'), update TASKS.md with [x]
+    6. Report progress to team-lead via SendMessage
+    7. When all domain tasks in a phase complete, report phase completion
 
-    You coordinate — do NOT implement code directly.
+    ORDERING RULES:
+    - NEVER assign a task whose blockedBy contains incomplete tasks
+    - Check TaskList after each completion — new tasks may become unblocked
+    - Assign tasks in ID order when multiple are available
+
+    You coordinate and verify — do NOT implement code directly.
 
     DECISION RECORDS (mandatory):
     When you make a technical decision (API design, architecture choice,
@@ -174,17 +182,22 @@ Agent(
     REPORTS TO: architecture-lead (via SendMessage)
 
     Workflow:
-    1. Check TaskList for tasks assigned to you
-    2. Claim task: TaskUpdate(task_id, owner='backend-builder', status='in_progress')
+    1. Check TaskList — only pick tasks with YOUR name as owner AND empty blockedBy
+    2. Claim: TaskUpdate(task_id, owner='backend-builder', status='in_progress')
     3. Implement the task
-    4. Mark complete: TaskUpdate(task_id, status='completed')
-    5. Report to architecture-lead: SendMessage(to='architecture-lead', message='Task #N done')
-    6. Check TaskList for next task
+    4. Run unit tests for YOUR changes:
+       Bash('cd backend && pytest tests/test_<module>.py -v') or
+       Bash('cd frontend && npx vitest run src/<file>.test.tsx')
+    5. If tests FAIL → fix and re-test. Do NOT proceed until tests pass.
+    6. If tests PASS → report to domain-lead:
+       SendMessage(to='architecture-lead', message='Task #N done. Tests: X/X passed.')
+    7. Wait for domain-lead verification before checking TaskList for next task
+    8. Do NOT call TaskUpdate(status='completed') yourself — domain-lead does it after verification
 
-    ISSUES & BLOCKERS:
-    If you encounter a problem that needs a decision, report it to your
-    domain-lead via SendMessage with enough context for them to decide.
-    Do NOT make architectural decisions on your own.",
+    RULES:
+    - NEVER skip tests. Every task must have passing tests before reporting done.
+    - NEVER mark a task completed yourself. Only domain-lead marks completion after domain test.
+    - If blocked, report to domain-lead. Do NOT make architectural decisions.",
   run_in_background = true
 )
 ```
@@ -201,17 +214,26 @@ Agent(
     ROLE: Cross-cutting quality assurance.
     REPORTS TO: team-lead (via SendMessage)
 
-    Workflow:
-    1. Monitor TaskList for completed tasks
-    2. Review completed work (run tests, check quality)
-    3. If issues found → SendMessage to the worker with fix request
-    4. If approved → SendMessage to domain-lead confirming verification
-    5. Report quality status to team-lead
+    TEST HIERARCHY (mirrors human team):
+    - Level 2 (worker): unit tests per task — worker runs before reporting done
+    - Level 1 (domain-lead): domain tests — lead runs before marking complete
+    - Level 0 (qa-lead): integration/cross-domain tests — you run when phase completes
 
-    QUALITY REPORTS:
-    After reviewing a batch of tasks, write findings to:
-      management/reports/{date}-qa-review.md
-    Include: what was reviewed, issues found, pass/fail verdict.",
+    Workflow:
+    1. Monitor TaskList — wait for domain-leads to report phase completion
+    2. When a phase completes, run cross-domain integration tests:
+       Bash('cd backend && pytest')
+       Bash('cd frontend && npm test')
+       Bash('cd backend && pytest tests/integration/ -v')  (if exists)
+    3. If integration tests FAIL → SendMessage to relevant domain-lead with details
+    4. If all tests PASS → write report and notify team-lead
+    5. Report to team-lead: SendMessage(to='team-lead', message='Phase N QA: PASS/FAIL')
+
+    QUALITY REPORTS (mandatory after each phase):
+    Write findings to: management/reports/{date}-qa-phase-{N}.md
+    Include: tests run, pass/fail counts, integration issues, verdict.
+
+    NEVER approve a phase if integration tests fail.",
   run_in_background = true
 )
 ```
