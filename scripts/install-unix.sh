@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Inflo Engineering Suite Installer for Unix/Mac
+# Claude Impl Tools Installer for Unix/Mac
 # This script creates Symbolic Links from the repo to your ~/.claude/skills directory.
 
 SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../skills" && pwd )"
@@ -21,5 +21,5 @@ for skill_path in "$SOURCE_DIR"/*/; do
     ln -s "$skill_path" "$dest_path"
 done
 
-echo -e "\nInflo Engineering Suite installed successfully!"
+echo -e "\nClaude Impl Tools installed successfully!"
 echo "Run 'claude config skills' to verify."
