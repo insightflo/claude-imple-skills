@@ -5,7 +5,7 @@ triggers:
   - /team-orchestrate
   - 에이전트 팀 실행
   - 팀 오케스트레이트
-version: 3.2.0
+version: 3.3.0
 updated: 2026-03-17
 ---
 
@@ -49,8 +49,16 @@ updated: 2026-03-17
      ```
    - If auto-install fails → STOP and report the error to the user.
 
-6. **governance-setup completed** (recommended, non-blocking):
-   - Missing → WARN. "Consider running `/governance-setup` first."
+6. **governance-setup completed** (recommended, user choice required):
+   - Missing → ASK USER using `AskUserQuestion`:
+     ```text
+     Question: Governance setup (/governance-setup) not found. Create governance structure first?
+     Options:
+       1. Yes, run /governance-setup first (recommended)
+       2. No, proceed without governance
+     ```
+   - If user selects "Yes" → STOP. "Run `/governance-setup` first, then come back."
+   - If user selects "No" → Proceed with a warning: "Proceeding without governance structure."
 
 ---
 
