@@ -29,7 +29,9 @@ updated: 2026-03-17
 
 ## Prerequisite Checks (auto-run on activation)
 
-> **CRITICAL**: All checks below are HARD BLOCKERS. If any check fails, STOP immediately and do not proceed to TeamCreate or any execution step. Tell the user exactly what is missing and how to fix it.
+> **CRITICAL**: Checks 1-2 are HARD BLOCKERS — user must fix manually.
+> Checks 3-5 are AUTO-FIXABLE — if missing, run `install.sh --local --mode=team` automatically.
+> Check 6 is a soft recommendation.
 
 1. **TASKS.md exists**: Must be at project root.
    - Missing → STOP. "Create one first with `/tasks-init`."
@@ -38,16 +40,17 @@ updated: 2026-03-17
    - Invalid → STOP. "Convert with `/tasks-migrate`."
 
 3. **Agent Teams enabled**: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.
-   - Missing → STOP. "Run `project-team/install.sh --local --mode=team`."
-
-4. **Project-level hooks installed**: `.claude/hooks/` must exist and contain at minimum `quality-gate.js`, `pre-edit-impact-check.js`, `security-scan.js`.
-   - Missing → STOP. "Run `bash ~/.claude/claude-impl-tools/project-team/install.sh --local` from the project root first. Hooks are mandatory — without them, agents run with no quality gates."
-
+4. **Project-level hooks installed**: `.claude/hooks/` must exist and contain hook files.
 5. **Project-level settings.json registered**: `.claude/settings.json` must exist and reference the hooks.
-   - Missing → STOP. "Hook files exist but are not registered. Re-run `install.sh --local` to register them in `.claude/settings.json`."
 
-6. **governance-setup completed** (recommended): `.claude/collab/decisions/` should contain at least one ADR, and `.claude/collab/reports/` should have a baseline report.
-   - Missing → WARN (non-blocking). "Consider running `/governance-setup` first to establish standards before team execution."
+   - **Checks 3-5 any fail → AUTO-FIX**: Run the following, then re-verify:
+     ```bash
+     bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=team --force
+     ```
+   - If auto-install fails → STOP and report the error to the user.
+
+6. **governance-setup completed** (recommended, non-blocking):
+   - Missing → WARN. "Consider running `/governance-setup` first."
 
 ---
 

@@ -175,54 +175,6 @@ install_skills() {
 }
 
 # ============================================
-# Prompt for Project Team
-# ============================================
-
-prompt_project_team() {
-    header "Project Team (Optional)"
-
-    printf "\n"
-    printf "  ${BOLD}Project Team${NC} includes:\n"
-    printf "    - 4 Agent Teams leads + 4 core workers\n"
-    printf "    - 20 auto-validation & governance hooks\n"
-    printf "    - Templates for protocols & contracts\n"
-    printf "\n"
-    printf "  ${CYAN}Recommended for:${NC} 30+ task projects, team collaboration\n"
-    printf "  ${CYAN}Requires:${NC}      Node.js 18+ (for hooks)\n"
-    printf "\n"
-
-    if confirm "Install Project Team now?"; then
-        install_project_team
-    else
-        log_info "Skipped. Install later with:"
-        log_info "  cd your-project && bash $INSTALL_DIR/project-team/install.sh --local"
-    fi
-}
-
-# ============================================
-# Install Project Team
-# ============================================
-
-install_project_team() {
-    header "Installing Project Team"
-
-    if ! command -v node >/dev/null 2>&1; then
-        log_warn "Node.js not found. Project Team hooks require Node.js."
-        log_warn "Install Node.js: https://nodejs.org/"
-        if ! confirm "Continue anyway?"; then
-            return
-        fi
-    fi
-
-    bash "$INSTALL_DIR/project-team/install.sh" --local || {
-        log_error "Project Team installation failed"
-        return 1
-    }
-
-    log_success "Project Team installed"
-}
-
-# ============================================
 # Print Summary
 # ============================================
 
@@ -245,6 +197,10 @@ print_summary() {
     printf "    /changelog        - Query change history\n"
     printf "    /coverage         - Test coverage visualization\n"
     printf "    /architecture     - Map project structure\n"
+    printf "\n"
+    printf "  ${BOLD}Project Team (optional):${NC}\n"
+    printf "    cd your-project\n"
+    printf "    bash $INSTALL_DIR/project-team/install.sh --local --mode=team\n"
     printf "\n"
     printf "  ${BOLD}Quick Start:${NC}\n"
     printf "    cd your-project\n"
@@ -285,7 +241,6 @@ main() {
     check_prerequisites
     download_repo
     install_skills
-    prompt_project_team
     print_summary
 }
 
