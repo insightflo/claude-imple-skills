@@ -12,3 +12,19 @@ roles:
 output:
   verdict_options: ["Go", "Go with Conditions", "Pause & Replan", "Escalate", "Kill"]
   verdict_label: "게이트 판정"
+
+# Done-When 검증 (배포 전 필수 검증)
+done_when:
+  - pattern: "TODO|FIXME|XXX|HACK"
+    context: "src/"
+    explanation: "배포 전 해결되지 않은 TODO/FIXME 존재"
+  - pattern: "console\\.log\\(|console\\.debug\\(|print\\("
+    context: "src/"
+    explanation: "디버깅 로그 미제거"
+  - pattern: "@ts-ignore|@ts-nocheck|any\\[\\]"
+    context: "src/"
+    explanation: "타입스크립트 안전성 우회 — 타입 정의 필요"
+  - pattern: "describe\\('\\s*\\)|it\\('\\s*\\)|test\\('\\s*\\)"
+    context: "__tests__/"
+    explanation: "빈 테스트 케이스 존재 — 테스트 구현 필요"
+

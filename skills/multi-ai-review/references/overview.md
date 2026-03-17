@@ -1,21 +1,25 @@
-# Multi-AI Review Overview
+# Multi-AI Review Overview (v4.1)
 
 ## Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Multi-AI Review Pipeline                          │
+│                    Multi-AI Review Pipeline (v4.1)                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  Stage 1: Initial Opinions (parallel execution)                     │
 │  ├── 💎 Gemini CLI → opinion.md (creative perspective)               │
-│  └── 🤖 Codex CLI → opinion.md (technical perspective)               │
+│  └── 🤖 Codex CLI → opinion.md (technical perspective w/ file:line)  │
 │                                                                      │
-│  Stage 2: Response Collection                                        │
-│  └── Collect and format each response                               │
+│  Stage 2: Cross-Review (rebuttal stage)                            │
+│  ├── Gemini reviews/rebuts Codex findings                          │
+│  └── Codex reviews/rebuts Gemini findings                           │
 │                                                                      │
-│  Stage 3: Chairman Synthesis                                         │
-│  └── 🧠 Claude synthesizes all opinions → final report               │
+│  Stage 3: Chairman Synthesis (Evidence-Weighted)                     │
+│  ├── 🔍 Evidence Extraction (file:line citations)                  │
+│  ├── ✅ Done-When Verification (pre-deploy grep)                    │
+│  ├── ⚖️ Delta Arbitration (gap ≥15 requires verification)          │
+│  └── 🧠 Claude synthesizes → Score Card → final report               │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -32,7 +36,14 @@
 - Depends on the slowest response time
 - Configurable timeout
 
-### 3. Job-Based Management
+### 3. Evidence Weighting (v4.1)
+- Code-level evidence (file:line) outranks structural impressions
+- Verification required before score increases
+- Pre-deploy Done-When checks block if issues found
+- Delta arbitration when score gap ≥15 points
+- Codex 2× weight in code-review/project-gate when verified
+
+### 4. Job-Based Management
 - Background execution support
 - Progress polling available
 - Results saved to files

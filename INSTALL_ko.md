@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 | Category | Skills | Description |
 |----------|--------|-------------|
-| **Core** | multi-ai-run, multi-ai-review, team-orchestrate | 필수 오케스트레이션 |
+| **Core** | multi-ai-run, multi-ai-review (v4.1), team-orchestrate | 필수 오케스트레이션. multi-ai-review는 Chairman Evidence Weighting Rules 제공 |
 | **Orchestration** | agile, governance-setup, workflow-guide | 프로젝트 관리 |
 | **Quality** | checkpoint, quality-auditor, security-review | 품질 검증 |
 | **Analysis** | architecture, deps, impact, changelog, coverage | 코드베이스 분석 |

@@ -178,3 +178,42 @@ $ ./scripts/council.sh status "$JOB_DIR"
   ]
 }
 ```
+
+## Done-When Verification (v4.1)
+
+### Pre-Deploy Gate Example
+
+```bash
+# Done-When checks run automatically in CI mode
+./skills/multi-ai-review/scripts/council.sh --mode ci "Review before deploy"
+
+# If Done-When checks fail, deployment is blocked
+# Example output:
+Done-When: FAILED (2 blockers)
+  ✗ JWT 'none' algorithm found at src/auth/jwt.ts:45
+  ✗ Hardcoded secret reference at src/config.ts:12
+
+# Fix issues and re-run verification
+```
+
+### Done-When Pattern Examples
+
+```yaml
+# From presets/code-review.yaml
+done_when:
+  - pattern: "algorithm\\s*['\"]\\s*none\\s*['\"]"
+    context: "src/"
+    explanation: "JWT 'none' algorithm vulnerability"
+  - pattern: "process\\.env\\.(API_KEY|SECRET)"
+    context: "src/"
+    explanation: "Hardcoded secrets in environment calls"
+```
+
+### Manual Done-When Check
+
+```bash
+# Run Done-When grep checks manually
+cd /path/to/project
+grep -rn "algorithm.*['\"]none['\"]" src/ && echo "FAIL: JWT vulnerability found"
+grep -rn "process\.env\.(API_KEY|SECRET)" src/ && echo "FAIL: Hardcoded secrets"
+```

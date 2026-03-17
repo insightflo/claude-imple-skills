@@ -77,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 |-------|--------------|
 | `/quality-auditor` | Pre-deployment comprehensive audit |
 | `/security-review` | OWASP TOP 10, CVE, secrets detection |
-| `/multi-ai-review` | Universal consensus engine (Claude + Gemini CLI + Codex CLI) — auto-routes code review, market regime, investment thesis, risk assessment via 3-Stage Pipeline |
+| `/multi-ai-review` | Universal consensus engine (v4.1) — Claude + Gemini CLI + Codex CLI with Evidence Weighting Rules, Done-When verification, Delta Arbitration (gap ≥15), and 2× Codex weight in code-review/project-gate |
 
 ### Automation
 
@@ -329,7 +329,7 @@ The subagent (Claude) decides when to call the external CLI, validates the outpu
 | Skill | Requirements |
 |-------|--------------|
 | All skills | Claude Code CLI |
-| `/multi-ai-review` | `gemini` CLI, `codex` CLI (optional) — 5 domain presets (code-review, market-regime, investment, risk-assessment, default) |
+| `/multi-ai-review` | `gemini` CLI, `codex` CLI (optional) — 15+ domain presets with Evidence Weighting Rules, Done-When pre-deploy verification (code-review, project-gate), Delta Arbitration (gap ≥15), and 2× Codex weight for technical findings |
 | `/agile`, `/audit` | `agent-browser` CLI, `lighthouse` CLI (optional, for browser verification) |
 
 ### For Project Team Hooks
@@ -342,9 +342,9 @@ The subagent (Claude) decides when to call the external CLI, validates the outpu
 ## Version History
 
 | Version | Date | Changes |
-|---------|------|---------|
-| **v4.1.0** | 2026-03-16 | Unified install.sh (skills + leads + project in one flow), prerequisite guards on core skills, workflow-guide simplified to pure router, playwright MCP → agent-browser + Lighthouse CLI, task-board removed |
-| v4.0.0 | 2026-03-16 | Agent Teams hierarchy (team-lead + 3 domain leads), native Agent Teams orchestration, TeammateIdle/TaskCompleted hooks, orchestrate-standalone removed |
+|---------|----------|---------|
+| **v4.1.0** | 2026-03-17 | **multi-ai-review v4.1**: Chairman Evidence Weighting Rules (code-level evidence priority, verification before score increases, pre-deploy Done-When checks, Delta Arbitration ≥15, 2× Codex weight in code-review/project-gate), Done-When verification in presets |
+| v4.1.0 | 2026-03-16 | Unified install.sh (skills + leads + project in one flow), prerequisite guards on core skills, workflow-guide simplified to pure router, playwright MCP → agent-browser + Lighthouse CLI, task-board removed |
 | v3.8.0 | 2026-03-05 | Task Board skill (`/task-board`), Kanban visualization, task-board-sync hook |
 | v3.7.0 | 2026-03-05 | Agile Sprint Mode, multi-ai-review zombie fix, REQ/DEC protocol |
 | v3.6.0 | 2026-03-03 | Hybrid Wave Architecture for 80-200 tasks |

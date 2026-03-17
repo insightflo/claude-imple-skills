@@ -77,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 |------|------|
 | `/quality-auditor` | 배포 전 종합 감사 |
 | `/security-review` | OWASP TOP 10, CVE, secrets 감지 |
-| `/multi-ai-review` | 범용 멀티-AI 합의 엔진 (Claude + Gemini CLI + Codex CLI) — 코드 리뷰, 시황 레짐, 투자 심사, 리스크 평가를 3-Stage Pipeline으로 자동 라우팅 |
+| `/multi-ai-review` | 범용 멀티-AI 합의 엔진 (v4.1) — Claude + Gemini CLI + Codex CLI, 코드 리뷰, 시황 레짐, 투자 심사, 리스크 평가. Chairman Evidence Weighting Rules (증거 계층, 검증 필수, Done-When 사전 grep, Delta Arbitration ≥15, Codex 2× 가중치) |
 
 ### 자동화
 
@@ -330,7 +330,7 @@ cd project-team
 | 스킬 | 요구사항 |
 |------|----------|
 | 모든 스킬 | Claude Code CLI |
-| `/multi-ai-review` | `gemini` CLI, `codex` CLI (선택) — 5개 도메인 프리셋 (code-review, market-regime, investment, risk-assessment, default) |
+| `/multi-ai-review` | `gemini` CLI, `codex` CLI (선택) — 15+ 도메인 프리셋. Chairman Evidence Weighting Rules, Done-When 검증, Delta Arbitration (점수 차 ≥15), Codex 2× 가중치 (code-review/project-gate) |
 | `/agile`, `/audit` | `agent-browser` CLI, `lighthouse` CLI (선택, 브라우저 검증용) |
 
 ### Project Team 훅용
@@ -344,7 +344,8 @@ cd project-team
 
 | 버전 | 날짜 | 변경사항 |
 |------|------|----------|
-| **v4.1.0** | 2026-03-16 | 통합 install.sh (스킬+리더+프로젝트 한번에), 핵심 스킬 선행 조건 가드, workflow-guide 단순 라우터화, playwright MCP → agent-browser + Lighthouse CLI, task-board 제거 |
+| **v4.1.0** | 2026-03-17 | **multi-ai-review v4.1**: Chairman Evidence Weighting Rules (코드 레벨 증거 우선, 검증 후 점수 상향, 사전 Done-When 체크, Delta Arbitration ≥15, code-review/project-gate에서 2× Codex 가중치), Done-When 검증 프리셋 추가 |
+| v4.1.0 | 2026-03-16 | 통합 install.sh (스킬+리더+프로젝트 한번에), 핵심 스킬 선행 조건 가드, workflow-guide 단순 라우터화, playwright MCP → agent-browser + Lighthouse CLI, task-board 제거 |
 | v4.0.0 | 2026-03-16 | Agent Teams 계층 (team-lead + 3 도메인 리더), 네이티브 Agent Teams 오케스트레이션, TeammateIdle/TaskCompleted 훅, orchestrate-standalone 제거 |
 | v3.8.0 | 2026-03-05 | Task Board 스킬, 칸반 시각화, task-board-sync 훅 |
 | v3.7.0 | 2026-03-05 | Agile Sprint Mode, REQ/DEC 프로토콜 |
