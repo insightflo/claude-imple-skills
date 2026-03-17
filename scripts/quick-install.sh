@@ -46,6 +46,12 @@ header() {
 }
 
 confirm() {
+    # 파이프 실행(curl | bash) 시 stdin이 tty가 아니므로 자동 Yes 처리
+    # 사용자가 입력할 수 없는 환경에서 N 기본값은 업데이트를 건너뛰는 버그를 유발
+    if [ ! -t 0 ]; then
+        printf "${YELLOW}%s [auto-yes: non-interactive]${NC}\n" "$1"
+        return 0
+    fi
     printf "${YELLOW}%s [y/N]${NC} " "$1"
     read -r answer
     case "$answer" in
