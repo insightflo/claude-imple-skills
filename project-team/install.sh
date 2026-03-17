@@ -67,6 +67,12 @@ confirm() {
     if [ "$FORCE" = true ]; then
         return 0
     fi
+    # 파이프 실행(curl | bash) 시 stdin이 tty가 아니므로 자동 Yes
+    if [ ! -t 0 ]; then
+        local prompt="${1:-Continue?}"
+        printf "${YELLOW}%s [auto-yes: non-interactive]${NC}\n" "$prompt"
+        return 0
+    fi
     local prompt="${1:-Continue?}"
     printf "${YELLOW}%s [y/N]${NC} " "$prompt"
     read -r answer
@@ -196,6 +202,13 @@ prompt_install_mode() {
     printf "  ${BOLD}2)${NC} Local install   ${CYAN}(.claude/)${NC}\n"
     printf "\n"
 
+    # 파이프 환경에서는 global 기본값
+    if [ ! -t 0 ]; then
+        INSTALL_MODE="global"
+        log_info "Non-interactive: defaulting to global install"
+        return
+    fi
+
     while true; do
         printf "${YELLOW}Select scope [1/2]:${NC} "
         read -r choice
@@ -218,6 +231,13 @@ prompt_configuration_mode() {
     printf "  ${BOLD}2)${NC} standard\n"
     printf "  ${BOLD}3)${NC} full\n"
     printf "\n"
+    # 파이프 환경에서는 full 기본값 (최대 기능 설치)
+    if [ ! -t 0 ]; then
+        MODE="full"
+        log_info "Non-interactive: defaulting to full mode"
+        return
+    fi
+
     printf "${YELLOW}Select mode [1/2/3] (Enter for lite):${NC} "
     read -r choice
     case "$choice" in
@@ -919,19 +939,25 @@ do_uninstall() {
     header "Uninstalling Claude Project Team"
 
     if [ -z "$INSTALL_MODE" ]; then
-        printf "\n"
-        printf "  ${BOLD}1)${NC} Global uninstall  ${CYAN}(~/.claude/)${NC}\n"
-        printf "  ${BOLD}2)${NC} Local uninstall   ${CYAN}(.claude/)${NC}\n"
-        printf "\n"
-        while true; do
-            printf "${YELLOW}Select scope [1/2]:${NC} "
-            read -r choice
-            case "$choice" in
-                1) INSTALL_MODE="global"; break ;;
-                2) INSTALL_MODE="local"; break ;;
-                *) printf "  Please enter 1 or 2.\n" ;;
-            esac
-        done
+        # 파이프 환경에서는 global 기본값
+        if [ ! -t 0 ]; then
+            INSTALL_MODE="global"
+            log_info "Non-interactive: defaulting to global uninstall"
+        else
+            printf "\n"
+            printf "  ${BOLD}1)${NC} Global uninstall  ${CYAN}(~/.claude/)${NC}\n"
+            printf "  ${BOLD}2)${NC} Local uninstall   ${CYAN}(.claude/)${NC}\n"
+            printf "\n"
+            while true; do
+                printf "${YELLOW}Select scope [1/2]:${NC} "
+                read -r choice
+                case "$choice" in
+                    1) INSTALL_MODE="global"; break ;;
+                    2) INSTALL_MODE="local"; break ;;
+                    *) printf "  Please enter 1 or 2.\n" ;;
+                esac
+            done
+        fi
     fi
 
     resolve_targets
