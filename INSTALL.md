@@ -1,108 +1,81 @@
 # Installation Guide
 
-## Quick Install (One Command)
+## Method 1: Plugin (Recommended)
 
-```bash
-git clone https://github.com/insightflo/claude-impl-tools.git
-cd claude-impl-tools
-./install.sh
+### Step 1: Register marketplace
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "insightflo": {
+      "source": {
+        "source": "github",
+        "repo": "insightflo/claude-impl-tools"
+      }
+    }
+  }
+}
 ```
 
-## Installation Methods
+### Step 2: Install plugin
 
-### 1. Interactive TUI (Recommended)
-
-```bash
-./install.sh
+```
+/plugin install claude-impl-tools@insightflo
 ```
 
-The TUI installer lets you select:
-- Install scope (global / project)
-- Skill categories
-- Project Team (agents + hooks)
-- Multi-AI routing configuration
+Done. 21 skills are now available in all projects.
 
-### 2. Non-Interactive
+### Step 3: Agent Teams (optional)
+
+When you run `/team-orchestrate`, it auto-installs hooks and agents to the current project. Or install manually:
 
 ```bash
-# Global install (Core skills + Agent Teams leads)
-./install.sh --global
-
-# Global + project setup (agents + hooks for current project)
-./install.sh --local
-
-# All skills globally + project setup
-./install.sh --all
+bash ~/.claude/plugins/cache/insightflo/claude-impl-tools/*/project-team/install.sh --local --mode=team
 ```
 
-### 3. Remote Install (No Git Clone)
+---
+
+## Method 2: Quick Install (No plugin)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 ```
 
----
-
-## Skill Categories
-
-| Category | Skills | Purpose |
-|----------|--------|---------|
-| **Core** | multi-ai-run, multi-ai-review, team-orchestrate | Essential orchestration |
-| **Orchestration** | agile, governance-setup, workflow-guide | Project management |
-| **Quality** | checkpoint, quality-auditor, security-review | Quality verification |
-| **Analysis** | architecture, deps, impact, changelog, coverage | Codebase analysis |
-| **Maintenance** | maintenance | ITIL 5-stage production maintenance |
-| **Tasks** | tasks-init, tasks-migrate, recover, context-optimize | Task management |
+Clones to `~/.claude/claude-impl-tools/` and symlinks skills. No hooks or agents — skills install them on demand.
 
 ---
 
-## Project Team
-
-Project Team includes 4 Agent Teams leads, 4 core workers, and 19 governance hooks.
-
-### Agent Teams Leads (`~/.claude/agents/`, installed globally)
-- **team-lead** — PM lead, Plan Approval, conflict mediation
-- **architecture-lead** — Architecture, API design, VETO authority
-- **qa-lead** — Quality gates, test strategy, VETO authority
-- **design-lead** — Design system, visual consistency, VETO authority
-
-### Core Workers (`project-team/agents/`, installed per-project)
-- **Builder** — Implementation execution
-- **Reviewer** — Code review & QA
-- **Designer** — Design specialist
-- **MaintenanceAnalyst** — Production impact analysis
-
-### Deployment Modes
-
-| Mode | Components | Use Case |
-|------|-----------|----------|
-| **team** | Agent Teams leads (global) + workers + governance hooks + `AGENT_TEAMS` env flag | Recommended |
-| **standard** | Core workers + recommended hooks | Most projects |
-| **lite** | Core workers only (no hooks) | MVP / startups |
-| **full** | All agents + all hooks | Regulated industries |
-
----
-
-## Multi-AI Routing
-
-Automatic model selection by task type:
-
-| Task Type | CLI | Model |
-|-----------|-----|-------|
-| Code writing / review | Codex | gpt-5.3-codex |
-| Design / UI | Gemini | gemini-3.1-pro-preview |
-| Planning / coordination | Claude | opus / sonnet |
-
-### CLI Installation
+## Method 3: Manual Clone
 
 ```bash
-# Gemini CLI
-npm install -g @google/gemini-cli
-gemini auth
+git clone https://github.com/insightflo/claude-impl-tools.git ~/.claude/claude-impl-tools
+```
 
-# Codex CLI
-npm install -g @openai/codex
-codex auth
+Then symlink skills:
+```bash
+for skill in ~/.claude/claude-impl-tools/skills/*/; do
+  ln -sf "$skill" ~/.claude/skills/$(basename "$skill")
+done
+```
+
+---
+
+## Project-level Setup (On Demand)
+
+Skills like `/team-orchestrate` auto-install project-level resources when needed. To install manually:
+
+```bash
+cd your-project
+
+# Team mode (Agent Teams + tmux + governance hooks)
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=team
+
+# Other modes
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=lite
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=standard
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=full
 ```
 
 ---
@@ -111,59 +84,46 @@ codex auth
 
 - **Claude Code CLI**: https://claude.ai/code
 - **Node.js 18+**: For hook execution (optional)
-- **gum**: For TUI (auto-installed)
-
----
-
-## Directory Structure
-
-After installation:
-
-```
-~/.claude/                    # Global install
-├── skills/                   # Skills (symlinked)
-│   ├── multi-ai-run/
-│   ├── multi-ai-review/
-│   ├── team-orchestrate/
-│   ├── maintenance/
-│   └── ...
-├── agents/                   # Agent Teams leads + workers
-│   ├── team-lead.md
-│   ├── architecture-lead.md
-│   ├── Builder.md
-│   └── ...
-├── hooks/                    # Governance hooks
-│   ├── permission-checker.js
-│   └── ...
-├── templates/                # Templates
-│   ├── project-team.yaml
-│   └── model-routing.yaml
-└── settings.json             # Hook configuration
-```
+- **tmux**: For Agent Teams pane auto-creation (optional)
 
 ---
 
 ## Update
 
+### Plugin
+```
+/plugin update claude-impl-tools@insightflo
+```
+
+### Quick Install
 ```bash
-cd claude-impl-tools
-git pull
-./install.sh
+cd ~/.claude/claude-impl-tools && git pull
 ```
 
 ---
 
 ## Uninstall
 
+### Plugin
+```
+/plugin uninstall claude-impl-tools@insightflo
+```
+
+### Quick Install
 ```bash
-# Remove skills
-rm -rf ~/.claude/skills/{multi-ai-run,multi-ai-review,team-orchestrate,...}
+# Remove skills symlinks
+for skill in agile architecture changelog checkpoint context-optimize coverage deps governance-setup impact maintenance multi-ai-review multi-ai-run quality-auditor recover security-review statusline tasks-init tasks-migrate team-orchestrate whitebox workflow-guide; do
+  rm -f ~/.claude/skills/$skill
+done
 
-# Remove Project Team
-rm -rf ~/.claude/agents ~/.claude/hooks ~/.claude/templates
+# Remove clone
+rm -rf ~/.claude/claude-impl-tools
+```
 
-# Full removal
-rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/hooks ~/.claude/templates
+### Project-level hooks
+```bash
+cd your-project
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --uninstall
 ```
 
 ---
@@ -171,20 +131,11 @@ rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/hooks ~/.claude/templates
 ## Quick Start
 
 ```bash
-# 1. Launch Claude Code
 claude
 
-# 2. Workflow guide
-> /workflow
-
-# 3. Start orchestration
-> /team-orchestrate
-
-# 4. Production maintenance
-> /maintenance
-
-# 5. Multi-AI review
-> /multi-ai-review
+> /workflow          # What should I do next?
+> /team-orchestrate  # Start agent team
+> /multi-ai-review   # Multi-AI consensus review
 ```
 
 ---

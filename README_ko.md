@@ -4,51 +4,53 @@
 
 [**English**](./README.md) | [**한국어**](./README_ko.md)
 
-Claude Code로 소프트웨어를 개발할 때 도와주는 **스킬**과 **에이전트 팀** 모음입니다. 외부 의존성 없이 독립적으로 실행됩니다.
+Claude Code용 **21개 스킬** 플러그인. 스킬 실행 시 프로젝트 레벨 훅과 에이전트를 자동 설치합니다 — 수동 설정 불필요.
 
 ---
 
 ## 빠른 시작
 
-### 옵션 1: 대화형 설치 (권장)
+### 옵션 1: 플러그인 설치 (권장)
 
-```bash
-git clone https://github.com/insightflo/claude-impl-tools.git
-cd claude-impl-tools
-./install.sh
+`~/.claude/settings.json`에 marketplace 추가:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "insightflo": {
+      "source": {
+        "source": "github",
+        "repo": "insightflo/claude-impl-tools"
+      }
+    }
+  }
+}
 ```
 
-TUI 기반 설치 프로그램에서 선택할 수 있습니다:
-- 설치 위치 (전역 / 프로젝트)
-- 스킬 카테고리 (Core, Orchestration, Quality, Analysis, Tasks)
-- Project Team (에이전트 + 훅)
-- Multi-AI 라우팅 (Claude + Gemini + Codex)
+설치:
 
-### 옵션 2: 비대화형 설치
-
-```bash
-./install.sh --global      # 전역 설치 (Core + Project Team)
-./install.sh --all         # 모든 스킬 전역 설치
-./install.sh --local       # 현재 프로젝트만
+```
+/plugin install claude-impl-tools@insightflo
 ```
 
-### 옵션 3: 원격 설치 (git clone 불필요)
+### 옵션 2: 빠른 설치 (플러그인 없이)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 ```
 
+레포 clone + 스킬 심링크만 설치. 훅/에이전트는 스킬 실행 시 자동 설치.
+
 ---
 
 ## 제공 기능
 
-| 구성요소 | 개수 | 용도 |
-|----------|------|------|
-| **스킬** | 21개 | 작업 실행, 분석, 자동화 |
-| **Agent Teams 리더** | 4개 | team-lead, architecture-lead, qa-lead, design-lead |
-| **코어 워커 에이전트** | 4개 | builder, reviewer, designer, maintenance-analyst |
-| **훅** | 19개 | 자동 검증, 게이트, 동기화, 거버넌스 |
-| **템플릿** | 11개 | Project Team 프로토콜, ADR, 계약, 표준 |
+| 구성요소 | 개수 | 설치 시점 |
+|----------|------|-----------|
+| **스킬** | 21개 | 플러그인 설치 시 |
+| **훅** | 최대 17개 | 필요 시 (스킬이 `install.sh --local` 실행) |
+| **워커 에이전트** | 4개 | 필요 시 (프로젝트 레벨) |
+| **템플릿** | 11개 | 필요 시 (프로젝트 레벨) |
 
 ---
 
@@ -58,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 | 스킬 | 기능 |
 |------|------|
-| `/workflow` | **메타 허브** — 현재 상태를 분석하여 다음 스킬 추천 |
+| `/workflow` | **메타 허브** — 현재 상태 분석 후 다음 스킬 추천 |
 | `/agile` | 레이어별 스프린트 (Skeleton → Muscles → Skin), 1~30개 태스크 |
 | `/recover` | 중단 후 작업 재개 |
 | `/checkpoint` | 진행 상태 저장/복원 |
@@ -67,8 +69,8 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 | 스킬 | 기능 |
 |------|------|
-| `/governance-setup` | 에이전트 팀 구조 설정 |
-| `/tasks-init` | TASKS.md 처음부터 생성 (독립형) |
+| `/governance-setup` | 거버넌스 구조 설정 |
+| `/tasks-init` | TASKS.md 처음부터 생성 |
 | `/tasks-migrate` | 기존 태스크 파일을 새 형식으로 변환 |
 
 ### 품질 & 보안
@@ -77,21 +79,21 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 |------|------|
 | `/quality-auditor` | 배포 전 종합 감사 |
 | `/security-review` | OWASP TOP 10, CVE, secrets 감지 |
-| `/multi-ai-review` | 범용 멀티-AI 합의 엔진 (v4.1) — Claude + Gemini CLI + Codex CLI, 코드 리뷰, 시황 레짐, 투자 심사, 리스크 평가. Chairman Evidence Weighting Rules (증거 계층, 검증 필수, Done-When 사전 grep, Delta Arbitration ≥15, Codex 2× 가중치) |
+| `/multi-ai-review` | 범용 멀티-AI 합의 엔진 (v4.1) — Claude + Gemini CLI + Codex CLI |
 
 ### 자동화
 
 | 스킬 | 기능 |
 |------|------|
-| `/team-orchestrate` | 네이티브 Agent Teams 오케스트레이션 — Plan Approval, 메일박스 통신, 전체 hook 적용, 선택적 multi-AI CLI 라우팅 (Gemini/Codex) |
-| `/multi-ai-run` | Claude/Gemini/Codex 자동 CLI 라우팅 기반 병렬 AI 실행 관리 |
-| `/whitebox` | 실행 대시보드, health/state 확인, 개입형 control-plane 결정 처리 |
+| `/team-orchestrate` | 네이티브 Agent Teams 오케스트레이션 — tmux pane 자동 생성 |
+| `/multi-ai-run` | Claude/Gemini/Codex 자동 CLI 라우팅 병렬 실행 |
+| `/whitebox` | 실행 대시보드, health/state 확인 |
 
 ### 유지보수
 
 | 스킬 | 기능 |
 |------|------|
-| `/maintenance` | ITIL 5단계 프로덕션 유지보수 오케스트레이터 (수용 판단 → 영향도 → 수정 → 검증 → 이력) |
+| `/maintenance` | ITIL 5단계 프로덕션 유지보수 오케스트레이터 |
 | `/impact` | 수정 전 영향도 분석 |
 | `/deps` | 의존성 시각화 + 순환 참조 감지 |
 | `/changelog` | 도메인별 변경 이력 조회 |
@@ -104,40 +106,43 @@ curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/s
 
 ## Agent Teams
 
-Claude Code 네이티브 **Agent Teams**를 사용한 계층적 에이전트 오케스트레이션:
+Claude Code 네이티브 **Agent Teams** + `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` + tmux 자동 pane 생성.
 
 ```
-team-lead (PM 리더)
-├── architecture-lead (Teammate) → Task(builder) / Task(reviewer)
-├── qa-lead (Teammate)           → Task(reviewer) / Task(test-specialist)
-└── design-lead (Teammate)       → Task(designer) / Task(builder)
-
-통신: Lead ↔ Teammates = 메일박스 (양방향)
-위임: Teammate → Subagents = Task tool (단방향)
-거버넌스: TeammateIdle hook + TaskCompleted hook
+현재 Claude 세션 (= team lead)
+├── architecture-lead    ← tmux pane
+│     ├── backend-builder
+│     └── reviewer
+├── design-lead          ← tmux pane
+│     ├── frontend-builder
+│     └── designer
+└── qa-lead              ← tmux pane
 ```
 
-### Agent Teams 리더 (`.claude/agents/`)
+### 작동 방식
 
-| 에이전트 | 책임 |
-|---------|------|
-| **team-lead** | Plan Approval, 팀 형성, 충돌 중재 |
-| **architecture-lead** | 아키텍처, API 설계, VETO 권한 |
-| **qa-lead** | 품질 게이트, 테스트 전략, VETO 권한 |
-| **design-lead** | 디자인 시스템, 시각적 일관성, VETO 권한 |
+1. `TASKS.md`가 있는 프로젝트에서 `/team-orchestrate` 실행
+2. 사전조건 확인 → 훅/에이전트 없으면 **자동 로컬 설치**
+3. tmux pane에 에이전트 자동 생성 (`teammateMode: "tmux"`)
+4. 공유 태스크 목록 + 메일박스로 에이전트 간 통신
 
-### 코어 워커 에이전트 (`project-team/agents/`)
+### Agent Teams 활성화
 
-| 에이전트 | 책임 |
-|---------|------|
-| **Builder** | 구현 실행 |
-| **Reviewer** | 코드 리뷰 & QA |
-| **Designer** | 디자인 전문가 |
-| **Maintenance Analyst** | 프로덕션 영향도 분석 |
+프로젝트 루트에서 `install.sh --local --mode=team` 실행하거나, `/team-orchestrate`가 자동 처리:
 
-### 훅 (19개)
+```bash
+bash project-team/install.sh --local --mode=team
+```
 
-파일 수정 전후 자동 실행되는 검증:
+프로젝트 `.claude/settings.json`에 추가됨:
+```json
+{
+  "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" },
+  "preferences": { "teammateMode": "tmux" }
+}
+```
+
+### 프로젝트 레벨 훅 (필요 시 설치)
 
 | 카테고리 | 훅 |
 |----------|-----|
@@ -146,49 +151,15 @@ team-lead (PM 리더)
 | **품질** | `standards-validator`, `design-validator`, `interface-validator`, `quality-gate` |
 | **게이트** | `policy-gate`, `contract-gate`, `risk-gate`, `docs-gate` |
 | **동기화** | `architecture-updater`, `changelog-recorder`, `cross-domain-notifier`, `task-sync` |
-| **Agent Teams** | `teammate-idle-gate`, `task-completed-gate` |
 
-### 배포 모드
+### 훅 모드
 
-| 모드 | 사용 시기 | 구성요소 |
-|------|-----------|----------|
-| **Lite** | MVP, 스타트업 | 3 에이전트, 2 훅 |
-| **Standard** | 일반적인 프로젝트 | 4 에이전트, 7 훅 |
-| **Full** | 규제 산업 | 전체 에이전트, 전체 훅 |
-| **Team** | Agent Teams 오케스트레이션 | 4 리더 + 워커, 거버넌스 훅 |
-
-자세한 내용은 `project-team/docs/MODES.md` 참조.
-
-### Agent Teams 활성화
-
-Agent Teams는 실험적 기능 플래그가 필요합니다. `--mode=team`으로 설치하면 자동 설정됩니다:
-
-```bash
-cd project-team
-./install.sh --local --mode=team
-```
-
-이 명령은 `.claude/settings.json`에 다음을 추가합니다:
-```json
-{
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
-  "hooks": {
-    "TeammateIdle": [...],
-    "TaskCompleted": [...]
-  }
-}
-```
-
-또는 `.claude/settings.json`이나 `.claude/settings.local.json`에 직접 추가:
-```json
-{
-  "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
-}
-```
-
-에이전트 정의 파일 (`.claude/agents/team-lead.md`, `architecture-lead.md`, `qa-lead.md`, `design-lead.md`)은 저장소에 포함되어 있으며, 플래그 설정 시 자동 활성화됩니다.
+| 모드 | 훅 수 | 사용 시기 |
+|------|-------|-----------|
+| **lite** | 4개 | MVP, 스타트업 |
+| **standard** | 7개 | 일반 프로젝트 |
+| **full** | 17개 | 규제 산업 |
+| **team** | 8개 + Agent Teams 훅 | 팀 오케스트레이션 |
 
 ---
 
@@ -208,7 +179,6 @@ cd project-team
   │   └─ 중대규모 (30+) ────────── /team-orchestrate
   │
   ├─ 유지보수
-  │   ├─ 버그 수정/기능 변경 ────── /maintenance
   │   ├─ 수정 전 영향도 ────────── /impact
   │   ├─ 의존성 확인 ──────────── /deps
   │   └─ 변경 이력 ────────────── /changelog
@@ -221,151 +191,39 @@ cd project-team
   └─ 중단 시 ──────────────────── /recover
 ```
 
-### 에이전트 팀이 필요한가?
-
-| 태스크 수 | 추천 | 코드 작성 | 에이전트 팀 |
-|-----------|------|-----------|------------|
-| ≤ 30 | `/agile auto` | Claude 직접 | 불필요 |
-| 30+ | `/team-orchestrate` | Agent Teams + Plan Approval | 필요 |
-
 ---
 
 ## 프로젝트 구조
 
 ```
 claude-impl-tools/
-├── skills/                    # 21개 스킬
-│   ├── workflow-guide/        # 메타 허브
-│   ├── governance-setup/      # Phase 0 설정
-│   ├── agile/                 # 레이어별 스프린트
-│   ├── recover/               # 중단 후 재개
-│   ├── quality-auditor/       # 배포 전 감사
-│   ├── multi-ai-review/       # 범용 합의 엔진
-│   ├── security-review/       # 보안 스캔
-│   ├── multi-ai-run/          # 병렬 실행
-│   ├── team-orchestrate/      # Agent Teams 오케스트레이션
-│   ├── checkpoint/            # 진행 관리
-│   ├── tasks-init/            # 태스크 생성
-│   ├── tasks-migrate/         # 태스크 마이그레이션
-│   ├── impact/                # 영향도 분석
-│   ├── deps/                  # 의존성 그래프
-│   ├── changelog/             # 변경 이력
-│   ├── coverage/              # 테스트 커버리지
-│   ├── architecture/          # 아키텍처 맵
-│   ├── maintenance/           # ITIL 프로덕션 유지보수 오케스트레이터
-│   ├── whitebox/              # 실행 상태 점검
-│   └── statusline/            # 상태바 진행 표시
-│
-├── project-team/              # 에이전트 팀 시스템
-│   ├── install.sh             # 설치 스크립트
-│   ├── agents/                # 코어 워커 에이전트
-│   ├── hooks/                 # 19개 검증 및 거버넌스 훅
-│   ├── scripts/               # 협업 & 충돌 해결
-│   ├── references/            # 통신 프로토콜
-│   ├── templates/             # 프로토콜, ADR, 계약
-│   ├── examples/              # 샘플 프로젝트
-│   └── docs/                  # 상세 가이드
-│
-├── .claude/agents/            # Agent Teams 리더 (team-lead, architecture-lead, qa-lead, design-lead)
-│
-├── scripts/                   # 설치 스크립트
-│   ├── install-unix.sh
-│   └── install-windows.ps1
-│
-└── README.md
+├── .claude-plugin/
+│   └── plugin.json             # 플러그인 매니페스트
+├── skills/                     # 21개 스킬 (자동 발견)
+│   ├── team-orchestrate/
+│   ├── multi-ai-review/
+│   ├── agile/
+│   └── ...
+├── project-team/               # 필요 시 프로젝트 설정
+│   ├── install.sh              # 로컬 설치 (훅, 에이전트, 템플릿)
+│   ├── agents/                 # 워커 에이전트
+│   ├── hooks/                  # 검증 & 거버넌스 훅
+│   ├── templates/              # 프로토콜, ADR, 계약
+│   └── scripts/                # 협업 스크립트
+└── scripts/
+    └── quick-install.sh        # 대체 설치 (clone + 심링크)
 ```
-
----
-
-## 설치
-
-### 1단계: 스킬 설치
-
-**macOS / Linux**
-```bash
-chmod +x ./scripts/install-unix.sh && ./scripts/install-unix.sh
-```
-
-**Windows (PowerShell)**
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
-```
-
-### 2단계: Project Team 설치 (선택)
-
-대규모 프로젝트나 팀 협업 시:
-
-```bash
-cd project-team
-./install.sh --global    # 모든 프로젝트에서 사용
-./install.sh --local     # 프로젝트별 사용
-```
-
-모드 선택:
-```bash
-./install.sh --mode=lite      # 3 에이전트, 2 훅
-./install.sh --mode=standard  # 4 에이전트, 7 훅 (기본값)
-./install.sh --mode=full      # 전체 에이전트, 전체 훅
-./install.sh --mode=team      # Agent Teams + 거버넌스 훅 + 리더를 ~/.claude/agents/에 전역 설치
-```
-
-`--mode=team`은 Agent Teams 리더를 전역(`~/.claude/agents/`)에 설치합니다 — TASKS.md 분석으로 동적 활성화되는 템플릿이므로 프로젝트별 복사가 불필요합니다.
-
-### 선택적 Multi-AI CLI 라우팅
-
-서브에이전트가 특정 서브태스크에서 Gemini 또는 Codex CLI를 선택적으로 호출할 수 있습니다. Claude가 컨트롤을 유지하면서 외부 AI의 장점을 활용합니다. `skills/team-orchestrate/config/team-topology.json`에서 팀원별 `cli` 필드를 설정합니다:
-
-```json
-{ "design-lead": { "cli": "gemini" } }
-```
-
-서브에이전트(Claude)가 외부 CLI 호출 시점을 판단하고, 결과를 검증하며, 훅은 그대로 적용됩니다. 기본값은 `null` (Claude only).
 
 ---
 
 ## 요구사항
 
-### 스킬용
-
-| 스킬 | 요구사항 |
-|------|----------|
+| 구성요소 | 요구사항 |
+|----------|----------|
 | 모든 스킬 | Claude Code CLI |
-| `/multi-ai-review` | `gemini` CLI, `codex` CLI (선택) — 15+ 도메인 프리셋. Chairman Evidence Weighting Rules, Done-When 검증, Delta Arbitration (점수 차 ≥15), Codex 2× 가중치 (code-review/project-gate) |
-| `/agile`, `/audit` | `agent-browser` CLI, `lighthouse` CLI (선택, 브라우저 검증용) |
-
-### Project Team 훅용
-
-- Node.js 18+ (훅 실행용)
-- Git (worktree & changelog 기능용)
-
----
-
-## 버전 히스토리
-
-| 버전 | 날짜 | 변경사항 |
-|------|------|----------|
-| **v4.1.0** | 2026-03-17 | **multi-ai-review v4.1**: Chairman Evidence Weighting Rules (코드 레벨 증거 우선, 검증 후 점수 상향, 사전 Done-When 체크, Delta Arbitration ≥15, code-review/project-gate에서 2× Codex 가중치), Done-When 검증 프리셋 추가 |
-| v4.1.0 | 2026-03-16 | 통합 install.sh (스킬+리더+프로젝트 한번에), 핵심 스킬 선행 조건 가드, workflow-guide 단순 라우터화, playwright MCP → agent-browser + Lighthouse CLI, task-board 제거 |
-| v4.0.0 | 2026-03-16 | Agent Teams 계층 (team-lead + 3 도메인 리더), 네이티브 Agent Teams 오케스트레이션, TeammateIdle/TaskCompleted 훅, orchestrate-standalone 제거 |
-| v3.8.0 | 2026-03-05 | Task Board 스킬, 칸반 시각화, task-board-sync 훅 |
-| v3.7.0 | 2026-03-05 | Agile Sprint Mode, REQ/DEC 프로토콜 |
-| v3.6.0 | 2026-03-03 | Hybrid Wave Architecture |
-| v3.5.0 | 2026-03-03 | Context Optimize 스킬 |
-| v3.3.0 | 2026-03-03 | 독립형 아키텍처 |
-| v3.0.0 | 2026-02-08 | Project Team 시스템 도입 |
-| v2.0.0 | 2026-01-27 | MCP 의존성 제거 |
-
----
-
-## Long Context 최적화
-
-컨텍스트 크기 증가에 따른 환각 및 정보 손실을 최소화하기 위한 기법:
-
-| 기법 | 목적 | 구현 |
-|------|------|------|
-| **H2O (Heavy-Hitter Oracle)** | 상단에 중요 정보 보존 | SKILL.md frontmatter, 에이전트 프롬프트 헤더 |
-| **Compressive Context** | 오래된/덜 중요한 컨텐츠 요약 | 에이전트 Compressed Context 섹션 |
-| **RAG Hybrid** | 검색 → 우선순위 → 압축 → 종합 | `project-team/services/contextOptimizer.js` |
+| `/multi-ai-review` | `gemini` CLI, `codex` CLI (선택) |
+| Project Team 훅 | Node.js 18+ |
+| Agent Teams + tmux | tmux, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
 
 ---
 

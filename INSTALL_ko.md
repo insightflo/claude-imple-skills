@@ -1,182 +1,143 @@
-# Installation Guide
+# 설치 가이드
 
-## Quick Install (One Command)
+## 방법 1: 플러그인 (권장)
 
-```bash
-# Clone and install
-git clone https://github.com/insightflo/claude-impl-tools.git
-cd claude-impl-tools
-./install.sh
+### 1단계: Marketplace 등록
+
+`~/.claude/settings.json`에 추가:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "insightflo": {
+      "source": {
+        "source": "github",
+        "repo": "insightflo/claude-impl-tools"
+      }
+    }
+  }
+}
 ```
 
-## Installation Methods
+### 2단계: 플러그인 설치
 
-### 1. Interactive TUI (Recommended)
-
-```bash
-./install.sh
+```
+/plugin install claude-impl-tools@insightflo
 ```
 
-TUI 모드로 다음을 선택할 수 있습니다:
-- 설치 위치 (전역/프로젝트)
-- 스킬 카테고리
-- Project Team (에이전트 + 훅)
-- Multi-AI 라우팅 설정
+완료. 21개 스킬이 모든 프로젝트에서 사용 가능합니다.
 
-### 2. Non-Interactive
+### 3단계: Agent Teams (선택)
+
+`/team-orchestrate` 실행 시 훅과 에이전트가 현재 프로젝트에 자동 설치됩니다. 수동 설치:
 
 ```bash
-# 전역 설치 (Core 스킬 + Project Team)
-./install.sh --global
-
-# 프로젝트 설치
-./install.sh --local
-
-# 모든 스킬 전역 설치
-./install.sh --all
+bash ~/.claude/plugins/cache/insightflo/claude-impl-tools/*/project-team/install.sh --local --mode=team
 ```
 
-### 3. Remote Install (No Git Clone)
+---
+
+## 방법 2: 빠른 설치 (플러그인 없이)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/insightflo/claude-impl-tools/main/scripts/quick-install.sh | bash
 ```
 
----
-
-## Skill Categories
-
-| Category | Skills | Description |
-|----------|--------|-------------|
-| **Core** | multi-ai-run, multi-ai-review (v4.1), team-orchestrate | 필수 오케스트레이션. multi-ai-review는 Chairman Evidence Weighting Rules 제공 |
-| **Orchestration** | agile, governance-setup, workflow-guide | 프로젝트 관리 |
-| **Quality** | checkpoint, quality-auditor, security-review | 품질 검증 |
-| **Analysis** | architecture, deps, impact, changelog, coverage | 코드베이스 분석 |
-| **Tasks** | tasks-init, tasks-migrate, recover, context-optimize | 태스크 관리 |
+`~/.claude/claude-impl-tools/`에 clone하고 스킬 심링크 생성. 훅/에이전트는 스킬이 필요할 때 자동 설치.
 
 ---
 
-## Project Team
-
-Project Team은 4명의 Agent Teams 리더와 4명의 코어 워커, 20개의 거버넌스 훅을 포함합니다.
-
-### Agent Teams 리더 (`.claude/agents/`)
-- **team-lead** — PM 리더, Plan Approval, 충돌 중재
-- **architecture-lead** — 아키텍처, API 설계, VETO
-- **qa-lead** — 품질 게이트, 테스트 전략, VETO
-- **design-lead** — 디자인 시스템, 시각적 일관성, VETO
-
-### 코어 워커 (`project-team/agents/`)
-- **Builder** — 구현 실행
-- **Reviewer** — 코드 리뷰 & QA
-- **Designer** — 디자인 전문가
-- **MaintenanceAnalyst** — 프로덕션 영향도 분석
-
-### 배포 모드
-- **team**: Agent Teams 리더 + 거버넌스 훅 + `AGENT_TEAMS` env 플래그 (권장)
-- **standard**: 코어 워커 + 권장 훅
-- **lite**: 코어 워커만 (훅 없음)
-- **full**: 모든 에이전트 + 모든 훅
-
----
-
-## Multi-AI Routing
-
-태스크 유형별 최적 AI 모델 자동 선택:
-
-| 작업 유형 | CLI | 모델 |
-|----------|-----|------|
-| 코드 작성/리뷰 | Codex | gpt-5.3-codex |
-| 디자인/UI | Gemini | gemini-3.1-pro-preview |
-| 기획/조율 | Claude | opus/sonnet |
-
-### CLI 설치
+## 방법 3: 수동 Clone
 
 ```bash
-# Gemini CLI
-npm install -g @google/gemini-cli
-gemini auth
+git clone https://github.com/insightflo/claude-impl-tools.git ~/.claude/claude-impl-tools
+```
 
-# Codex CLI
-npm install -g @openai/codex
-codex auth
+스킬 심링크:
+```bash
+for skill in ~/.claude/claude-impl-tools/skills/*/; do
+  ln -sf "$skill" ~/.claude/skills/$(basename "$skill")
+done
 ```
 
 ---
 
-## Requirements
+## 프로젝트 레벨 설정 (필요 시)
+
+`/team-orchestrate` 같은 스킬이 필요할 때 자동으로 프로젝트 레벨 리소스를 설치합니다. 수동 설치:
+
+```bash
+cd your-project
+
+# Team 모드 (Agent Teams + tmux + 거버넌스 훅)
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=team
+
+# 기타 모드
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=lite
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=standard
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --mode=full
+```
+
+---
+
+## 요구사항
 
 - **Claude Code CLI**: https://claude.ai/code
 - **Node.js 18+**: 훅 실행용 (선택)
-- **gum**: TUI용 (자동 설치)
+- **tmux**: Agent Teams pane 자동 생성용 (선택)
 
 ---
 
-## Directory Structure
+## 업데이트
 
-설치 후 구조:
-
+### 플러그인
 ```
-~/.claude/                    # 전역 설치 시
-├── skills/                   # 스킬들
-│   ├── multi-ai-run/
-│   ├── multi-ai-review/
-│   ├── team-orchestrate/
-│   └── ...
-├── agents/                   # Project Team 에이전트
-│   ├── Builder.md
-│   ├── Reviewer.md
-│   ├── Designer.md
-│   └── MaintenanceAnalyst.md
-├── hooks/                    # 자동 검증 훅
-│   ├── permission-checker.js
-│   └── ...
-├── templates/                # 템플릿
-│   ├── project-team.yaml
-│   └── model-routing.yaml
-├── routing.config.yaml       # CLI 모델 설정
-└── settings.json             # 훅 설정
+/plugin update claude-impl-tools@insightflo
+```
+
+### 빠른 설치
+```bash
+cd ~/.claude/claude-impl-tools && git pull
 ```
 
 ---
 
-## Update
+## 제거
+
+### 플러그인
+```
+/plugin uninstall claude-impl-tools@insightflo
+```
+
+### 빠른 설치
+```bash
+# 스킬 심링크 제거
+for skill in agile architecture changelog checkpoint context-optimize coverage deps governance-setup impact maintenance multi-ai-review multi-ai-run quality-auditor recover security-review statusline tasks-init tasks-migrate team-orchestrate whitebox workflow-guide; do
+  rm -f ~/.claude/skills/$skill
+done
+
+# Clone 제거
+rm -rf ~/.claude/claude-impl-tools
+```
+
+### 프로젝트 레벨 훅 제거
+```bash
+cd your-project
+bash ~/.claude/claude-impl-tools/project-team/install.sh --local --uninstall
+```
+
+---
+
+## 빠른 시작
 
 ```bash
-cd claude-impl-tools
-git pull
-./install.sh
-```
-
----
-
-## Uninstall
-
-```bash
-# 스킬 제거
-rm -rf ~/.claude/skills/{multi-ai-run,multi-ai-review,team-orchestrate,...}
-
-# Project Team 제거
-rm -rf ~/.claude/agents ~/.claude/hooks ~/.claude/templates
-
-# 전체 제거
-rm -rf ~/.claude/skills ~/.claude/agents ~/.claude/hooks ~/.claude/templates
-```
-
----
-
-## Quick Start
-
-```bash
-# 1. Claude Code 실행
 claude
 
-# 2. 워크플로우 가이드
-> /workflow
-
-# 3. 오케스트레이션 시작
-> /team-orchestrate
-
-# 4. 멀티 AI 리뷰
-> /multi-ai-review
+> /workflow          # 다음 뭐 해야 해?
+> /team-orchestrate  # 에이전트 팀 시작
+> /multi-ai-review   # 멀티 AI 합의 리뷰
 ```
+
+---
+
+**[English version](./INSTALL.md)**
