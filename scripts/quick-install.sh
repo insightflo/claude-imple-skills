@@ -195,7 +195,7 @@ prompt_project_team() {
         install_project_team
     else
         log_info "Skipped. Install later with:"
-        log_info "  cd $INSTALL_DIR/project-team && ./install.sh --global"
+        log_info "  cd your-project && bash $INSTALL_DIR/project-team/install.sh --local"
     fi
 }
 
@@ -214,7 +214,7 @@ install_project_team() {
         fi
     fi
 
-    bash "$INSTALL_DIR/project-team/install.sh" --global || {
+    bash "$INSTALL_DIR/project-team/install.sh" --local || {
         log_error "Project Team installation failed"
         return 1
     }
