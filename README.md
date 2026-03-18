@@ -4,7 +4,7 @@
 
 [**English**](./README.md) | [**한국어**](./README_ko.md)
 
-A plugin of **22 skills** for Claude Code. Skills auto-install project-level hooks and agents on demand — no manual setup required.
+A plugin of **23 skills** for Claude Code. Skills auto-install project-level hooks and agents on demand — no manual setup required.
 
 ---
 
@@ -33,7 +33,7 @@ This clones the repo and symlinks skills. No hooks or agents installed — skill
 
 | Component | Count | Installed when |
 |-----------|-------|----------------|
-| **Skills** | 22 | Plugin install |
+| **Skills** | 23 | Plugin install |
 | **Hooks** | up to 17 | On demand (skill runs `install.sh --local`) |
 | **Worker Agents** | 4 | On demand (project-level) |
 | **Templates** | 11 | On demand (project-level) |
@@ -72,6 +72,7 @@ This clones the repo and symlinks skills. No hooks or agents installed — skill
 | Skill | What it does |
 |-------|--------------|
 | `/team-orchestrate` | Native Agent Teams orchestration with tmux pane auto-creation |
+| `/cmux-orchestrate` | cmux-based multi-AI team orchestration — physical 3-level hierarchy with Claude/Gemini/Codex |
 | `/multi-ai-run` | Parallel AI execution with automatic CLI routing (Claude/Gemini/Codex) |
 | `/whitebox` | Execution dashboard, health/state inspection |
 | `/cmux` | cmux terminal multiplexer control (workspaces, panes, browser automation) |
