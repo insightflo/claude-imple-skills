@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "claude-impl-tools",
-      "version": "3.5.0",
+      "version": "3.5.1",
       "source": "./plugin",
       "description": "25 skills for Agent Teams orchestration, governance hooks, multi-AI review, cmux-based parallel AI execution, and project management",
       "author": {
