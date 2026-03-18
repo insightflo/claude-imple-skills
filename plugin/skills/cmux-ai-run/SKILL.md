@@ -6,28 +6,31 @@ triggers:
   - cmux AI 분업
   - cmux 병렬 실행
   - 창 분할 실행
-version: 1.1.0
+version: 1.2.0
 ---
 
 # /cmux-ai-run — cmux 창 분할 병렬 AI 실행
 
 > **multi-ai-run과의 차이**: Bash 서브프로세스(순차) 대신 cmux 패널 분할(진짜 병렬).
-> 같은 워크스페이스에서 Codex/Gemini 패널이 동시에 실행되는 것을 눈으로 볼 수 있음.
+> 패널에서 `tail -f`로 에이전트 진행 상황을 실시간 확인 가능.
 >
-> **완료 감지**: cmux 패널은 시각적 표시 전용. 실제 완료 신호는 Agent Teams API (SendMessage)로 수신 — 파일 폴링 없음.
+> **완료 감지**: 실제 완료 신호는 Agent Teams API (SendMessage)로 수신 — 파일 폴링 없음.
+> **시각화**: 패널에서 각 에이전트의 로그를 실시간 스트리밍.
 
 ---
 
 ## 패널 레이아웃
 
 ```
-┌─────────────────────┬─────────────────────┐
-│  Claude             │  Codex              │
-│  (현재 패널)        │  코드 생성/리팩토링  │
-│  오케스트레이터     ├─────────────────────┤
-│                     │  Gemini             │
-│                     │  디자인/UI 구현      │
-└─────────────────────┴─────────────────────┘
+┌─────────────────────┬──────────────────────────┐
+│  Claude             │  codex-runner 로그        │
+│  (현재 패널)        │  $ tail -f codex.log      │
+│  오케스트레이터     │  [진행 상황 실시간 표시]   │
+│                     ├──────────────────────────┤
+│                     │  gemini-runner 로그       │
+│                     │  $ tail -f gemini.log     │
+│                     │  [진행 상황 실시간 표시]   │
+└─────────────────────┴──────────────────────────┘
 ```
 
 ---
@@ -69,94 +72,97 @@ claude_tasks: [아키텍처 결정, 플래닝, 복잡한 추론]
 라우팅 기준은 `config/models.yaml`의 `routing` 섹션 참조.
 태스크에 `[model:gemini]` 태그가 있으면 강제 라우팅.
 
-### Step 2: Agent Teams 세션 + cmux 패널 생성
+### Step 2: 로그 파일 + Agent Teams 세션 + cmux 패널 생성
 
-Agent Teams API로 통신 채널을 먼저 만들고, cmux 패널은 시각적 표시용으로 병렬 생성:
+```bash
+# 로그 파일 먼저 생성 (tail -f가 즉시 열 수 있도록)
+mkdir -p .claude/cmux-ai/runs
+touch .claude/cmux-ai/runs/codex-runner.log
+touch .claude/cmux-ai/runs/gemini-runner.log
+```
 
 ```
 # Agent Teams 세션 생성
-TeamCreate(name="cmux-ai-run-{project}-{timestamp}")
-
-# 각 AI 역할에 태스크 등록
-TaskCreate(team_name=..., title="codex-tasks", description="{codex_tasks_list}")
-TaskCreate(team_name=..., title="gemini-tasks", description="{gemini_tasks_list}")
+TeamCreate(name="cmux-ai-run-{project}-{timestamp}", description="Parallel AI task execution")
+TaskCreate(team_name=..., subject="codex-tasks", description="{codex_tasks_list}")
+TaskCreate(team_name=..., subject="gemini-tasks", description="{gemini_tasks_list}")
 ```
 
 ```bash
-# cmux 패널 생성 (시각적 표시)
+# cmux 패널 생성 + 즉시 tail -f 실행
 CODEX_SURFACE=$(cmux new-split right --json | jq -r '.surface_id')
 GEMINI_SURFACE=$(cmux new-split down --surface $CODEX_SURFACE --json | jq -r '.surface_id')
 
-mkdir -p .claude/cmux-ai/runs
+# 패널에 로그 스트리밍 시작 (에이전트 작업이 보임)
+cmux send-surface --surface $CODEX_SURFACE \
+  "tail -f .claude/cmux-ai/runs/codex-runner.log\n"
+cmux send-surface --surface $GEMINI_SURFACE \
+  "tail -f .claude/cmux-ai/runs/gemini-runner.log\n"
+
+cmux set-status "codex" "running" --icon gear --color "#007aff"
+cmux set-status "gemini" "running" --icon brush --color "#5856d6"
+cmux set-progress 0.2 --label "Agents starting..."
 ```
 
 ### Step 3: 병렬 에이전트 실행
 
-Claude 서브에이전트 2개를 동시에 실행. 각 에이전트는 내부적으로 gemini/codex CLI를 호출하고, 완료 시 `SendMessage`로 결과를 메인에 전달:
+각 에이전트는 진행 상황을 로그 파일에 기록하고, 완료 시 `SendMessage`로 보고:
 
 ```
-# gemini-runner 에이전트 (백그라운드)
-Agent(
-  subagent_type="builder",
-  team_name="cmux-ai-run-{project}-{timestamp}",
-  name="gemini-runner",
-  run_in_background=true,
-  prompt="""
-    다음 태스크를 gemini CLI로 실행하세요.
-    모델: gemini-3.1-pro-preview (또는 config 값)
-    태스크: {gemini_tasks_list}
-
-    1. `gemini --model gemini-3.1-pro-preview --yolo "{task_prompt}"` 실행
-    2. 결과를 .claude/cmux-ai/runs/gemini-result.md에 저장
-    3. SendMessage("team-lead", "gemini-runner: DONE\n{결과 요약}")
-    4. TaskUpdate(task_id="{gemini_task_id}", status="completed")
-  """
-)
-
-# codex-runner 에이전트 (백그라운드, 동시 실행)
 Agent(
   subagent_type="builder",
   team_name="cmux-ai-run-{project}-{timestamp}",
   name="codex-runner",
   run_in_background=true,
   prompt="""
-    다음 태스크를 codex CLI로 실행하세요.
-    모델: gpt-5.4 (effort=high, 또는 config 값)
+    다음 태스크를 실행하세요.
     태스크: {codex_tasks_list}
 
-    1. `codex -q --model gpt-5.4 --effort high "{task_prompt}"` 실행
-    2. 결과를 .claude/cmux-ai/runs/codex-result.md에 저장
-    3. SendMessage("team-lead", "codex-runner: DONE\n{결과 요약}")
-    4. TaskUpdate(task_id="{codex_task_id}", status="completed")
+    진행할 때마다 .claude/cmux-ai/runs/codex-runner.log 에 기록 (append):
+      echo "[$(date +%H:%M:%S)] 태스크 시작: {task}" >> .claude/cmux-ai/runs/codex-runner.log
+      echo "[$(date +%H:%M:%S)] 완료: {result}" >> .claude/cmux-ai/runs/codex-runner.log
+
+    모든 태스크 완료 후:
+      echo "[$(date +%H:%M:%S)] ✅ ALL DONE" >> .claude/cmux-ai/runs/codex-runner.log
+      SendMessage(
+        to="team-lead",
+        message="{결과 전체 내용}",
+        summary="codex-runner: DONE — {완료된 태스크 수}개 완료"
+      )
+  """
+)
+
+Agent(
+  subagent_type="builder",
+  team_name="cmux-ai-run-{project}-{timestamp}",
+  name="gemini-runner",
+  run_in_background=true,
+  prompt="""
+    다음 태스크를 실행하세요.
+    태스크: {gemini_tasks_list}
+
+    진행할 때마다 .claude/cmux-ai/runs/gemini-runner.log 에 기록 (append):
+      echo "[$(date +%H:%M:%S)] 태스크 시작: {task}" >> .claude/cmux-ai/runs/gemini-runner.log
+      echo "[$(date +%H:%M:%S)] 완료: {result}" >> .claude/cmux-ai/runs/gemini-runner.log
+
+    모든 태스크 완료 후:
+      echo "[$(date +%H:%M:%S)] ✅ ALL DONE" >> .claude/cmux-ai/runs/gemini-runner.log
+      SendMessage(
+        to="team-lead",
+        message="{결과 전체 내용}",
+        summary="gemini-runner: DONE — {완료된 태스크 수}개 완료"
+      )
   """
 )
 ```
 
-cmux 패널에도 동시에 시각적 활동 표시:
-
 ```bash
-# 패널에 진행 상황 표시 (시각용, 완료 감지는 SendMessage로)
-cmux send-surface --surface $CODEX_SURFACE "echo '🤖 codex-runner started...'\n"
-cmux send-surface --surface $GEMINI_SURFACE "echo '🤖 gemini-runner started...'\n"
-cmux set-status "codex" "running" --icon gear --color "#007aff"
-cmux set-status "gemini" "running" --icon brush --color "#5856d6"
-cmux set-progress 0.3 --label "Parallel execution in progress..."
+cmux set-progress 0.4 --label "Agents running (see panels)..."
 ```
 
 ### Step 4: 완료 대기 (이벤트 기반)
 
-메인 Claude는 두 에이전트의 `SendMessage`를 수신하여 완료를 감지 (폴링 없음):
-
-```
-# 두 에이전트가 각자 SendMessage로 완료를 알림
-# 메인 Claude는 알림을 수신할 때까지 대기 (blocking)
-#
-# 수신 예시:
-#   gemini-runner → "gemini-runner: DONE\n컴포넌트 3개 구현 완료..."
-#   codex-runner  → "codex-runner: DONE\nAPI 엔드포인트 5개 구현 완료..."
-#
-# 두 메시지를 모두 받으면 Step 5로 진행
-```
+메인 Claude는 두 에이전트의 `SendMessage` 수신 대기. 수신 시 패널의 로그에도 완료가 표시되어 있음.
 
 ```bash
 cmux set-progress 0.7 --label "Waiting for agents..."
@@ -164,7 +170,7 @@ cmux set-progress 0.7 --label "Waiting for agents..."
 
 ### Step 5: 결과 통합 + 충돌 해결
 
-두 에이전트 완료 후 Claude가 결과를 검토하고 프로젝트에 반영:
+두 `SendMessage` 수신 후 결과를 검토하고 프로젝트에 반영:
 
 - **파일 충돌**: 같은 파일 수정 시 Claude가 중재
 - **품질 검증**: lint, type-check, test 실행
@@ -176,14 +182,8 @@ cmux set-progress 0.9 --label "Integrating results..."
 cmux set-progress 1.0 --label "Done"
 cmux log --level success -- "cmux-ai-run: All tasks complete"
 cmux notify --title "cmux-ai-run Complete" --body "All agents finished"
-```
-
-### Step 6: 패널 정리 (선택)
-
-```bash
 cmux clear-status "codex"
 cmux clear-status "gemini"
-# 패널 유지 (결과 확인) 또는 닫기는 사용자 선택에 맡김
 ```
 
 ---
@@ -206,7 +206,7 @@ cmux clear-status "gemini"
 | `codex` CLI 없음 | Claude가 직접 처리 |
 | `gemini` CLI 없음 | Claude가 직접 처리 |
 | cmux 없음 | `/multi-ai-run` 사용 권장 |
-| Agent 타임아웃 | SendMessage 미수신 시 5분 후 Claude가 직접 재시도 |
+| Agent 무응답 (5분) | Claude가 직접 해당 태스크 수행 |
 
 ---
 
@@ -214,11 +214,11 @@ cmux clear-status "gemini"
 
 ```
 메인 Claude (오케스트레이터)
+├── 로그 파일 생성 → cmux 패널에서 tail -f (실시간 가시화)
 ├── TeamCreate → 통신 채널 수립
-├── cmux 패널 생성 → 시각적 표시
-├── Agent(gemini-runner, background) → gemini CLI 실행 → SendMessage 완료 알림
-├── Agent(codex-runner, background)  → codex CLI 실행  → SendMessage 완료 알림
-└── SendMessage 수신 → 결과 통합 (이벤트 기반, 폴링 없음)
+├── Agent(codex-runner, bg) → 작업 + 로그 기록 → SendMessage(summary="DONE")
+├── Agent(gemini-runner, bg) → 작업 + 로그 기록 → SendMessage(summary="DONE")
+└── SendMessage 수신 → 결과 통합 (이벤트 기반)
 ```
 
 ---
