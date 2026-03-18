@@ -267,6 +267,18 @@ cmux set-status "backend-builder" "spawned" --icon gear --color "#007aff"
 
 ---
 
+## Fallback
+
+| 상황 | 동작 |
+|------|------|
+| cmux 없음 | `/team-orchestrate` (Agent Teams API 기반) 사용 권장 |
+| codex CLI 없음 | Claude 워크스페이스가 대체 |
+| gemini CLI 없음 | Claude 워크스페이스가 대체 |
+| 워크스페이스 생성 실패 | 로그 기록 후 해당 역할 건너뜀 |
+| Agent 타임아웃 (5분) | Claude가 직접 해당 역할 수행 |
+
+---
+
 ## 참고 파일
 
 | 파일 | 내용 |
