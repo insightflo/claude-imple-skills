@@ -50,7 +50,7 @@ CONFIG="${PROJECT_ROOT}/.claude/cmux-ai-models.yaml"
 
 기본값 (`config/models.yaml`):
 - **Codex**: `gpt-5.4`, `effort=high`
-- **Gemini**: `gemini-3.1-pro-preview`
+- **Gemini**: `gemini-3-flash-preview`
 - **Claude**: `opus`
 
 프로젝트별 오버라이드: `.claude/cmux-ai-models.yaml` 생성 (동일 형식)

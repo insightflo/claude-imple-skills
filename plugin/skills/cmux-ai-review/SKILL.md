@@ -48,7 +48,7 @@ CONFIG="${PROJECT_ROOT}/.claude/cmux-ai-models.yaml"
 ## 모델 설정
 
 기본값 (`config/models.yaml`):
-- **Gemini**: `gemini-3.1-pro-preview` (Perspective A)
+- **Gemini**: `gemini-3-flash-preview` (Perspective A)
 - **Codex**: `gpt-5.4`, `effort=high` (Perspective B)
 - **Claude**: `opus` (Chairman)
 

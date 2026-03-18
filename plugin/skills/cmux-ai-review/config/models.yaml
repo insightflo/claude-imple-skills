@@ -6,12 +6,15 @@ models:
     command: "codex"
     model: "gpt-5.4"
     effort: "high"
-    args: "-q"
+    oneshot: "codex exec"
+    interactive_submit: "enter enter"  # Enter 2번으로 제출
 
   gemini:
     command: "gemini"
-    model: "gemini-3.1-pro-preview"
-    args: "--yolo"
+    model: "gemini-3-flash-preview"
+    args: "-y"
+    oneshot: "gemini -y -m gemini-3-flash-preview -p"
+    interactive_submit: "enter"  # Enter 1번으로 제출
 
   claude:
     command: "claude"
