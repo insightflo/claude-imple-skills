@@ -126,3 +126,5 @@ target/
 .claude/settings.json
 .claude/backups/
 plugin/skills/multi-ai-review/.jobs/
+.auto-revision/
+.auto-revision.bak-*/
