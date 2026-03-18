@@ -107,24 +107,30 @@ mkdir -p .claude/collab/{reports,requests,decisions,contexts,inbox}
 
 ```bash
 # arch-lead (claude)
-ARCH_WS=$(cmux new-workspace --json | jq -r '.workspace_id')
-cmux send-surface --surface $ARCH_WS "cd $(pwd)\n"
-cmux send-surface --surface $ARCH_WS \
-  "claude --dangerously-skip-permissions -p \"\$(cat .claude/collab/contexts/arch-lead.md)\"\n"
+ARCH_WS=$(cmux new-workspace 2>&1 | awk '{print $2}')
+cmux send --workspace $ARCH_WS "cd $(pwd)
+"
+cmux send --workspace $ARCH_WS \
+  "claude --dangerously-skip-permissions -p \"\$(cat .claude/collab/contexts/arch-lead.md)\"
+"
 cmux set-status "arch-lead" "starting" --icon hammer --color "#ff9500"
 
 # design-lead (gemini)
-DESIGN_WS=$(cmux new-workspace --json | jq -r '.workspace_id')
-cmux send-surface --surface $DESIGN_WS "cd $(pwd)\n"
-cmux send-surface --surface $DESIGN_WS \
-  "gemini --yolo \"\$(cat .claude/collab/contexts/design-lead.md)\"\n"
+DESIGN_WS=$(cmux new-workspace 2>&1 | awk '{print $2}')
+cmux send --workspace $DESIGN_WS "cd $(pwd)
+"
+cmux send --workspace $DESIGN_WS \
+  "gemini --yolo \"\$(cat .claude/collab/contexts/design-lead.md)\"
+"
 cmux set-status "design-lead" "starting" --icon brush --color "#5856d6"
 
 # qa-lead (claude) — L1 리드들 스폰 후에 시작
-QA_WS=$(cmux new-workspace --json | jq -r '.workspace_id')
-cmux send-surface --surface $QA_WS "cd $(pwd)\n"
-cmux send-surface --surface $QA_WS \
-  "claude --dangerously-skip-permissions -p \"\$(cat .claude/collab/contexts/qa-lead.md)\"\n"
+QA_WS=$(cmux new-workspace 2>&1 | awk '{print $2}')
+cmux send --workspace $QA_WS "cd $(pwd)
+"
+cmux send --workspace $QA_WS \
+  "claude --dangerously-skip-permissions -p \"\$(cat .claude/collab/contexts/qa-lead.md)\"
+"
 cmux set-status "qa-lead" "waiting" --icon checklist --color "#8e8e93"
 ```
 
@@ -150,8 +156,9 @@ ls .claude/collab/inbox/
 리드 간 충돌/의존성 발생 시:
 ```bash
 # team-lead가 해당 리드 워크스페이스에 지시 전달
-cmux send-surface --surface $ARCH_WS \
-  "API 스펙 변경 사항을 .claude/collab/requests/REQ-001.md 에 기록하고 design-lead에 공유\n"
+cmux send --workspace $ARCH_WS \
+  "API 스펙 변경 사항을 .claude/collab/requests/REQ-001.md 에 기록하고 design-lead에 공유
+"
 ```
 
 결정 사항 → `.claude/collab/decisions/DEC-NNN.md` 에 기록.
@@ -160,13 +167,14 @@ cmux send-surface --surface $ARCH_WS \
 
 ```bash
 # 작업량 증가 → 워커 추가 스폰
-EXTRA_WS=$(cmux new-workspace --json | jq -r '.workspace_id')
-cmux send-surface --surface $ARCH_WS \
-  "WS=\$(cmux new-workspace --json | jq -r '.workspace_id') && \
-   cmux send-surface --surface \$WS \"cd $(pwd) && codex -q '\$(cat .claude/collab/contexts/backend-builder-2.md)'\n\"\n"
+EXTRA_WS=$(cmux new-workspace 2>&1 | awk '{print $2}')
+cmux send --workspace $ARCH_WS \
+  "WS=\$(cmux new-workspace 2>&1 | awk '{print \$2}') && cmux send --workspace \$WS \"cd $(pwd) && codex -q '\$(cat .claude/collab/contexts/backend-builder-2.md)'\"
+"
 
 # 완료된 워커 종료
-cmux send-surface --surface $DONE_WS "exit\n"
+cmux send --workspace $DONE_WS "exit
+"
 cmux close-workspace --workspace $DONE_WS
 cmux clear-status "backend-builder"
 ```
@@ -176,7 +184,8 @@ cmux clear-status "backend-builder"
 ```bash
 # 각 리드에 종료 신호
 for WS in $ARCH_WS $DESIGN_WS $QA_WS; do
-  cmux send-surface --surface $WS "exit\n"
+  cmux send --workspace $WS "exit
+"
 done
 
 # 워크스페이스 정리
@@ -234,8 +243,9 @@ cat > $WORKER_CTX << 'EOF'
 [워커 컨텍스트 - 담당 태스크, 테스트 명령, 보고 방법]
 EOF
 
-WS=$(cmux new-workspace --json | jq -r '.workspace_id')
-cmux send-surface --surface $WS "cd $(pwd) && codex -q \"\$(cat $WORKER_CTX)\"\n"
+WS=$(cmux new-workspace 2>&1 | awk '{print $2}')
+cmux send --workspace $WS "cd $(pwd) && codex -q \"\$(cat $WORKER_CTX)\"
+"
 cmux set-status "backend-builder" "spawned" --icon gear --color "#007aff"
 ```
 
