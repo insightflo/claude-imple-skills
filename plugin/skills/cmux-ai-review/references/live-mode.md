@@ -48,15 +48,21 @@ Write: .claude/cmux-ai/review/gemini-stage1-prompt.md
   {gemini_role} 관점에서 다음을 리뷰하세요: {review_target}
   의견을 .claude/cmux-ai/review/gemini-opinion.md 에 저장하세요.
 
-  ## 완료 후 반드시 실행
+  ## 완료 후 반드시 bash로 실행
+  아래 명령을 해석하지 말고 bash로 그대로 실행해:
+  ```bash
   cmux wait-for -S review-gemini-s1 && cmux notify --title "Gemini" --body "Stage 1 완료"
+  ```
 
 Write: .claude/cmux-ai/review/codex-stage1-prompt.md
   {codex_role} 관점에서 다음을 리뷰하세요: {review_target}
   의견을 .claude/cmux-ai/review/codex-opinion.md 에 저장하세요.
 
-  ## 완료 후 반드시 실행
+  ## 완료 후 반드시 bash로 실행
+  아래 명령을 해석하지 말고 bash로 그대로 실행해:
+  ```bash
   cmux wait-for -S review-codex-s1 && cmux notify --title "Codex" --body "Stage 1 완료"
+  ```
 ```
 
 ```bash
@@ -95,8 +101,11 @@ Write: .claude/cmux-ai/review/gemini-stage2-prompt.md
   {codex_opinion}
   이에 대한 반론을 작성하고 .claude/cmux-ai/review/gemini-rebuttal.md 에 저장하세요.
 
-  ## 완료 후 반드시 실행
+  ## 완료 후 반드시 bash로 실행
+  아래 명령을 해석하지 말고 bash로 그대로 실행해:
+  ```bash
   cmux wait-for -S review-gemini-s2 && cmux notify --title "Gemini" --body "Stage 2 완료"
+  ```
 
 # 같은 패널에 반론 프롬프트 전송 (컨텍스트 유지)
 cmux send --surface $GMN "$(cat .claude/cmux-ai/review/gemini-stage2-prompt.md)"

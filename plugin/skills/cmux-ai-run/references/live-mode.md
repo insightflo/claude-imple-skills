@@ -58,16 +58,20 @@ cmux capture-pane --surface $GMN --lines 3
 Write: .claude/cmux-ai/runs/codex-prompt.md
   {codex_tasks}
 
-  ## 완료 후 반드시 실행
-  작업이 모두 끝나면, 마지막에 아래 쉘 명령을 실행해줘:
+  ## 완료 후 반드시 bash로 실행
+  작업이 모두 끝나면, 아래 명령을 해석하지 말고 bash로 그대로 실행해:
+  ```bash
   cmux wait-for -S codex-done && cmux notify --title "Codex" --body "작업 완료"
+  ```
 
 Write: .claude/cmux-ai/runs/gemini-prompt.md
   {gemini_tasks}
 
-  ## 완료 후 반드시 실행
-  작업이 모두 끝나면, 마지막에 아래 쉘 명령을 실행해줘:
+  ## 완료 후 반드시 bash로 실행
+  작업이 모두 끝나면, 아래 명령을 해석하지 말고 bash로 그대로 실행해:
+  ```bash
   cmux wait-for -S gemini-done && cmux notify --title "Gemini" --body "작업 완료"
+  ```
 ```
 
 ```bash
