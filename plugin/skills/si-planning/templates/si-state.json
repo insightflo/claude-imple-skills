@@ -1,0 +1,51 @@
+{
+  "project": {
+    "name": "",
+    "domain": "",
+    "created": "",
+    "updated": "",
+    "status": "",
+    "version": "1.0.0"
+  },
+  "requirements": {
+    "total": 0,
+    "functional": 0,
+    "non_functional": 0,
+    "by_priority": { "must": 0, "should": 0, "could": 0, "wont": 0 },
+    "by_status": { "confirmed": 0, "draft": 0, "changed": 0, "deleted": 0 },
+    "ambiguity_score": 1.0,
+    "items": []
+  },
+  "functions": {
+    "total": 0,
+    "items": []
+  },
+  "screens": {
+    "total": 0,
+    "items": []
+  },
+  "traceability": {
+    "rd_to_fn": { "mapped": 0, "unmapped": 0 },
+    "fn_to_sc": { "mapped": 0, "unmapped": 0 },
+    "sc_to_tc": { "mapped": 0, "unmapped": 0 },
+    "coverage_percent": 0
+  },
+  "domain_checklist": {
+    "domain": "",
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "pending": 0,
+    "items": []
+  },
+  "changes": [],
+  "documents": [],
+  "phases": [
+    { "id": 0, "name": "도메인 프로파일", "status": "pending", "progress": 0 },
+    { "id": 1, "name": "요구사항 수집", "status": "pending", "progress": 0 },
+    { "id": 2, "name": "분석 + Gap Detection", "status": "pending", "progress": 0 },
+    { "id": 3, "name": "산출물 생성", "status": "pending", "progress": 0 },
+    { "id": 4, "name": "검증 + 핸드오프", "status": "pending", "progress": 0 }
+  ],
+  "gaps": []
+}

@@ -55,6 +55,7 @@ This clones the repo and symlinks skills. No hooks or agents installed — skill
 
 | Skill | What it does |
 |-------|--------------|
+| `/si-planning` | SI requirements engineering — Socratic elicitation, domain checklist, auto-generated deliverables (requirements analysis / functional spec / screen spec / traceability matrix), change impact analysis, customer dashboard |
 | `/governance-setup` | Set up Agent Teams governance or Mini-PRD |
 | `/tasks-init` | Generate TASKS.md from scratch |
 | `/tasks-migrate` | Consolidate legacy task files into TASKS.md |

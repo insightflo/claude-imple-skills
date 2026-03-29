@@ -181,6 +181,13 @@ Display the diagnosis result with a starred recommendation for user confirmation
 "이 기능 추가해줘"          → /discuss → /agile auto
 "뭘 어떻게 해야 할지 모르겠어" → /discuss
 "결정해야 할 게 있어"        → /discuss
+"요구사항 분석해줘"          → /si-planning
+"기능정의서 만들어줘"        → /si-planning
+"화면정의서 만들어줘"        → /si-planning
+"SI 기획 시작"             → /si-planning --domain=?
+"요구사항 변경"             → /si-planning --change
+"누락 검사"                → /si-planning --gap
+"고객 대시보드"             → /si-planning --dashboard
 "이거 검증해줘"             → /audit (goal-backward 포함)
 "코드 확인해줘"             → /checkpoint
 "이거 맞게 했는지 봐줘"      → /audit
