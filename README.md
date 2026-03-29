@@ -4,7 +4,7 @@
 
 [**English**](./README.md) | [**한국어**](./README_ko.md)
 
-A plugin of **26 skills** for Claude Code. Covers the full dev lifecycle: planning, orchestration, quality, security, maintenance, and skill ecosystem intelligence. Skills auto-install project-level hooks and agents on demand.
+A plugin of **27 skills** for Claude Code. Covers the full dev lifecycle: planning, orchestration, quality, security, maintenance, and skill ecosystem intelligence. Skills auto-install project-level hooks and agents on demand.
 
 ---
 
@@ -33,14 +33,14 @@ This clones the repo and symlinks skills. No hooks or agents installed — skill
 
 | Component | Count | Installed when |
 |-----------|-------|----------------|
-| **Skills** | 26 | Plugin install |
+| **Skills** | 27 | Plugin install |
 | **Hooks** | up to 17 | On demand (skill runs `install.sh --local`) |
 | **Worker Agents** | 4 | On demand (project-level) |
 | **Templates** | 11 | On demand (project-level) |
 
 ---
 
-## Skills (26)
+## Skills (27)
 
 ### Core Workflow
 
@@ -333,6 +333,8 @@ claude-impl-tools/
 
 | Version | Changes |
 |---------|---------|
+| **4.7.0** | /si-planning skill (SI requirements engineering, domain profiles, customer dashboard), GSD benchmark integration |
+| **4.6.0** | GSD patterns: context monitoring hooks, /discuss skill, goal-backward verification, deviation rules, autonomous mode |
 | **4.5.0** | context-optimize v2.0 (self-editing /prune), hybrid recall |
 | **4.4.0** | Unified DuckDB experience store, memento global mode |
 | **4.3.1** | memento harness mode (AutoHarness-inspired validation) |
