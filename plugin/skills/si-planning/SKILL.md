@@ -131,6 +131,27 @@ AskUserQuestion으로 수집:
 "외부 기관과 데이터를 주고받나요?"
 ```
 
+### Gray Area → CONTEXT.md 연동 (GSD 패턴)
+
+Phase 1 수집 중 Gray area(명확한 답이 없는 결정 사항) 발견 시:
+
+1. `/discuss` 스킬 호출하여 결정 수집
+2. 결정 결과를 `.claude/CONTEXT.md`에 기록
+3. Phase 3 서브에이전트가 CONTEXT.md를 참조하여 산출물 생성
+
+```text
+Gray Area 발견 시:
+  "이 부분은 여러 방법이 있는데, 어떻게 할지 결정이 필요합니다"
+  → /discuss 호출 → CONTEXT.md 생성
+  → Phase 3 서브에이전트에 CONTEXT.md 경로 전달
+```
+
+Gray area 예시:
+- 권한 체계: 역할 기반(RBAC) vs 속성 기반(ABAC)
+- 데이터 보존: 물리 삭제 vs 논리 삭제
+- 알림 방식: 이메일 vs SMS vs 앱 푸시
+- 결재선: 고정 vs 동적 결재선
+
 ### Ambiguity Score 측정
 
 6가지 명확성 차원 평가 (각 0.0~1.0, 낮을수록 명확):
@@ -226,12 +247,58 @@ Agent(
     5. docs/si/si-state.json — 대시보드 상태 데이터
 
     [수집된 정보 JSON 전달]
+    [.claude/CONTEXT.md 경로가 있으면 함께 전달]
 
     각 문서는 templates/ 폴더의 템플릿을 따릅니다.
     mkdir -p docs/si 먼저 실행하세요.
   """
 )
 ```
+
+### Deviation Rules 적용 (GSD 패턴)
+
+> 산출물 생성 중 발견한 누락/오류를 자동 처리하는 규칙.
+
+#### Rule 1: Auto-fix Gaps
+**상황**: 산출물 생성 중 RTM 매핑 누락 발견
+**동작**:
+1. 누락된 매핑 자동 추가
+2. 관련 산출물 업데이트
+3. `[Rule 1 - Gap Fix] {설명}` 로 추적
+
+#### Rule 2: Auto-add Missing Critical
+**상황**: 도메인 체크리스트 필수 항목이 요구사항에 없음
+**동작**:
+1. 해당 NFR을 RD-NFR-NNN으로 자동 추가 (Draft 상태)
+2. 산출물에 반영
+3. `[Rule 2 - Critical Add] {설명}` 로 추적
+4. Phase 4에서 사용자 확인 필수
+
+#### Rule 3: Auto-fix Consistency
+**상황**: 산출물 간 ID 불일치 (예: 기능정의서에 FN-015가 있는데 추적표에 없음)
+**동작**:
+1. 불일치 자동 수정
+2. `[Rule 3 - Consistency Fix] {설명}` 로 추적
+
+#### Deviation 기록
+
+모든 deviation은 si-state.json의 gaps 배열에 기록:
+
+```json
+{
+  "id": "DEV-001",
+  "rule": "Rule 2",
+  "type": "Critical Add",
+  "description": "공공 도메인 필수: 감사로그 NFR 자동 추가",
+  "target": "RD-NFR-014",
+  "status": "draft"
+}
+```
+
+#### 사용자 확인 필요한 경우
+
+- Rule 2로 추가된 요구사항 (Draft → Confirmed 전환 필요)
+- 3개 이상 산출물에 영향을 미치는 deviation
 
 ### 산출물 완료 확인
 
@@ -244,15 +311,47 @@ Read("docs/si/si-state.json")  # JSON 유효성 확인
 
 ## Phase 4: 검증 + 핸드오프
 
-### Step 1: 추적성 완전성 검증
+### Step 1: Goal-backward 검증 + 추적성 (GSD 패턴)
+
+> **핵심 원칙**: 산출물 완성 ≠ 요구사항 충족. 목표에서 역산하여 검증한다.
+
+**Goal-backward 검증 흐름:**
+
+```text
+프로젝트 목표 (Goal)
+  ↓
+Must-have: 이 목표를 달성하려면 반드시 필요한 요구사항은?
+  ↓
+Must-exist: 각 요구사항이 기능정의서에 존재하는가?
+  ↓
+Must-wired: 각 기능이 화면에 연결되어 있는가?
+  ↓
+실제 산출물 교차 검증
+```
+
+**실행:**
+
+```bash
+# Must-have 검증: 프로젝트 목표 대비 요구사항 완전성
+grep -c "RD-FR" docs/si/requirements-analysis.md
+
+# Must-exist 검증: 요구사항 대비 기능 존재 확인
+grep -c "FN-" docs/si/functional-spec.md
+
+# Must-wired 검증: 기능 대비 화면 연결 확인
+grep -c "SC-" docs/si/screen-spec.md
+```
+
+**추적성 검증 결과:**
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- TRACEABILITY VERIFICATION
+ GOAL-BACKWARD VERIFICATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
- RD → FN 매핑: 30/32 (93.8%) ⚠️
- FN → SC 매핑: 28/30 (93.3%) ⚠️
+ Goal → Must-have (요구사항): 45건 확인
+ Must-have → Must-exist (기능): 30/32 (93.8%) ⚠️
+ Must-exist → Must-wired (화면): 28/30 (93.3%) ⚠️
  도메인 체크: 12/15 (80.0%) ❌
 
  미매핑 항목:
@@ -260,7 +359,13 @@ Read("docs/si/si-state.json")  # JSON 유효성 확인
  - RD-FR-032 → FN 없음
  - FN-029 → SC 없음
  - FN-030 → SC 없음
+
+ Deviation 적용: 2건 (Rule 2: 1건, Rule 3: 1건)
 ```
+
+Gap 발견 시 `/quality-auditor`의 goal-backward 패턴으로 추가 검증:
+- PASS → Phase 4 Step 2 진행
+- FAIL → Gap 해결 작업 생성 → Phase 2로 회귀
 
 ### Step 2: 실패 기획 4요건 검사
 
@@ -338,8 +443,11 @@ vibelab 패턴 적용:
 |------|----------|
 | 요구사항 수집 전 브레인스토밍 | `/neurion` |
 | Gray area 결정 수집 | `/discuss` |
+| Phase 1 gray area 발견 | `/discuss` → CONTEXT.md |
 | 산출물 완성 후 구현 | `/agile auto` 또는 `/team-orchestrate` |
+| Phase 3 산출물 생성 중 누락 | Deviation Rules 자동 적용 |
 | 산출물 검증 | `/quality-auditor` |
+| Phase 4 목표 검증 | `/quality-auditor` goal-backward |
 | 고객 공유 | `/si-planning --dashboard` |
 | 변경 영향 분석 | `/si-planning --change` |
 
