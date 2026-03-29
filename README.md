@@ -4,7 +4,7 @@
 
 [**English**](./README.md) | [**한국어**](./README_ko.md)
 
-A plugin of **27 skills** for Claude Code. Covers the full dev lifecycle: planning, orchestration, quality, security, maintenance, and skill ecosystem intelligence. Skills auto-install project-level hooks and agents on demand.
+A plugin of **28 skills** for Claude Code. Covers the full dev lifecycle: planning, orchestration, quality, security, maintenance, and skill ecosystem intelligence. Skills auto-install project-level hooks and agents on demand.
 
 ---
 
@@ -33,14 +33,14 @@ This clones the repo and symlinks skills. No hooks or agents installed — skill
 
 | Component | Count | Installed when |
 |-----------|-------|----------------|
-| **Skills** | 27 | Plugin install |
+| **Skills** | 28 | Plugin install |
 | **Hooks** | up to 17 | On demand (skill runs `install.sh --local`) |
 | **Worker Agents** | 4 | On demand (project-level) |
 | **Templates** | 11 | On demand (project-level) |
 
 ---
 
-## Skills (27)
+## Skills (28)
 
 ### Core Workflow
 
