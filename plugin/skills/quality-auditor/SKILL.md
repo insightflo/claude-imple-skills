@@ -241,3 +241,93 @@ Store metrics in `.claude/metrics/` for trend tracking across phases.
 ---
 
 **Last Updated**: 2026-03-27 (v3.0.0 - Absorbed evaluation + verification-before-completion)
+
+---
+
+## Goal-backward Verification (GSD 패턴)
+
+> **핵심 원칙**: Task 완료 ≠ Goal 달성
+
+### 검증 흐름
+
+```text
+Goal (목표)
+  ↓
+Must-have (참이어야 할 것)
+  ↓
+Must-exist (존재해야 할 것)
+  ↓
+Must-wired (연결되어야 할 것)
+  ↓
+실제 코드베이스 검증
+```
+
+### Step 1: Goal 파악
+
+```bash
+# TASKS.md에서 현재 Phase/작업의 목표 추출
+GOAL=$(grep -A5 "## Phase" TASKS.md | grep -E "^>" | head -1)
+```
+
+### Step 2: Must-haves 도출
+
+목표에서 역산하여 필수 조건 도출:
+
+```markdown
+Goal: "사용자가 채팅할 수 있어야 함"
+  ↓
+Must-have:
+  - 메시지 전송 가능
+  - 메시지 수신 가능
+  - 메시지 표시 가능
+```
+
+### Step 3: Must-exist 확인
+
+각 must-have에 대해 실제 코드 존재 확인:
+
+```bash
+# 예: 채팅 기능 검증
+grep -r "sendMessage\\|ChatInput\\|MessageList" src/
+```
+
+### Step 4: Must-wired 확인
+
+컴포넌트 간 연결 확인:
+
+```bash
+# import/export 관계 확인
+grep -r "import.*from.*chat" src/
+```
+
+### Step 5: VERIFICATION.md 생성
+
+```markdown
+# {Phase} - Verification Report
+
+**검증일:** {date}
+**상태:** {PASS|FAIL}
+
+## Goal
+{검증한 목표}
+
+## Must-haves 검증
+
+| ID | Must-have | Status | Evidence |
+|----|-----------|--------|----------|
+| M-01 | {항목} | ✅/❌ | {파일:라인} |
+
+## Gaps (실패 시)
+- {누락된 항목}
+- {수정 필요 사항}
+
+## 다음 단계
+{PASS 시: 다음 Phase}
+{FAIL 시: Gap 해결 작업}
+```
+
+### 검증 실패 처리
+
+1. Gaps 목록화
+2. TASKS.md에 수정 작업 추가
+3. 수정 후 재검증

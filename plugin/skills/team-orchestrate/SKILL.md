@@ -9,8 +9,8 @@ triggers:
   - 팀 오케스트레이트
   - 완전 자동화
   - 자동 실행
-version: 4.0.0
-updated: 2026-03-27
+version: 4.1.0
+updated: 2026-03-29
 ---
 
 # Unified Orchestration Engine
@@ -22,6 +22,7 @@ updated: 2026-03-27
 | Mode | Task count | Infrastructure | Command |
 |------|-----------|----------------|---------|
 | **auto** | 1-50 | Task tool only | `/team-orchestrate --mode=auto` |
+| **autonomous** | any | Task tool + auto-cycle | `/team-orchestrate --mode=autonomous` |
 | **team** | 10-80 | Agent Teams API | `/team-orchestrate --mode=team` |
 | **thin** | 50-200 | Task tool + background | `/team-orchestrate --mode=thin` |
 
@@ -216,4 +217,54 @@ Cross-domain:            architecture-lead → design-lead "API changed"
 
 ---
 
-**Last Updated**: 2026-03-17 (v3.4.0 — 길이 최적화, prompts 분리)
+**Last Updated**: 2026-03-29 (v4.1.0 - autonomous 모드 추가)
+
+---
+
+## Mode: autonomous (완전 자율 실행)
+
+> GSD의 `/gsd:autonomous` 패턴. 모든 incomplete 작업을 자동으로 순회.
+
+### 실행 흐름
+
+```
+1. TASKS.md 분석 → incomplete 작업 목록
+2. 각 작업에 대해:
+   a. /discuss (필요시) → CONTEXT.md
+   b. 계획 수립
+   c. 실행 (deviation rules 적용)
+   d. 검증 (goal-backward)
+3. 모든 작업 완료 또는 블로커 발생까지 반복
+```
+
+### 사용자 개입 포인트
+
+- Gray area 결정 필요 (AskUserQuestion)
+- 검증 실패 시 확인
+- 블로커 발생 시 알림
+
+### 진행 상황 표시
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ AUTONOMOUS MODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Progress: 3/10 tasks
+ Current: T1.3: Implement auth API
+ Status: executing...
+
+ [██████░░░░░░░░░░░░░░] 30%
+```
+
+### 호출
+
+```bash
+/team-orchestrate --mode=autonomous
+/team-orchestrate --mode=autonomous --from T2.1  # 특정 작업부터
+```
+
+### Fallback
+
+- 5분 무응답 → 알림 + 대기
+- 3회 연속 실패 → 중단 + 상태 저장

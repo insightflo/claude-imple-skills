@@ -1,8 +1,8 @@
 ---
 name: agile
 description: Agile Sprint Master for regular user check-ins and sprint management. Use this for /agile, /sprint, starting a sprint, checkpoint requests, or any time you are running structured iterative development. Triggers on "start sprint", "checkpoint", "sprint status", "run task", or whenever you need to manage layered build progress across Skeleton → Muscles → Skin.
-version: 2.6.0
-updated: 2026-03-03
+version: 2.7.0
+updated: 2026-03-29
 ---
 
 # Agile Sprint Master
@@ -421,4 +421,65 @@ When Agent Teams are active, delegate sprint coordination to team-lead.
 
 ---
 
-**Last Updated**: 2026-03-16 (v3.0.0 - Agent Teams integration, agent-browser + Lighthouse CLI)
+**Last Updated**: 2026-03-29 (v2.7.0 - Deviation Rules 추가)
+
+---
+
+## Deviation Rules (GSD 패턴)
+
+> 실행 중 발견한 작업을 자동 처리하는 규칙. 사용자 허락 없이 적용.
+
+### Rule 1: Auto-fix Bugs
+**상황**: 작업 중 버그 발견
+**동작**:
+1. 인라인 수정
+2. 테스트 추가/업데이트
+3. 수정 검증
+4. `[Rule 1 - Bug Fix] {설명}` 로 추적
+
+```bash
+# 예시: 타입 에러 발견
+# 1. 에러 수정
+# 2. 관련 테스트 확인
+# 3. 빌드 검증
+```
+
+### Rule 2: Auto-add Missing Critical
+**상황**: 누락된 핵심 기능 발견
+**동작**:
+1. 핵심 기능 추가
+2. 테스트 작성
+3. 통합 검증
+4. `[Rule 2 - Critical Add] {설명}` 로 추적
+
+### Rule 3: Auto-fix Type Errors
+**상황**: 타입 에러 발견
+**동작**:
+1. 타입 수정
+2. 타입체크 실행
+3. `[Rule 3 - Type Fix] {설명}` 로 추적
+
+### Deviation 기록
+
+모든 deviation은 SUMMARY.md에 기록:
+
+```markdown
+## Deviations
+
+| Rule | Type | Description |
+|------|------|-------------|
+| Rule 1 | Bug Fix | {설명} |
+| Rule 2 | Critical Add | {설명} |
+```
+
+### 적용 범위
+
+- /agile auto
+- /agile iterate
+- /team-orchestrate 실행 단계
+
+### 사용자 확인 필요한 경우
+
+- 큰 범위 변경 (3+ 파일)
+- 아키텍처 변경
+- 외부 의존성 추가

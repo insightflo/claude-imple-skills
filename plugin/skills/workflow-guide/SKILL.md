@@ -154,7 +154,7 @@ Display the diagnosis result with a starred recommendation for user confirmation
 
 ---
 
-## Natural Language → Skill Quick Map
+## Natural Language → Skill Quick Map (GSD 스타일 확장)
 
 ```
 "I don't know where to start"          → /workflow
@@ -175,6 +175,29 @@ Display the diagnosis result with a starred recommendation for user confirmation
 "Which skill works best for this?"     → /memento route
 "Show skill performance"               → /memento health
 "Why does this skill keep failing?"    → /memento reflect
+
+# GSD 스타일 자연어 라우팅
+"이거 리팩토링해줘"         → /agile auto (복잡) 또는 /agile iterate (단순)
+"이 기능 추가해줘"          → /discuss → /agile auto
+"뭘 어떻게 해야 할지 모르겠어" → /discuss
+"결정해야 할 게 있어"        → /discuss
+"이거 검증해줘"             → /audit (goal-backward 포함)
+"코드 확인해줘"             → /checkpoint
+"이거 맞게 했는지 봐줘"      → /audit
+"자동으로 다 해줘"          → /team-orchestrate --mode=autonomous
+"알아서 해줘"               → /agile auto
+```
+
+### 자동 라우팅 모드
+
+`--auto` 플래그 추가 시 사용자 확인 없이 바로 실행:
+
+```bash
+# 기존
+/workflow → 진단 → 추천 → 사용자 확인 → 실행
+
+# --auto 모드
+/workflow --auto → 진단 → 바로 실행
 ```
 
 ---
