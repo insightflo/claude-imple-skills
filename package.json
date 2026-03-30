@@ -1,0 +1,10 @@
+{
+  "name": "claude-impl-tools",
+  "version": "4.7.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "clean": "node scripts/build.js --clean",
+    "rebuild": "node scripts/build.js --clean && node scripts/build.js"
+  }
+}
