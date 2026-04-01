@@ -1,6 +1,6 @@
 {
   "name": "claude-impl-tools",
-  "version": "4.5.0",
+  "version": "4.8.0",
   "description": "Agent Teams orchestration, governance hooks, multi-AI review, memento skill intelligence, and project management skills for Claude Code",
   "author": {
     "name": "insightflo",

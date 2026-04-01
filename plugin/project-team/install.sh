@@ -372,7 +372,15 @@ if (process.env.PREVIOUS_HOOK_CONFIG_JSON) {
   const config = JSON.parse(process.env.PREVIOUS_HOOK_CONFIG_JSON);
   commands.push(...(((config.managed || {}).commands) || []));
 }
-process.stdout.write(JSON.stringify(unique(commands)));
+// Also track .cjs variants so re-install cleans up hooks that were manually renamed .js→.cjs
+const withCjsVariants = [];
+for (const cmd of commands) {
+  withCjsVariants.push(cmd);
+  if (cmd.match(/\.js"?\s*$/)) {
+    withCjsVariants.push(cmd.replace(/\.js("?\s*)$/, '.cjs$1'));
+  }
+}
+process.stdout.write(JSON.stringify(unique(withCjsVariants)));
 NODE
 )"
 }
@@ -531,6 +539,14 @@ install_registry_category() {
         fi
 
         install_file "$src" "$dest"
+        # If installing a .js hook, remove stale .cjs with same base name to prevent duplicate registration
+        if [[ "$dest" == *.js ]] && [ "$DRY_RUN" = false ]; then
+            local cjs_dest="${dest%.js}.cjs"
+            if [ -f "$cjs_dest" ]; then
+                rm -f "$cjs_dest"
+                log_warn "Removed stale .cjs: $(basename "$cjs_dest") (superseded by .js)"
+            fi
+        fi
         count=$((count + 1))
         if [ "$QUIET" = false ] && [ "$DRY_RUN" = false ]; then
             log_success "  ${relpath}"
@@ -776,6 +792,39 @@ configure_settings() {
     CURRENT_HOOK_CONFIG_JSON="$(build_hook_config_json)"
     write_hook_config_file
     merge_settings_json
+    validate_stop_hooks_in_settings
+}
+
+# Verify that Stop-event hooks from the config were actually written to settings.json.
+# If any are missing (e.g. due to a merge edge-case), append them directly.
+validate_stop_hooks_in_settings() {
+    [ "$DRY_RUN" = true ] && return
+
+    CURRENT_HOOK_CONFIG_JSON="$CURRENT_HOOK_CONFIG_JSON" TARGET_SETTINGS="$TARGET_SETTINGS" node - <<'NODE'
+const fs = require('fs');
+const configHooks = (JSON.parse(process.env.CURRENT_HOOK_CONFIG_JSON || '{}')).hooks || {};
+const stopGroups = configHooks['Stop'];
+if (!stopGroups || stopGroups.length === 0) process.exit(0); // nothing to check
+
+const settingsPath = process.env.TARGET_SETTINGS;
+let settings = {};
+try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch { process.exit(0); }
+
+const settingsStop = (settings.hooks || {})['Stop'] || [];
+const existingCmds = new Set(settingsStop.flatMap(g => (g.hooks || []).map(h => h.command)));
+
+const missingGroups = stopGroups.filter(g =>
+  (g.hooks || []).some(h => !existingCmds.has(h.command))
+);
+if (missingGroups.length === 0) process.exit(0);
+
+// Append missing Stop groups to settings.json
+if (!settings.hooks) settings.hooks = {};
+if (!settings.hooks['Stop']) settings.hooks['Stop'] = [];
+settings.hooks['Stop'] = settings.hooks['Stop'].concat(missingGroups);
+fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+process.stderr.write(`[validate_stop_hooks] Repaired ${missingGroups.length} missing Stop hook group(s) in settings.json\n`);
+NODE
 }
 
 remove_managed_settings_entries() {
