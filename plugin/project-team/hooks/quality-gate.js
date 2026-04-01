@@ -337,6 +337,18 @@ function detectProjectType() {
       const hasTypeScript = !!(scripts && typeof scripts === 'object' && (scripts['type-check'] || scripts.typecheck));
 
       if (hasTestScript || hasLintScript || hasTypeScript) {
+        // Monorepo guard: if no actual test files exist at root level,
+        // treat as unknown to avoid false failures from workspace-level scripts.
+        const hasRootTestFiles =
+          fs.existsSync(path.join(cwd, 'src')) ||
+          fs.existsSync(path.join(cwd, 'test')) ||
+          fs.existsSync(path.join(cwd, 'tests')) ||
+          fs.existsSync(path.join(cwd, '__tests__')) ||
+          fs.existsSync(path.join(cwd, 'spec'));
+
+        if (!hasRootTestFiles) {
+          return 'unknown'; // monorepo root — tests live in subpackages
+        }
         return 'frontend';
       }
     } catch {
