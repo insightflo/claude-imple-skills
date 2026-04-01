@@ -11,8 +11,8 @@ description: |
   - "review this", "convene a council", "get multiple AI opinions", "deep review", "consensus"
   - "market analysis", "macro analysis", "investment review", "risk assessment"
   - Any situation needing multiple perspectives — trigger proactively
-version: 4.1.0
-updated: 2026-03-17
+version: 4.2.0
+updated: 2026-04-01
 ---
 
 # Multi-AI Review — Universal Consensus Engine
@@ -74,6 +74,7 @@ Keywords detected automatically — no preset naming needed.
 | investment | investment, valuation, deal | market/strategy | finance/risk |
 | risk-assessment | risk, security, danger | external threats | internal weaknesses |
 | project-gate | gate, milestone, Go/No-Go | stakeholders/scope | schedule/resources |
+| planning | plan, PRD, design, architecture, council | CTO (architecture/scalability) | Security (threats/compliance) |
 | default | (fallback) | strategy/opportunity | execution/risk |
 
 Full presets: `presets/*.yaml`
@@ -121,6 +122,8 @@ Full presets: `presets/*.yaml`
 3. **Pre-Deploy Gate** — Done-When checks BEFORE deployment
 4. **Delta Arbitration** — score gap ≥15 triggers verification (no averaging)
 5. **2× Codex Weight** — in code-review/project-gate when verified
+6. **Council Skeptic** — `planning` domain: play Devil's Advocate. Challenge every recommendation with "What's the tradeoff?" — never accept "good point" without a follow-up probing question.
+7. **Planning Fallback** — `planning` domain + CLI unavailable: spawn Agent(CTO) + Agent(UX) + Agent(Security) per `references/council-personas.md` instead of skipping.
 
 **Quick Reference**:
 
@@ -131,6 +134,8 @@ Full presets: `presets/*.yaml`
 | Pre-Deploy Gate | Task completion | Block if checks fail |
 | Delta Arbitration | Gap ≥15 | Verify, don't average |
 | 2× Weight | code-review + verified Codex | Formula: `(codex×2 + gemini)/3` |
+| Council Skeptic | planning domain | "What's the tradeoff?" on every recommendation |
+| Planning Fallback | planning + no CLI | Spawn Agent(CTO) + Agent(UX) + Agent(Security) |
 
 **Detailed rules**: `references/evidence-rules.md`
 
@@ -186,6 +191,7 @@ Thresholds (`council.config.yaml`):
 | market-regime | Strong Bull / Bull / Neutral / Bear / Strong Bear |
 | investment | Strong Buy / Buy / Hold / Pass / Strong Pass |
 | risk-assessment | Critical / High / Medium / Low / Negligible |
+| planning | Strongly Recommend / Recommend / Revise / Major Revise / Reject |
 | default | Strong Agree / Agree / Neutral / Disagree / Strong Disagree |
 
 ---
@@ -210,4 +216,4 @@ skills/multi-ai-review/
 
 ---
 
-**Last Updated**: 2026-03-17 (v4.1.0 — 길이 최적화, detailed rules 분리)
+**Last Updated**: 2026-04-01 (v4.2.0 — Council mode: planning preset + CTO/UX/Security personas + Council Skeptic rule)

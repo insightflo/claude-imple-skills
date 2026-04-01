@@ -8,7 +8,7 @@ triggers:
   - AI 분업
   - Codex로
   - Gemini로
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Multi-AI Run
@@ -37,6 +37,32 @@ version: 1.2.0
 | **Claude** | `claude` | Complex reasoning, long context, orchestration | orchestrator, architect, pm |
 | **Codex** | `codex` | Code generation, refactoring, tests | backend, test, api |
 | **Gemini** | `gemini` | Creativity, design sensibility, multimodal | frontend, designer, ui |
+
+---
+
+## Cost-Tier Routing
+
+Classify each task before model selection to reduce token costs 40–70%.
+
+| Tier | Characteristics | Model |
+|------|----------------|-------|
+| **FREE** | Read-only — search, grep, explore, list. No code changes. | Tools only (no LLM call) |
+| **CHEAP** | Simple edits ≤20 lines, ≤3 files, no logic change (format/lint/rename/comment) | Haiku |
+| **EXPENSIVE** | New logic, debugging, architecture, security, >20 lines or >3 files | Sonnet (Opus for security/arch) |
+
+**Keyword signals:**
+- Always-EXPENSIVE: `implement`, `create`, `refactor`, `debug`, `design`, `integrate`, `security`, `auth`, `payment`
+- Always-CHEAP: `format`, `lint`, `rename`, `add import`, `add comment`, `typo fix`
+
+**Auto-Upgrade on Failure:**
+
+```
+CHEAP task fails / quality < threshold → retry with Sonnet
+Sonnet fails (2nd time) → escalate to Opus
+Never downgrade a task mid-execution.
+```
+
+Apply this classification as the **first step** when routing any task — before looking up role-based model assignments.
 
 ---
 

@@ -1,8 +1,8 @@
 ---
 name: quality-auditor
 description: "Comprehensive quality audit before phase completion or deployment. Performs planning conformance, DDD validation, security checks, tests, browser verification, and quantitative metrics. Also enforces verification-before-completion discipline — no claims without evidence. Run this skill before deploying, before merging a PR, after completing significant changes, and whenever anyone claims 'it works' or 'tests pass'. Triggers immediately on 'quality check', 'pre-deploy check', 'audit this', 'QA', 'verify this', 'does this work', '품질 검사', '배포 전 검사'. Trigger: /audit, /evaluate, /verify."
-version: 3.0.0
-updated: 2026-03-27
+version: 3.1.0
+updated: 2026-04-01
 ---
 
 # Quality Auditor (Comprehensive Audit + Verification + Metrics)
@@ -42,6 +42,24 @@ Before starting the audit, verify the following when the skill is triggered.
 
 1. **Planning documents exist**: at least one of `management/mini-prd.md` or `docs/planning/*.md` must be present.
    - If neither exists: "No planning documents found. Please run `/governance-setup` first."
+
+---
+
+## Skeptical QA Baseline
+
+**Default assumption: "It doesn't work."** Prove otherwise with evidence. (Inspired by Harness Evaluator pattern.)
+
+| Rule | Violation Blocked |
+|------|------------------|
+| All scores require evidence (file:line, test output, screenshot) | Score without evidence = 0 |
+| Console errors > 0 → Functionality capped at **7/10** | Ignoring console errors |
+| Uncaught exceptions → **auto FAIL** for that route | Rationalizing "minor" exceptions |
+| Untestable (server down) → Score **0**, not skip | "Couldn't test, so pass" |
+| BLOCKING issues must be fixed before deploy | Shipping with known blockers |
+
+**Issue Classification** (applies to all audit output):
+- **BLOCKING** — data loss, auth bypass, broken core flow, uncaught exception → must fix before deploy
+- **NON-BLOCKING** — cosmetic issue, minor UX gap, non-critical warning → ship with ticket
 
 ---
 
@@ -113,6 +131,16 @@ npx lighthouse http://localhost:3000 --output=json --quiet
 agent-browser console                     # error/warning count
 ```
 
+**AI Slop Detection** — Auto-deduct from visual score: ≥1 pattern → −1pt, ≥3 patterns → −2pt.
+
+| # | Pattern | # | Pattern |
+|---|---------|---|---------|
+| 1 | Hero section with no real image (placeholder/gradient) | 6 | Generic icons only (no custom illustrations) |
+| 2 | 3-column generic feature grid | 7 | Empty state not handled |
+| 3 | Meaningless gradient decoration | 8 | Hardcoded demo data visible in UI |
+| 4 | Lorem ipsum text remaining | 9 | Excessive `rounded-xl` on everything |
+| 5 | Identical card layout repeated throughout | 10 | Purposeless animation/motion |
+
 ---
 
 ## Audit Result Submission
@@ -143,10 +171,10 @@ agent-browser console                     # error/warning count
 
 ### Critical Defects
 
-| Priority | Category | Description | Related File | Reference Document |
-|----------|----------|-------------|-------------|-------------------|
-| Critical | Security | Hardcoded API key | `src/api/auth.py:23` | TRD security section |
-| High | Bug | Missing duplicate check | `src/api/auth.py:45` | PRD signup |
+| BLOCKING | Priority | Category | Description | Related File |
+|----------|----------|----------|-------------|-------------|
+| ✅ YES | Critical | Security | Hardcoded API key | `src/api/auth.py:23` |
+| ✅ YES | High | Bug | Missing duplicate check | `src/api/auth.py:45` |
 
 ---
 
@@ -240,7 +268,7 @@ Store metrics in `.claude/metrics/` for trend tracking across phases.
 
 ---
 
-**Last Updated**: 2026-03-27 (v3.0.0 - Absorbed evaluation + verification-before-completion)
+**Last Updated**: 2026-04-01 (v3.1.0 — Skeptical QA baseline + BLOCKING/NON-BLOCKING classification + AI Slop Detection)
 
 ---
 

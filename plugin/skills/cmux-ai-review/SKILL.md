@@ -7,7 +7,7 @@ triggers:
   - cmux 코드 리뷰
   - 패널 리뷰
   - 병렬 AI 리뷰
-version: 1.3.0
+version: 1.4.0
 ---
 
 # /cmux-ai-review — cmux 창 분할 병렬 AI 리뷰
@@ -95,6 +95,7 @@ Claude ─── 양쪽 의견 + 반론 분석 ──→ Score Card + 최종 판
 | investment, valuation | investment | 시장/전략 | 재무/리스크 |
 | risk, security, danger | risk-assessment | 외부위협 | 내부취약점 |
 | gate, milestone, Go/No-Go | project-gate | 이해관계자/범위 | 일정/리소스 |
+| plan, PRD, design, architecture, council | planning | CTO (아키텍처/확장성) | Security (위협/규정준수) |
 
 감지 실패 시 `default` 프리셋 적용.
 
@@ -276,6 +277,7 @@ Chairman 합성 규칙:
 - 점수 차이 ≥ 15 → 증거 검증 후 결정 (평균 금지)
 - code-review 도메인 → Codex 의견 2배 가중 (파일:라인 인용 시)
 - 미해결 쟁점 → 추가 라운드 (최대 2회, Step 3부터 재실행)
+- **Council Skeptic (planning 도메인)** → 모든 권고사항에 "그렇게 하면 뭘 잃는가?" 트레이드오프 질문 강제 후 합성. "좋은 지적이네요"로 끝내지 않음
 
 Score Card 형식:
 
