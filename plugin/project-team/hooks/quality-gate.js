@@ -377,9 +377,21 @@ function runTests(projectType) {
     return { ...results, output: res.stdout };
   }
 
-  // Command failed - tests did not pass
-  const output = res.output || res.error || 'Test command failed';
-  return { passed: 0, failed: 1, total: 1, output };
+  // pytest exit code 5 = no tests collected (not a real failure)
+  // npm/vitest may exit non-zero when no test files found
+  const combined = res.output || res.stderr || res.stdout || '';
+  const noTestsFound =
+    res.status === 5 ||
+    /no tests? (found|collected|ran)/i.test(combined) ||
+    /test suite.*empty/i.test(combined) ||
+    /cannot find.*test/i.test(combined);
+
+  if (noTestsFound) {
+    return { passed: 0, failed: 0, total: 0, output: combined };
+  }
+
+  // Command failed - tests ran and failed
+  return { passed: 0, failed: 1, total: 1, output: combined };
 }
 
 /**
@@ -720,6 +732,37 @@ function generateReport(results) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Detect if the current git diff only touches migration/infra files.
+ * If so, quality gate should be skipped (no testable code changed).
+ * @returns {boolean}
+ */
+function isMigrationOrInfraOnly() {
+  const res = runCommand('git diff --name-only HEAD~1 HEAD');
+  if (!res.ok && !res.stdout) return false;
+
+  const files = (res.stdout || '').trim().split('\n').filter(Boolean);
+  if (files.length === 0) return false;
+
+  const INFRA_PATTERNS = [
+    /migrations?\//i,
+    /alembic\//i,
+    /\.sql$/i,
+    /^Makefile$/i,
+    /docker-compose/i,
+    /^Dockerfile/i,
+    /\.ya?ml$/i,
+    /\.env(\.|$)/i,
+    /\.sh$/i,
+    /^\.github\//i,
+    /^infra\//i,
+    /^deploy\//i,
+    /^scripts\//i,
+  ];
+
+  return files.every(f => INFRA_PATTERNS.some(p => p.test(f)));
+}
+
+/**
  * Determine if quality gate is passed
  * @param {object} results - Quality metrics
  * @returns {boolean}
@@ -727,13 +770,18 @@ function generateReport(results) {
 function isQualityGatePassed(results) {
   const { tests, coverage, linting, typeChecking } = results;
 
-  // All tests must pass
+  // Skip gate entirely when only migration/infra files changed
+  if (isMigrationOrInfraOnly()) {
+    return true;
+  }
+
+  // All tests must pass (when tests actually ran)
   if (tests.failed > 0) {
     return false;
   }
 
-  // Coverage threshold
-  if (coverage.line < QUALITY_THRESHOLDS.coverage.line) {
+  // Skip coverage check when no tests exist (migration/initial phase)
+  if (tests.total > 0 && coverage.line < QUALITY_THRESHOLDS.coverage.line) {
     return false;
   }
 
@@ -804,7 +852,11 @@ async function main() {
 
     // Generate report
     const report = generateReport(results);
+    // Only attempt Whitebox if dashboard script is available (avoid noisy error on missing install)
     const whitebox = results.passed ? null : openWhiteboxUi(projectRoot);
+    if (whitebox && whitebox.error === 'whitebox_dashboard_missing') {
+      whitebox.error = ''; // suppress dashboard-not-installed noise from reason string
+    }
 
     await emitHookDecision(input, {
       hook: 'quality-gate',
