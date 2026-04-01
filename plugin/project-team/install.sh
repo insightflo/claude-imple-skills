@@ -376,8 +376,8 @@ if (process.env.PREVIOUS_HOOK_CONFIG_JSON) {
 const withCjsVariants = [];
 for (const cmd of commands) {
   withCjsVariants.push(cmd);
-  if (cmd.match(/\.js"?\s*$/)) {
-    withCjsVariants.push(cmd.replace(/\.js("?\s*)$/, '.cjs$1'));
+  if (cmd.includes('.js"')) {
+    withCjsVariants.push(cmd.split('.js"').join('.cjs"'));
   }
 }
 process.stdout.write(JSON.stringify(unique(withCjsVariants)));
