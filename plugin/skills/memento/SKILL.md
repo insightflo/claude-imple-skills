@@ -1,6 +1,6 @@
 ---
 name: memento
-description: "Skill ecosystem intelligence engine — learns which skills work best for which tasks through execution experience, routes to optimal skills with confidence scores, and triggers improvements when patterns of failure emerge. Use this skill whenever you need to check skill health and performance stats, understand why a skill keeps failing, find the best skill for an unusual task, get a data-driven skill recommendation (not just rule-based), review the skill ecosystem dashboard, or trigger experience-based skill improvement. Also triggers automatically after skill execution to log outcomes. Responds to: 'skill health', 'skill stats', 'which skill works best for', 'why does this skill fail', 'skill dashboard', 'memento', '스킬 성능', '스킬 추천', '스킬 건강', '어떤 스킬이 좋아'."
+description: "Cross-project experience memory — your persistent knowledge base across sessions. Remembers what worked, what failed, and why, so every new session starts smarter. Log outcomes → recall lessons → apply patterns. Use when starting work that other projects have solved, when you need to avoid past mistakes, or when onboarding to a new project area. Also logs skill execution outcomes to improve future routing. Responds to: 'memento', 'cross-project knowledge', 'what did we learn', 'past experience', 'avoid repeating', 'session memory', 'global memory', '스킬 성능', '스킬 추천', '스킬 건강', '어떤 스킬이 좋아'."
 ---
 
 # Memento: Skill Ecosystem Intelligence
@@ -12,29 +12,44 @@ description: "Skill ecosystem intelligence engine — learns which skills work b
 
 ## What Memento Does
 
-Three functions, mapped to the paper's Read-Write Reflective Learning:
+Cross-project knowledge memory with two primary purposes:
 
-1. **Log** — Record skill execution outcomes (the experience memory)
-2. **Route** — Recommend the best skill using rules + experience (Read phase)
-3. **Reflect** — Detect failure patterns and suggest improvements (Write phase)
+1. **Persist** — Record what you learn: feedback, decisions, references (Log)
+2. **Retrieve** — Pull relevant lessons from other projects when starting new work (Recall/Search)
+
+Skill intelligence is secondary — analyzing execution data to improve future routing:
 
 ## Modes
 
 Invoke with: `/memento <mode>`
 
-| Mode | Purpose | When to use |
-|------|---------|-------------|
-| `log` | Record a skill execution outcome | After any skill completes (can be automated via hook) |
-| `route <task>` | Get experience-weighted skill recommendation | When workflow-guide's static rules feel insufficient |
-| `health` | Show skill ecosystem dashboard | Periodic review, before skill cleanup |
-| `reflect <skill>` | Analyze failure patterns, suggest fixes | When a skill underperforms repeatedly |
-| `profile <skill>` | Show detailed skill execution history | Before deciding to modify or deprecate a skill |
-| `harness <skill>` | Generate validation scripts from failure patterns | When a skill has recurring failures that could be caught by code |
-| `global search <query>` | Cross-project knowledge search via DuckDB | When you need context from other projects |
-| `global health` | Unified skill dashboard across all projects | Periodic ecosystem review |
-| `global recall <topic>` | Retrieve cross-project learnings on a topic | Before starting work that other projects have done |
-| `global sync` | Sync all project MEMORY.md files to global DB | After adding new memory files |
-| `global sql <query>` | Direct SQL on the unified experience store | Advanced queries |
+### Knowledge Modes (Persisting & Retrieving)
+
+| Mode | Purpose | When |
+|------|---------|------|
+| `log` | Record what happened — successes, failures, decisions | After any significant outcome |
+| `global recall <topic>` | Retrieve cross-project learnings on a topic | Session start, before new work |
+| `global search <query>` | Full-text search across all projects | Need specific past experience |
+
+### Skill Intelligence Modes (Learning from Execution)
+
+These modes analyze skill execution data to improve future routing. They are means to improve recommendations, not the primary purpose.
+
+| Mode | Purpose | When |
+|------|---------|------|
+| `route <task>` | Recommend best skill with experience weighting | workflow-guide static rules insufficient |
+| `health` | Skill ecosystem dashboard | Periodic review |
+| `reflect <skill>` | Failure pattern analysis + improvement suggestions | Skill underperforms repeatedly |
+| `profile <skill>` | Detailed execution history for one skill | Before modifying or deprecating |
+| `harness <skill>` | Auto-generate deterministic guardrails from failures | Recurring failures caught by code |
+
+### Administration Modes
+
+| Mode | Purpose |
+|------|--------|
+| `global health` | Unified ecosystem dashboard across all projects |
+| `global sync` | Sync MEMORY.md files → DuckDB |
+| `global sql <query>` | Direct SQL on unified experience store |
 
 ---
 
